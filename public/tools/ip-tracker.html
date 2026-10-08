@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="ipt.title">IP Tracker - Công cụ học tập</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --danger: #dc2626;
+      --success: #16a34a;
+    }
+    [data-theme="light"] {
+      --bg: #f0f2f5;
+      --card: #ffffff;
+      --border: rgba(0,0,0,0.1);
+      --text: #1a1a2e;
+      --muted: #666688;
+      --muted2: #888899;
+      --input-bg: #f5f6fa;
+      --row-hover: rgba(0,0,0,0.03);
+      --code-bg: #f0f4ff;
+      --code-text: #2563eb;
+      --accent1: #d97706;
+      --accent2: #16a34a;
+      --accent3: #dc2626;
+      --badge-url-bg: #e0f2ff;
+      --badge-url-text: #0369a1;
+      --badge-img-bg: #dcfce7;
+      --badge-img-text: #166534;
+      --warning-bg: #fff7ed;
+      --warning-border: #fed7aa;
+      --warning-head: #c2410c;
+      --warning-text: #9a3412;
+      --modal-scrim: rgba(0,0,0,0.5);
+    }
+    [data-theme="dark"] {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --muted2: #64748b;
+      --input-bg: #0f172a;
+      --row-hover: rgba(255,255,255,0.03);
+      --code-bg: #1e293b;
+      --code-text: #93c5fd;
+      --accent1: #fbbf24;
+      --accent2: #4ade80;
+      --accent3: #ff6666;
+      --badge-url-bg: #1e3a5f;
+      --badge-url-text: #60a5fa;
+      --badge-img-bg: #14532d;
+      --badge-img-text: #4ade80;
+      --warning-bg: #451a03;
+      --warning-border: #78350f;
+      --warning-head: #fbbf24;
+      --warning-text: #fcd34d;
+      --modal-scrim: rgba(0,0,0,0.6);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; transition: background 0.3s, color 0.3s; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    .warning { background: var(--warning-bg); border: 1px solid var(--warning-border); border-left: 4px solid var(--accent1); padding: 16px; border-radius: 8px; margin-bottom: 24px; }
+    .warning h3 { color: var(--warning-head); font-size: 14px; margin-bottom: 6px; }
+    .warning p { color: var(--warning-text); font-size: 13px; line-height: 1.5; }
+    h1 { font-size: 24px; margin-bottom: 4px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 4px; }
+    .tab-btn { flex: 1; padding: 12px; border: none; background: transparent; color: var(--muted); cursor: pointer; border-radius: 6px; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+    .tab-btn:hover { background: var(--row-hover); color: var(--text); }
+    .tab-btn.active { background: var(--primary); color: white; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+    .card h2 { font-size: 16px; margin-bottom: 16px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .form-group input[type="text"], .form-group input[type="url"] { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text); font-size: 14px; outline: none; transition: border 0.2s; }
+    .form-group input:focus { border-color: var(--primary); }
+    .btn { padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-icon { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.15s; }
+    .btn-icon:hover { background: var(--row-hover); border-color: var(--muted); }
+    .file-upload { border: 2px dashed var(--border); border-radius: 8px; padding: 32px; text-align: center; cursor: pointer; transition: all 0.2s; }
+    .file-upload:hover { border-color: var(--primary); background: rgba(37,99,235,0.05); }
+    .file-upload.has-file { border-color: var(--success); }
+    .file-upload input { display: none; }
+    .file-upload .icon { font-size: 32px; margin-bottom: 8px; }
+    .file-upload .text { font-size: 14px; color: var(--muted); }
+    .file-upload .file-name { margin-top: 8px; font-size: 13px; color: var(--success); }
+    .result-box { display: none; margin-top: 16px; padding: 16px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; }
+    .result-box.show { display: block; }
+    .result-box .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .result-box .url { display: flex; align-items: center; gap: 8px; padding: 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; font-size: 13px; word-break: break-all; }
+    .result-box .url code { flex: 1; color: var(--code-text); }
+    .result-box .url .copy-btn { background: none; border: none; color: var(--primary); cursor: pointer; font-size: 13px; white-space: nowrap; }
+    .result-box .url .copy-btn:hover { color: var(--code-text); }
+    .result-box .links { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .result-box .links a { color: var(--primary); font-size: 13px; text-decoration: none; }
+    .result-box .links a:hover { text-decoration: underline; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    tr:hover { background: var(--row-hover); }
+    .empty { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-scrim); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: var(--card); border: 1px solid var(--border); border-radius: 12px; width: 100%; max-width: 900px; max-height: 85vh; overflow-y: auto; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .modal-header h3 { font-size: 16px; }
+    .modal-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; padding: 4px; }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 20px; }
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .info-item { padding: 12px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; }
+    .info-item .il { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .info-item .iv { font-size: 14px; word-break: break-all; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+    .badge-url { background: var(--badge-url-bg); color: var(--badge-url-text); }
+    .badge-image { background: var(--badge-img-bg); color: var(--badge-img-text); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .status-dot.on { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+    .status-dot.off { background: #64748b; }
+    .loader { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* Topbar */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--card);
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border);
+      height: 48px;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .topbar-left h1 { font-size: 16px; color: var(--text); }
+    .topbar-right { display: flex; align-items: center; gap: 8px; }
+    .topbar .btn-nav {
+      padding: 7px 14px; border: 1px solid var(--border);
+      border-radius: 6px; background: transparent;
+      color: var(--muted); cursor: pointer; font-size: 12px; transition: all 0.2s;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .topbar .btn-nav:hover { background: var(--row-hover); color: var(--text); }
+    details summary { font-size: 13px; color: var(--muted); padding: 8px 0; cursor: pointer; }
+    details summary:hover { color: var(--text); }
+    .og-section { padding: 12px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; margin-top: 8px; }
+    /* helpers */
+    .col-accent1 { color: var(--accent1); }
+    .col-accent2 { color: var(--accent2); }
+    .col-accent3 { color: var(--accent3); }
+    .bg-code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+<nav class="navbar"></nav>
+
+<div class="container" style="margin-top: 40px;">
+
+  <h1>🔍 IP Tracker</h1>
+  <p class="subtitle" data-i18n="ipt.subtitle">Tạo tracking link để kiểm tra thông tin request (IP, User-Agent, Headers)</p>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="url">🔗 <span data-i18n="ipt.tabUrl">URL Redirect</span></button>
+    <button class="tab-btn" data-tab="image">🖼 <span data-i18n="ipt.tabImage">Ảnh (Image)</span></button>
+  </div>
+
+  <!-- Tab: URL -->
+  <div class="tab-content" id="tab-url">
+    <div class="card">
+      <h2 data-i18n="ipt.urlTitle">Tạo tracking link URL</h2>
+      <p class="muted" style="font-size: 13px; margin-bottom: 16px;" data-i18n="ipt.urlDesc">Khi victim click link, họ sẽ được redirect đến URL bạn nhập, và thông tin request được log lại.</p>
+      <div class="form-group">
+        <label data-i18n="ipt.name">Tên (ghi nhớ)</label>
+        <input type="text" id="url-name" data-i18n-placeholder="ipt.namePh" placeholder="VD: Link VNExpress test">
+      </div>
+      <div class="form-group">
+        <label data-i18n="ipt.urlRedirect">URL redirect (nơi victim được chuyển hướng đến)</label>
+        <input type="url" id="url-redirect" placeholder="https://vnexpress.net">
+      </div>
+      <details>
+        <summary data-i18n="ipt.ogSummary">⚙ Tùy chỉnh OG (Open Graph) — social preview</summary>
+        <div class="og-section">
+          <div class="form-group">
+            <label data-i18n="ipt.ogTitle">OG Title (tiêu đề hiển thị khi share Facebook, Telegram...)</label>
+            <input type="text" id="url-og-title" data-i18n-placeholder="ipt.ogTitlePh" placeholder="VD: Bài viết mới - Tin tức 24h">
+          </div>
+          <div class="form-group">
+            <label data-i18n="ipt.ogDesc">OG Description (mô tả)</label>
+            <input type="text" id="url-og-desc" data-i18n-placeholder="ipt.ogDescPh" placeholder="VD: Cập nhật tin tức nhanh chóng và chính xác">
+          </div>
+          <div class="form-group">
+            <label data-i18n="ipt.ogImage">OG Image URL (ảnh đại diện — để trống dùng ảnh mặc định)</label>
+            <input type="url" id="url-og-image" data-i18n-placeholder="ipt.ogImagePh" placeholder="https://example.com/image.jpg">
+          </div>
+        </div>
+      </details>
+      <button class="btn btn-primary" id="btn-create-url"><span data-i18n="ipt.createUrlBtn">Tạo tracking link</span></button>
+      <div class="result-box" id="result-url">
+        <div class="label" data-i18n="ipt.trackingLinkLabel">Tracking link (gửi link này cho victim):</div>
+        <div class="url">
+          <code id="url-tracking-url"></code>
+          <button class="copy-btn" onclick="copyText('url-tracking-url')">📋 <span data-i18n="ipt.copy">Copy</span></button>
+        </div>
+        <div class="links">
+          <a href="#" target="_blank" id="url-share-link">🔗 <span data-i18n="ipt.shareLink">Share link (public check)</span></a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Image -->
+  <div class="tab-content" id="tab-image" style="display:none">
+    <div class="card">
+      <h2 data-i18n="ipt.imgTitle">Tạo tracking link ảnh</h2>
+      <p class="muted" style="font-size: 13px; margin-bottom: 16px;" data-i18n="ipt.imgDesc">Upload ảnh bất kỳ. Khi victim mở link, ảnh hiển thị bình thường và thông tin request được log lại. Bạn cũng có thể tải ảnh đã nhúng tracking pixel.</p>
+      <div class="form-group">
+        <label data-i18n="ipt.name">Tên (ghi nhớ)</label>
+        <input type="text" id="img-name" data-i18n-placeholder="ipt.imgNamePh" placeholder="VD: Ảnh test">
+      </div>
+      <div class="form-group">
+        <label data-i18n="ipt.chooseImage">Chọn ảnh</label>
+        <div class="file-upload" id="file-upload-area">
+          <input type="file" id="img-file" accept="image/png,image/jpeg,image/jpg">
+          <div class="icon">🖼</div>
+          <div class="text" data-i18n="ipt.dropImage">Click hoặc kéo thả ảnh vào đây (PNG/JPG)</div>
+          <div class="file-name" id="file-name-display"></div>
+        </div>
+      </div>
+      <details>
+        <summary data-i18n="ipt.ogSummary">⚙ Tùy chỉnh OG (Open Graph) — social preview</summary>
+        <div class="og-section">
+          <div class="form-group">
+            <label data-i18n="ipt.ogTitle">OG Title (tiêu đề hiển thị khi share Facebook, Telegram...)</label>
+            <input type="text" id="img-og-title" data-i18n-placeholder="ipt.ogTitlePh" placeholder="VD: Hình ảnh mới">
+          </div>
+          <div class="form-group">
+            <label data-i18n="ipt.ogDesc">OG Description (mô tả)</label>
+            <input type="text" id="img-og-desc" data-i18n-placeholder="ipt.ogDescPh" placeholder="VD: Chia sẻ hình ảnh">
+          </div>
+          <div class="form-group">
+            <label data-i18n="ipt.ogImage">OG Image URL (ảnh đại diện — để trống dùng ảnh gốc)</label>
+            <input type="url" id="img-og-image" data-i18n-placeholder="ipt.ogImagePh" placeholder="https://example.com/image.jpg">
+          </div>
+        </div>
+      </details>
+      <button class="btn btn-primary" id="btn-create-img"><span data-i18n="ipt.createImgBtn">Tạo tracking link</span></button>
+      <div class="result-box" id="result-img">
+        <div class="label" data-i18n="ipt.trackingLinkLabel">Tracking link (gửi link này cho victim):</div>
+        <div class="url">
+          <code id="img-tracking-url"></code>
+          <button class="copy-btn" onclick="copyText('img-tracking-url')">📋 <span data-i18n="ipt.copy">Copy</span></button>
+        </div>
+        <div class="links">
+          <a href="#" target="_blank" id="img-download-url">📥 <span data-i18n="ipt.downloadImg">Download ảnh (đã nhúng pixel)</span></a>
+          <a href="#" target="_blank" id="img-share-link">🔗 <span data-i18n="ipt.shareLink">Share link (public check)</span></a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- List -->
+  <div class="card">
+    <h2>📋 <span data-i18n="ipt.listTitle">Danh sách tracking link đã tạo</span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-i18n="ipt.colName">Tên</th>
+            <th data-i18n="ipt.colType">Loại</th>
+            <th data-i18n="ipt.colClicks">Click</th>
+            <th data-i18n="ipt.colLastClick">Click gần nhất</th>
+            <th data-i18n="ipt.colActions">Thao tác</th>
+          </tr>
+        </thead>
+        <tbody id="tracker-list">
+          <tr><td colspan="5" class="empty" data-i18n="common.loading">Đang tải...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Share Modal -->
+  <div class="modal-overlay" id="share-modal">
+    <div class="modal" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3>🔗 <span data-i18n="ipt.shareTitle">Share Link — Kiểm tra trạng thái</span></h3>
+        <button class="modal-close" onclick="closeShareModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="share-modal-body">
+        <p class="muted" style="margin-bottom: 16px;" data-i18n="ipt.shareDesc">Link này public (không cần đăng nhập), dùng để gửi cho người khác biết victim đã click vào link hay chưa.</p>
+        <div class="form-group">
+          <label data-i18n="ipt.shareUrl">URL share:</label>
+          <div class="url" style="padding: 10px;">
+            <code id="share-url-display" style="color: var(--code-text); word-break: break-all;"></code>
+            <button class="copy-btn" onclick="copyText('share-url-display')">📋 <span data-i18n="ipt.copy">Copy</span></button>
+          </div>
+        </div>
+        <div style="margin-top: 16px; padding: 16px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px;">
+          <div class="info-item" style="background: transparent; padding: 0;">
+            <div class="il" data-i18n="ipt.status">Trạng thái</div>
+            <div class="iv" id="share-status" style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+              <span class="loader"></span>&nbsp;<span data-i18n="common.checking">Đang kiểm tra...</span>
+            </div>
+          </div>
+          <div class="info-item" style="background: transparent; padding: 0; margin-top: 12px;">
+            <div class="il" data-i18n="ipt.clickCount">Số lần click</div>
+            <div class="iv" id="share-click-count">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/auth.js"></script>
+<script src="ip-tracker.js"></script>
+</body>
+</html>
+</｜｜DSML｜｜_task_progress>
+- [x] ip-tracker.html: var palette light/dark + data-i18n attributes
+- [ ] ip-tracker.js: standalone i18n + applyI18n + toggleLang override
+</｜｜DSML｜｜_task_progress>
+</｜｜DSML｜｜_command>

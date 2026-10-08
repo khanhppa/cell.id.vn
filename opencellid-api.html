@@ -1,0 +1,2252 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" class="client-nojs">
+<head>
+<meta charset="UTF-8" /><title>API - OpenCellID wiki</title>
+<meta name="generator" content="MediaWiki 1.22.2" />
+<link rel="shortcut icon" href="/skins/common/images/favicon.ico" />
+<link rel="search" type="application/opensearchdescription+xml" href="/opensearch_desc.php" title="OpenCellID wiki (en)" />
+<link rel="EditURI" type="application/rsd+xml" href="https://wiki.opencellid.org/api.php?action=rsd" />
+<link rel="alternate" type="application/atom+xml" title="OpenCellID wiki Atom feed" href="/index.php?title=Special:RecentChanges&amp;feed=atom" />
+<link rel="stylesheet" href="https://wiki.opencellid.org/load.php?debug=false&amp;lang=en&amp;modules=mediawiki.legacy.commonPrint%2Cshared%7Cskins.vector&amp;only=styles&amp;skin=vector&amp;*" />
+<meta name="ResourceLoaderDynamicStyles" content="" />
+<style>a:lang(ar),a:lang(ckb),a:lang(kk-arab),a:lang(mzn),a:lang(ps),a:lang(ur){text-decoration:none}
+/* cache key: opencellid:resourceloader:filter:minify-css:7:1dacd5c1d3a899e679c9eeeaa9e26d75 */</style>
+
+<script src="https://wiki.opencellid.org/load.php?debug=false&amp;lang=en&amp;modules=startup&amp;only=scripts&amp;skin=vector&amp;*"></script>
+<script>if(window.mw){
+mw.config.set({"wgCanonicalNamespace":"","wgCanonicalSpecialPageName":false,"wgNamespaceNumber":0,"wgPageName":"API","wgTitle":"API","wgCurRevisionId":3652,"wgRevisionId":3652,"wgArticleId":5,"wgIsArticle":true,"wgIsRedirect":false,"wgAction":"view","wgUserName":null,"wgUserGroups":["*"],"wgCategories":[],"wgBreakFrames":false,"wgPageContentLanguage":"en","wgPageContentModel":"wikitext","wgSeparatorTransformTable":["",""],"wgDigitTransformTable":["",""],"wgDefaultDateFormat":"dmy","wgMonthNames":["","January","February","March","April","May","June","July","August","September","October","November","December"],"wgMonthNamesShort":["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],"wgRelevantPageName":"API","wgIsProbablyEditable":false,"wgRestrictionEdit":[],"wgRestrictionMove":[]});
+}</script><script>if(window.mw){
+mw.loader.implement("user.options",function(){mw.user.options.set({"ccmeonemails":0,"cols":80,"date":"default","diffonly":0,"disablemail":0,"disablesuggest":0,"editfont":"default","editondblclick":0,"editsection":1,"editsectiononrightclick":0,"enotifminoredits":0,"enotifrevealaddr":0,"enotifusertalkpages":1,"enotifwatchlistpages":0,"extendwatchlist":0,"fancysig":0,"forceeditsummary":0,"gender":"unknown","hideminor":0,"hidepatrolled":0,"imagesize":2,"justify":0,"math":1,"minordefault":0,"newpageshidepatrolled":0,"nocache":0,"noconvertlink":0,"norollbackdiff":0,"numberheadings":0,"previewonfirst":0,"previewontop":1,"rcdays":7,"rclimit":50,"rememberpassword":0,"rows":25,"searchlimit":20,"showhiddencats":0,"shownumberswatching":1,"showtoc":1,"showtoolbar":1,"skin":"vector","stubthreshold":0,"thumbsize":2,"underline":2,"uselivepreview":0,"usenewrc":0,"vector-simplesearch":1,"watchcreations":0,"watchdefault":0,"watchdeletion":0,"watchlistdays":3,"watchlisthideanons":0,"watchlisthidebots":0,
+"watchlisthideliu":0,"watchlisthideminor":0,"watchlisthideown":0,"watchlisthidepatrolled":0,"watchmoves":0,"wllimit":250,"useeditwarning":1,"prefershttps":1,"language":"en","variant-gan":"gan","variant-iu":"iu","variant-kk":"kk","variant-ku":"ku","variant-shi":"shi","variant-sr":"sr","variant-tg":"tg","variant-uz":"uz","variant-zh":"zh","searchNs0":true,"searchNs1":false,"searchNs2":false,"searchNs3":false,"searchNs4":false,"searchNs5":false,"searchNs6":false,"searchNs7":false,"searchNs8":false,"searchNs9":false,"searchNs10":false,"searchNs11":false,"searchNs12":false,"searchNs13":false,"searchNs14":false,"searchNs15":false,"searchNs100":false,"searchNs101":false,"variant":"en"});},{},{});mw.loader.implement("user.tokens",function(){mw.user.tokens.set({"editToken":"+\\","patrolToken":false,"watchToken":false});},{},{});
+/* cache key: opencellid:resourceloader:filter:minify-js:7:51c557ebdfaa5f7dcbc901a92748b5cf */
+}</script>
+<script>if(window.mw){
+mw.loader.load(["mediawiki.page.startup","mediawiki.legacy.wikibits","mediawiki.legacy.ajax","skins.vector.js"]);
+}</script>
+<style type="text/css">/*<![CDATA[*/
+.source-bash {line-height: normal;}
+.source-bash li, .source-bash pre {
+	line-height: normal; border: 0px none white;
+}
+/**
+ * GeSHi Dynamically Generated Stylesheet
+ * --------------------------------------
+ * Dynamically generated stylesheet for bash
+ * CSS class: source-bash, CSS id: 
+ * GeSHi (C) 2004 - 2007 Nigel McNie, 2007 - 2008 Benny Baumann
+ * (http://qbnz.com/highlighter/ and http://geshi.org/)
+ * --------------------------------------
+ */
+.bash.source-bash .de1, .bash.source-bash .de2 {font: normal normal 1em/1.2em monospace; margin:0; padding:0; background:none; vertical-align:top;font-family: monospace, monospace;}
+.bash.source-bash  {font-family:monospace;}
+.bash.source-bash .imp {font-weight: bold; color: red;}
+.bash.source-bash li, .bash.source-bash .li1 {font-weight: normal; vertical-align:top;}
+.bash.source-bash .ln {width:1px;text-align:right;margin:0;padding:0 2px;vertical-align:top;}
+.bash.source-bash .li2 {font-weight: bold; vertical-align:top;}
+.bash.source-bash .kw1 {color: #000000; font-weight: bold;}
+.bash.source-bash .kw2 {color: #c20cb9; font-weight: bold;}
+.bash.source-bash .kw3 {color: #7a0874; font-weight: bold;}
+.bash.source-bash .co0 {color: #666666; font-style: italic;}
+.bash.source-bash .co1 {color: #800000;}
+.bash.source-bash .co2 {color: #cc0000; font-style: italic;}
+.bash.source-bash .co3 {color: #000000; font-weight: bold;}
+.bash.source-bash .co4 {color: #666666;}
+.bash.source-bash .es1 {color: #000099; font-weight: bold;}
+.bash.source-bash .es2 {color: #007800;}
+.bash.source-bash .es3 {color: #007800;}
+.bash.source-bash .es4 {color: #007800;}
+.bash.source-bash .es5 {color: #780078;}
+.bash.source-bash .es_h {color: #000099; font-weight: bold;}
+.bash.source-bash .br0 {color: #7a0874; font-weight: bold;}
+.bash.source-bash .sy0 {color: #000000; font-weight: bold;}
+.bash.source-bash .st0 {color: #ff0000;}
+.bash.source-bash .st_h {color: #ff0000;}
+.bash.source-bash .nu0 {color: #000000;}
+.bash.source-bash .re0 {color: #007800;}
+.bash.source-bash .re1 {color: #007800;}
+.bash.source-bash .re2 {color: #007800;}
+.bash.source-bash .re4 {color: #007800;}
+.bash.source-bash .re5 {color: #660033;}
+.bash.source-bash .ln-xtra, .bash.source-bash li.ln-xtra, .bash.source-bash div.ln-xtra {background-color: #ffc;}
+.bash.source-bash span.xtra { display:block; }
+
+/*]]>*/
+</style><style type="text/css">/*<![CDATA[*/
+.source-html5 {line-height: normal;}
+.source-html5 li, .source-html5 pre {
+	line-height: normal; border: 0px none white;
+}
+/**
+ * GeSHi Dynamically Generated Stylesheet
+ * --------------------------------------
+ * Dynamically generated stylesheet for html5
+ * CSS class: source-html5, CSS id: 
+ * GeSHi (C) 2004 - 2007 Nigel McNie, 2007 - 2008 Benny Baumann
+ * (http://qbnz.com/highlighter/ and http://geshi.org/)
+ * --------------------------------------
+ */
+.html5.source-html5 .de1, .html5.source-html5 .de2 {font: normal normal 1em/1.2em monospace; margin:0; padding:0; background:none; vertical-align:top;font-family: monospace, monospace;}
+.html5.source-html5  {font-family:monospace;}
+.html5.source-html5 .imp {font-weight: bold; color: red;}
+.html5.source-html5 li, .html5.source-html5 .li1 {font-weight: normal; vertical-align:top;}
+.html5.source-html5 .ln {width:1px;text-align:right;margin:0;padding:0 2px;vertical-align:top;}
+.html5.source-html5 .li2 {font-weight: bold; vertical-align:top;}
+.html5.source-html5 .kw2 {color: #000000; font-weight: bold;}
+.html5.source-html5 .kw3 {color: #000066;}
+.html5.source-html5 .es0 {color: #000099; font-weight: bold;}
+.html5.source-html5 .br0 {color: #66cc66;}
+.html5.source-html5 .sy0 {color: #66cc66;}
+.html5.source-html5 .st0 {color: #ff0000;}
+.html5.source-html5 .nu0 {color: #cc66cc;}
+.html5.source-html5 .sc-2 {color: #404040;}
+.html5.source-html5 .sc-1 {color: #808080; font-style: italic;}
+.html5.source-html5 .sc0 {color: #00bbdd;}
+.html5.source-html5 .sc1 {color: #ddbb00;}
+.html5.source-html5 .sc2 {color: #009900;}
+.html5.source-html5 .ln-xtra, .html5.source-html5 li.ln-xtra, .html5.source-html5 div.ln-xtra {background-color: #ffc;}
+.html5.source-html5 span.xtra { display:block; }
+
+/*]]>*/
+</style><style type="text/css">/*<![CDATA[*/
+.source-xml {line-height: normal;}
+.source-xml li, .source-xml pre {
+	line-height: normal; border: 0px none white;
+}
+/**
+ * GeSHi Dynamically Generated Stylesheet
+ * --------------------------------------
+ * Dynamically generated stylesheet for xml
+ * CSS class: source-xml, CSS id: 
+ * GeSHi (C) 2004 - 2007 Nigel McNie, 2007 - 2008 Benny Baumann
+ * (http://qbnz.com/highlighter/ and http://geshi.org/)
+ * --------------------------------------
+ */
+.xml.source-xml .de1, .xml.source-xml .de2 {font: normal normal 1em/1.2em monospace; margin:0; padding:0; background:none; vertical-align:top;font-family: monospace, monospace;}
+.xml.source-xml  {font-family:monospace;}
+.xml.source-xml .imp {font-weight: bold; color: red;}
+.xml.source-xml li, .xml.source-xml .li1 {font-weight: normal; vertical-align:top;}
+.xml.source-xml .ln {width:1px;text-align:right;margin:0;padding:0 2px;vertical-align:top;}
+.xml.source-xml .li2 {font-weight: bold; vertical-align:top;}
+.xml.source-xml .es0 {color: #000099; font-weight: bold;}
+.xml.source-xml .br0 {color: #66cc66;}
+.xml.source-xml .sy0 {color: #66cc66;}
+.xml.source-xml .st0 {color: #ff0000;}
+.xml.source-xml .nu0 {color: #cc66cc;}
+.xml.source-xml .sc-1 {color: #808080; font-style: italic;}
+.xml.source-xml .sc0 {color: #00bbdd;}
+.xml.source-xml .sc1 {color: #ddbb00;}
+.xml.source-xml .sc2 {color: #339933;}
+.xml.source-xml .sc3 {color: #009900;}
+.xml.source-xml .re0 {color: #000066;}
+.xml.source-xml .re1 {color: #000000; font-weight: bold;}
+.xml.source-xml .re2 {color: #000000; font-weight: bold;}
+.xml.source-xml .ln-xtra, .xml.source-xml li.ln-xtra, .xml.source-xml div.ln-xtra {background-color: #ffc;}
+.xml.source-xml span.xtra { display:block; }
+
+/*]]>*/
+</style><style type="text/css">/*<![CDATA[*/
+.source-javascript {line-height: normal;}
+.source-javascript li, .source-javascript pre {
+	line-height: normal; border: 0px none white;
+}
+/**
+ * GeSHi Dynamically Generated Stylesheet
+ * --------------------------------------
+ * Dynamically generated stylesheet for javascript
+ * CSS class: source-javascript, CSS id: 
+ * GeSHi (C) 2004 - 2007 Nigel McNie, 2007 - 2008 Benny Baumann
+ * (http://qbnz.com/highlighter/ and http://geshi.org/)
+ * --------------------------------------
+ */
+.javascript.source-javascript .de1, .javascript.source-javascript .de2 {font: normal normal 1em/1.2em monospace; margin:0; padding:0; background:none; vertical-align:top;font-family: monospace, monospace;}
+.javascript.source-javascript  {font-family:monospace;}
+.javascript.source-javascript .imp {font-weight: bold; color: red;}
+.javascript.source-javascript li, .javascript.source-javascript .li1 {font-weight: normal; vertical-align:top;}
+.javascript.source-javascript .ln {width:1px;text-align:right;margin:0;padding:0 2px;vertical-align:top;}
+.javascript.source-javascript .li2 {font-weight: bold; vertical-align:top;}
+.javascript.source-javascript .kw1 {color: #000066; font-weight: bold;}
+.javascript.source-javascript .kw2 {color: #003366; font-weight: bold;}
+.javascript.source-javascript .kw3 {color: #000066;}
+.javascript.source-javascript .kw5 {color: #FF0000;}
+.javascript.source-javascript .co1 {color: #006600; font-style: italic;}
+.javascript.source-javascript .co2 {color: #009966; font-style: italic;}
+.javascript.source-javascript .coMULTI {color: #006600; font-style: italic;}
+.javascript.source-javascript .es0 {color: #000099; font-weight: bold;}
+.javascript.source-javascript .br0 {color: #009900;}
+.javascript.source-javascript .sy0 {color: #339933;}
+.javascript.source-javascript .st0 {color: #3366CC;}
+.javascript.source-javascript .nu0 {color: #CC0000;}
+.javascript.source-javascript .me1 {color: #660066;}
+.javascript.source-javascript .ln-xtra, .javascript.source-javascript li.ln-xtra, .javascript.source-javascript div.ln-xtra {background-color: #ffc;}
+.javascript.source-javascript span.xtra { display:block; }
+
+/*]]>*/
+</style><style type="text/css">/*<![CDATA[*/
+.source-text {line-height: normal;}
+.source-text li, .source-text pre {
+	line-height: normal; border: 0px none white;
+}
+/**
+ * GeSHi Dynamically Generated Stylesheet
+ * --------------------------------------
+ * Dynamically generated stylesheet for text
+ * CSS class: source-text, CSS id: 
+ * GeSHi (C) 2004 - 2007 Nigel McNie, 2007 - 2008 Benny Baumann
+ * (http://qbnz.com/highlighter/ and http://geshi.org/)
+ * --------------------------------------
+ */
+.text.source-text .de1, .text.source-text .de2 {font: normal normal 1em/1.2em monospace; margin:0; padding:0; background:none; vertical-align:top;font-family: monospace, monospace;}
+.text.source-text  {font-family:monospace;}
+.text.source-text .imp {font-weight: bold; color: red;}
+.text.source-text li, .text.source-text .li1 {font-weight: normal; vertical-align:top;}
+.text.source-text .ln {width:1px;text-align:right;margin:0;padding:0 2px;vertical-align:top;}
+.text.source-text .li2 {font-weight: bold; vertical-align:top;}
+.text.source-text .ln-xtra, .text.source-text li.ln-xtra, .text.source-text div.ln-xtra {background-color: #ffc;}
+.text.source-text span.xtra { display:block; }
+
+/*]]>*/
+</style><!--[if lt IE 7]><style type="text/css">body{behavior:url("/skins/vector/csshover.min.htc")}</style><![endif]--></head>
+<body class="mediawiki ltr sitedir-ltr ns-0 ns-subject page-API skin-vector action-view vector-animateLayout">
+		<div id="mw-page-base" class="noprint"></div>
+		<div id="mw-head-base" class="noprint"></div>
+		<div id="content" class="mw-body" role="main">
+			<a id="top"></a>
+			<div id="mw-js-message" style="display:none;"></div>
+						<h1 id="firstHeading" class="firstHeading" lang="en"><span dir="auto">API</span></h1>
+			<div id="bodyContent">
+								<div id="siteSub">From OpenCellID wiki</div>
+								<div id="contentSub"></div>
+												<div id="jump-to-nav" class="mw-jump">
+					Jump to:					<a href="#mw-navigation">navigation</a>, 					<a href="#p-search">search</a>
+				</div>
+				<div id="mw-content-text" lang="en" dir="ltr" class="mw-content-ltr"><table align="right">
+<tr>
+<td><div id="toc" class="toc"><div id="toctitle"><h2>Contents</h2></div>
+<ul>
+<li class="toclevel-1 tocsection-1"><a href="#API_key"><span class="tocnumber">1</span> <span class="toctext">API key</span></a></li>
+<li class="toclevel-1 tocsection-2"><a href="#WebServiceURL"><span class="tocnumber">2</span> <span class="toctext">WebServiceURL</span></a></li>
+<li class="toclevel-1 tocsection-3"><a href="#.22changeable.22_attribute"><span class="tocnumber">3</span> <span class="toctext">"changeable" attribute</span></a></li>
+<li class="toclevel-1 tocsection-4"><a href="#Filtering_of_data"><span class="tocnumber">4</span> <span class="toctext">Filtering of data</span></a></li>
+<li class="toclevel-1 tocsection-5"><a href="#Payload_legend"><span class="tocnumber">5</span> <span class="toctext">Payload legend</span></a></li>
+<li class="toclevel-1 tocsection-6"><a href="#Error_codes"><span class="tocnumber">6</span> <span class="toctext">Error codes</span></a></li>
+<li class="toclevel-1 tocsection-7"><a href="#Adding_a_single_measurement"><span class="tocnumber">7</span> <span class="toctext">Adding a single measurement</span></a>
+<ul>
+<li class="toclevel-2 tocsection-8"><a href="#Parameters"><span class="tocnumber">7.1</span> <span class="toctext">Parameters</span></a></li>
+<li class="toclevel-2 tocsection-9"><a href="#Payload"><span class="tocnumber">7.2</span> <span class="toctext">Payload</span></a></li>
+<li class="toclevel-2 tocsection-10"><a href="#Response"><span class="tocnumber">7.3</span> <span class="toctext">Response</span></a></li>
+<li class="toclevel-2 tocsection-11"><a href="#Example"><span class="tocnumber">7.4</span> <span class="toctext">Example</span></a></li>
+<li class="toclevel-2 tocsection-12"><a href="#Time_needed_for_processing_newly_uploaded_measurements"><span class="tocnumber">7.5</span> <span class="toctext">Time needed for processing newly uploaded measurements</span></a></li>
+</ul>
+</li>
+<li class="toclevel-1 tocsection-13"><a href="#Uploading_measurements_from_a_CSV_file"><span class="tocnumber">8</span> <span class="toctext">Uploading measurements from a CSV file</span></a>
+<ul>
+<li class="toclevel-2 tocsection-14"><a href="#Parameters_2"><span class="tocnumber">8.1</span> <span class="toctext">Parameters</span></a></li>
+<li class="toclevel-2 tocsection-15"><a href="#Payload_2"><span class="tocnumber">8.2</span> <span class="toctext">Payload</span></a></li>
+<li class="toclevel-2 tocsection-16"><a href="#Response_2"><span class="tocnumber">8.3</span> <span class="toctext">Response</span></a></li>
+<li class="toclevel-2 tocsection-17"><a href="#Business_logic"><span class="tocnumber">8.4</span> <span class="toctext">Business logic</span></a></li>
+<li class="toclevel-2 tocsection-18"><a href="#cURL_command"><span class="tocnumber">8.5</span> <span class="toctext">cURL command</span></a></li>
+<li class="toclevel-2 tocsection-19"><a href="#Time_needed_for_processing_newly_uploaded_measurements_2"><span class="tocnumber">8.6</span> <span class="toctext">Time needed for processing newly uploaded measurements</span></a></li>
+<li class="toclevel-2 tocsection-20"><a href="#FAQ"><span class="tocnumber">8.7</span> <span class="toctext">FAQ</span></a></li>
+</ul>
+</li>
+<li class="toclevel-1 tocsection-21"><a href="#Uploading_measurements_from_a_JSON_file"><span class="tocnumber">9</span> <span class="toctext">Uploading measurements from a JSON file</span></a>
+<ul>
+<li class="toclevel-2 tocsection-22"><a href="#Parameters_3"><span class="tocnumber">9.1</span> <span class="toctext">Parameters</span></a></li>
+<li class="toclevel-2 tocsection-23"><a href="#Payload_3"><span class="tocnumber">9.2</span> <span class="toctext">Payload</span></a></li>
+<li class="toclevel-2 tocsection-24"><a href="#Response_3"><span class="tocnumber">9.3</span> <span class="toctext">Response</span></a></li>
+<li class="toclevel-2 tocsection-25"><a href="#Business_logic_2"><span class="tocnumber">9.4</span> <span class="toctext">Business logic</span></a></li>
+<li class="toclevel-2 tocsection-26"><a href="#cURL_command_2"><span class="tocnumber">9.5</span> <span class="toctext">cURL command</span></a></li>
+<li class="toclevel-2 tocsection-27"><a href="#Time_needed_for_processing_newly_uploaded_measurements_3"><span class="tocnumber">9.6</span> <span class="toctext">Time needed for processing newly uploaded measurements</span></a></li>
+<li class="toclevel-2 tocsection-28"><a href="#FAQ_2"><span class="tocnumber">9.7</span> <span class="toctext">FAQ</span></a></li>
+</ul>
+</li>
+<li class="toclevel-1 tocsection-29"><a href="#Uploading_measurements_from_CLF3_file"><span class="tocnumber">10</span> <span class="toctext">Uploading measurements from CLF3 file</span></a>
+<ul>
+<li class="toclevel-2 tocsection-30"><a href="#Parameters_4"><span class="tocnumber">10.1</span> <span class="toctext">Parameters</span></a></li>
+<li class="toclevel-2 tocsection-31"><a href="#Payload_4"><span class="tocnumber">10.2</span> <span class="toctext">Payload</span></a></li>
+<li class="toclevel-2 tocsection-32"><a href="#Response_4"><span class="tocnumber">10.3</span> <span class="toctext">Response</span></a></li>
+<li class="toclevel-2 tocsection-33"><a href="#Business_logic_3"><span class="tocnumber">10.4</span> <span class="toctext">Business logic</span></a></li>
+<li class="toclevel-2 tocsection-34"><a href="#Time_needed_for_processing_newly_uploaded_measurements_4"><span class="tocnumber">10.5</span> <span class="toctext">Time needed for processing newly uploaded measurements</span></a></li>
+</ul>
+</li>
+<li class="toclevel-1 tocsection-35"><a href="#Getting_cell_position"><span class="tocnumber">11</span> <span class="toctext">Getting cell position</span></a>
+<ul>
+<li class="toclevel-2 tocsection-36"><a href="#Parameters_5"><span class="tocnumber">11.1</span> <span class="toctext">Parameters</span></a></li>
+<li class="toclevel-2 tocsection-37"><a href="#Headers"><span class="tocnumber">11.2</span> <span class="toctext">Headers</span></a></li>
+<li class="toclevel-2 tocsection-38"><a href="#Payload_5"><span class="tocnumber">11.3</span> <span class="toctext">Payload</span></a></li>
+<li class="toclevel-2 tocsection-39"><a href="#Response_5"><span class="tocnumber">11.4</span> <span class="toctext">Response</span></a>
+<ul>
+<li class="toclevel-3 tocsection-40"><a href="#XML"><span class="tocnumber">11.4.1</span> <span class="toctext">XML</span></a></li>
+<li class="toclevel-3 tocsection-41"><a href="#JSON"><span class="tocnumber">11.4.2</span> <span class="toctext">JSON</span></a></li>
+<li class="toclevel-3 tocsection-42"><a href="#AT"><span class="tocnumber">11.4.3</span> <span class="toctext">AT</span></a></li>
+</ul>
+</li>
+<li class="toclevel-2 tocsection-43"><a href="#Business_logic_4"><span class="tocnumber">11.5</span> <span class="toctext">Business logic</span></a></li>
+<li class="toclevel-2 tocsection-44"><a href="#Example_2"><span class="tocnumber">11.6</span> <span class="toctext">Example</span></a></li>
+<li class="toclevel-2 tocsection-45"><a href="#Availability"><span class="tocnumber">11.7</span> <span class="toctext">Availability</span></a></li>
+</ul>
+</li>
+<li class="toclevel-1 tocsection-46"><a href="#Getting_the_list_of_cells_in_a_specified_area"><span class="tocnumber">12</span> <span class="toctext">Getting the list of cells in a specified area</span></a>
+<ul>
+<li class="toclevel-2 tocsection-47"><a href="#Parameters_6"><span class="tocnumber">12.1</span> <span class="toctext">Parameters</span></a></li>
+<li class="toclevel-2 tocsection-48"><a href="#Payload_6"><span class="tocnumber">12.2</span> <span class="toctext">Payload</span></a></li>
+<li class="toclevel-2 tocsection-49"><a href="#Response_6"><span class="tocnumber">12.3</span> <span class="toctext">Response</span></a>
+<ul>
+<li class="toclevel-3 tocsection-50"><a href="#XML_2"><span class="tocnumber">12.3.1</span> <span class="toctext">XML</span></a></li>
+<li class="toclevel-3 tocsection-51"><a href="#KML_.28default.29"><span class="tocnumber">12.3.2</span> <span class="toctext">KML (default)</span></a></li>
+<li class="toclevel-3 tocsection-52"><a href="#CSV"><span class="tocnumber">12.3.3</span> <span class="toctext">CSV</span></a></li>
+<li class="toclevel-3 tocsection-53"><a href="#JSON_2"><span class="tocnumber">12.3.4</span> <span class="toctext">JSON</span></a></li>
+</ul>
+</li>
+<li class="toclevel-2 tocsection-54"><a href="#Business_logic_5"><span class="tocnumber">12.4</span> <span class="toctext">Business logic</span></a></li>
+<li class="toclevel-2 tocsection-55"><a href="#Example_3"><span class="tocnumber">12.5</span> <span class="toctext">Example</span></a></li>
+<li class="toclevel-2 tocsection-56"><a href="#Availability_2"><span class="tocnumber">12.6</span> <span class="toctext">Availability</span></a></li>
+</ul>
+</li>
+<li class="toclevel-1 tocsection-57"><a href="#Getting_the_number_of_cells_in_a_specified_area"><span class="tocnumber">13</span> <span class="toctext">Getting the number of cells in a specified area</span></a>
+<ul>
+<li class="toclevel-2 tocsection-58"><a href="#Parameters_7"><span class="tocnumber">13.1</span> <span class="toctext">Parameters</span></a></li>
+<li class="toclevel-2 tocsection-59"><a href="#Payload_7"><span class="tocnumber">13.2</span> <span class="toctext">Payload</span></a></li>
+<li class="toclevel-2 tocsection-60"><a href="#Response_7"><span class="tocnumber">13.3</span> <span class="toctext">Response</span></a>
+<ul>
+<li class="toclevel-3 tocsection-61"><a href="#XML_3"><span class="tocnumber">13.3.1</span> <span class="toctext">XML</span></a></li>
+<li class="toclevel-3 tocsection-62"><a href="#JSON_3"><span class="tocnumber">13.3.2</span> <span class="toctext">JSON</span></a></li>
+</ul>
+</li>
+<li class="toclevel-2 tocsection-63"><a href="#Business_logic_6"><span class="tocnumber">13.4</span> <span class="toctext">Business logic</span></a></li>
+<li class="toclevel-2 tocsection-64"><a href="#Example_4"><span class="tocnumber">13.5</span> <span class="toctext">Example</span></a></li>
+<li class="toclevel-2 tocsection-65"><a href="#Availability_3"><span class="tocnumber">13.6</span> <span class="toctext">Availability</span></a></li>
+</ul>
+</li>
+</ul>
+</div>
+
+</td></tr></table>
+<div style="font-size: 180%;"><span style="color:#505D89"><b>API</b></span></div><br />
+<p>This wiki page describes all available API functions.<br />
+Please contact <u><a rel="nofollow" class="external text" href="/cdn-cgi/l/email-protection#a2cac7cececde2cdd2c7ccc1c7cececbc68ccdd0c5">Unwired Labs</a></u> if you have any suggestions for improvement or bugs to report.
+</p>
+<h2><span class="mw-headline" id="API_key">API key</span></h2>
+<p>Most of the API calls require an API key. This API key can be obtained by registering <u><a rel="nofollow" class="external text" href="https://opencellid.org/">here</a></u>.<br />
+All uploaded data will be stored along with this API key. This offers many functions, including the deletion of data from users that provide incorrect data.<br />
+It also allows the identification of users that are violating the community server usage policy.
+</p><p>Some smartphone apps also require an API key, for example the <u><a rel="nofollow" class="external text" href="https://play.google.com/store/apps/details?id=info.zamojski.soft.towercollector">Tower Collector</a></u>.
+</p><p>In the examples below "apiKey" is used as a place holder for this parameter.
+</p>
+<h2><span class="mw-headline" id="WebServiceURL">WebServiceURL</span></h2>
+<p>The base URL (&lt;WebServiceURL&gt;) for the OpenCellID API service. This should be either <code><a rel="nofollow" class="external free" href="http://opencellid.org">http://opencellid.org</a></code> or <code><a rel="nofollow" class="external free" href="https://opencellid.org">https://opencellid.org</a></code>.<br />
+<b>Note:</b> HTTPS is recommended for secure communication.<br />
+</p>
+<h2><span class="mw-headline" id=".22changeable.22_attribute">"changeable" attribute</span></h2>
+<p>The meaning of the "changeable" value returned by some methods is the following:<br />
+</p>
+<ul>
+<li>some cell positions in the database are precise; for example, the GSM network provider O2 in Germany provides GPS information along with the Cell ID information and software is able to extract this information for OpenCellID.<br />
+</li>
+<li>in this case, new measurements for the cell are stored and shown on the map; however, their GPS positions are not used for calculating the GPS position of the cell tower.
+</li>
+</ul>
+<p>changeable=1:<br />
+the GPS position of the cell tower has been calculated from all available measurements
+</p><p>changeable=0:<br />
+the GPS position of the cell tower is precise; no measurements have been used to calculate it.
+</p>
+<h2><span class="mw-headline" id="Filtering_of_data">Filtering of data</span></h2>
+<p>The following filters are currently applied to all incoming data and decide if a measurement is suspicious or valid.<br />
+Suspect data is inserted into a database table with suspect data which can be re-examined at a later stage if required.
+</p>
+<table class="wikitable sortable" style="font-size: 85%; text-align: left;">
+
+<tr>
+<th scope="col"> Parameter
+</th>
+<th scope="col"> Rules
+</th></tr>
+<tr>
+<td title="Parameter"> act
+</td>
+<td> must be one of supported type:<br />1xRTT, CDMA, eHRPD, IS95A, IS95B, EVDO_0, EVDO_A, EVDO_B, UMTS, HSPA+, HSDPA, HSUPA, HSPA, LTE, LTECATM, NR, NBIOT, EDGE, GPRS, GSM
+</td></tr>
+<tr>
+<td title="Parameter"> MCC
+</td>
+<td title="Rules"> must be known in the database
+</td></tr>
+<tr>
+<td title="Parameter"> MCC
+</td>
+<td title="Rules"> must be in the range of 100 to 999
+</td></tr>
+<tr>
+<td title="Parameter"> MNC/SID
+</td>
+<td title="Rules"> must be known in the database
+</td></tr>
+<tr>
+<td title="Parameter"> MNC
+</td>
+<td title="Rules"> must be in the range of 0 to 999 for GSM, UMTS, LTE, NR and NBIOT
+</td></tr>
+<tr>
+<td title="Parameter"> MNC/SID
+</td>
+<td title="Rules"> must be in the range of 0 to 32767 for CDMA
+</td></tr>
+<tr>
+<td title="Parameter"> LAC/TAC/NID
+</td>
+<td title="Rules"> must be in the range of 1 to 65535 for all radios except NR, 0 to 16777215 for NR.
+</td></tr>
+<tr>
+<td title="Parameter"> CID
+</td>
+<td title="Rules"> must be in the range of 1 to 65535 for GSM
+</td></tr>
+<tr>
+<td title="Parameter"> CID
+</td>
+<td title="Rules"> must be in the range of 1 to 268435455 for UMTS and LTE, 1 to 68719476735 for NR
+</td></tr>
+<tr>
+<td title="Parameter"> CID/BID
+</td>
+<td title="Rules"> must be in the range 1 to 65535 for CDMA
+</td></tr>
+<tr>
+<td title="Parameter"> longitude
+</td>
+<td title="Rules"> must be float (not integer)
+</td></tr>
+<tr>
+<td title="Parameter"> longitude
+</td>
+<td title="Rules"> must be in the range: (-180,0) U (0,180)
+</td></tr>
+<tr>
+<td title="Parameter"> longitude
+</td>
+<td title="Rules"> must be&#160;!= 0
+</td></tr>
+<tr>
+<td title="Parameter"> latitude
+</td>
+<td title="Rules"> must be float (not integer)
+</td></tr>
+<tr>
+<td title="Parameter"> latitude
+</td>
+<td title="Rules"> must be in the range: (-90,0) U (0,90)
+</td></tr>
+<tr>
+<td title="Parameter"> latitude
+</td>
+<td title="Rules"> must be&#160;!= 0
+</td></tr></table>
+<table class="wikitable sortable" style="font-size: 85%; text-align: left;">
+
+<tr>
+<th scope="col"> Parameters
+</th>
+<th scope="col"> Rules
+</th></tr>
+<tr>
+<td title="Parameter"> MCC,MNC,LAC,CID,longitude,latitude
+</td>
+<td> must have unique coordinates for the cell
+</td></tr>
+<tr>
+<td title="Parameter"> MCC,longitude,latitude
+</td>
+<td title="Rules"> must have coordinates in the home country
+</td></tr>
+<tr>
+<td title="Parameter"> MCC,MNC,LAC,CID,longitude,latitude
+</td>
+<td title="Rules"> must be closer than 150 km away from the cell (only in case of precise cells)
+</td></tr></table>
+<p>The following filters are currently applied to optional fields in all incoming data.<br />
+If an optional field has invalid value, then only the value is rejected.
+</p>
+<table class="wikitable sortable" style="font-size: 85%; text-align: left;">
+
+<tr>
+<th scope="col"> Parameter
+</th>
+<th scope="col"> Rules
+</th></tr>
+<tr>
+<td title="Parameter"> measured_at
+</td>
+<td> must be in one of supported date formats:<br />- timestamp (milliseconds since 1/1/1970 00:00:00 GMT),<br />- "yyyy-MM-dd HH:mm:ss",<br />- "yyyyMMddHHmmss",<br />- "yyyy-MM-dd HH:mm:ss.SSSZ",<br />- "yyyy-MM-dd"
+</td></tr>
+<tr>
+<td title="Parameter"> signal
+</td>
+<td title="Rules">
+<table class="wikitable sortable" style="font-size: 85%; text-align: left;">
+
+<tr>
+<th scope="col"> Technology
+</th>
+<th scope="col"> Rules
+</th></tr>
+<tr>
+<td title="Technology"> GSM
+</td>
+<td title="Rules"> RSSI in dBm in the range of -51 to -113 or ASU in the range of 0 to 31
+</td></tr>
+<tr>
+<td title="Technology"> UMTS
+</td>
+<td title="Rules"> RSCP in dBm in the range of -25 to -121 or ASU in the range of -5 to 91
+</td></tr>
+<tr>
+<td title="Technology"> LTE
+</td>
+<td title="Rules"> RSRP in dBm in the range of -45 to -137 or ASU in the range of 0 to 95
+</td></tr>
+<tr>
+<td title="Technology"> NR
+</td>
+<td title="Rules"> RSRP in dBm in the range of -44 to -140 or ASU in the range of 0 to 97
+</td></tr>
+<tr>
+<td title="Technology"> CDMA
+</td>
+<td title="Rules"> RSSI in dBm in the range of -75 to -100 or ASU in the range of 1 to 16
+</td></tr></table>
+</td></tr>
+<tr>
+<td title="Parameter"> rating
+</td>
+<td title="Rules"> must be in metres in the range of 0 to 35000
+</td></tr>
+<tr>
+<td title="Parameter"> speed
+</td>
+<td title="Rules"> must be in metres/second in the range of 0 to 300
+</td></tr>
+<tr>
+<td title="Parameter"> direction
+</td>
+<td title="Rules"> must be in the range of 0 to 360
+</td></tr>
+<tr>
+<td title="Parameter"> ta
+</td>
+<td title="Rules"> only for GSM and LTE; must be in the range of 0 to 63
+</td></tr>
+<tr>
+<td title="Parameter"> psc
+</td>
+<td title="Rules"> only for UMTS; must be in the range of 0 to 511
+</td></tr>
+<tr>
+<td title="Parameter"> pci
+</td>
+<td title="Rules"> only for LTE; must be in the range of 0 to 503
+</td></tr>
+<tr>
+<td title="Parameter"> txp
+</td>
+<td title="Rules"> must be in the range of -200 to 100
+</td></tr>
+<tr>
+<td title="Parameter"> tsrf
+</td>
+<td title="Rules"> must be in the range of -100 to 100
+</td></tr></table>
+<h2><span class="mw-headline" id="Payload_legend">Payload legend</span></h2>
+<p>A typical payload for API requests and Measurement submissions may include some or all of the following parameters:
+</p>
+<table class="wikitable sortable" style="font-size: 85%; text-align: left;">
+
+<tr>
+<th scope="col"> Parameter
+</th>
+<th scope="col"> Data type
+</th>
+<th scope="col"> Description
+</th>
+<th scope="col"> Optional
+</th></tr>
+<tr>
+<td title="Parameter"> &lt;apiKey&gt;
+</td>
+<td title="Data type"> string
+</td>
+<td title="Description"> API key assigned to the user submitting the measurement
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;lat&gt;
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> Latitude
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;lon&gt;
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> Longitude
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;mcc&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Mobile country code
+</td>
+<td title="Optional"> no<br />(except CDMA)
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;mnc&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Mobile network code or system identifier
+</td>
+<td title="Optional"> no<br />(except CDMA if sid is provided)
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;lac&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Local area code, tracking area code or network id
+</td>
+<td title="Optional"> no<br />(except CDMA if nid is provided or LTE or NR if tac is provided)
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;cellid&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Cell tower id or base station id
+</td>
+<td title="Optional"> no<br />(except CDMA if bid is provided)
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;signal&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Signal level: either in dBm or as defined in TS 27.007 8.5; both is accepted.
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;measured_at&gt;
+</td>
+<td title="Data type"> date
+</td>
+<td title="Description"> When the measurement was measured.<br />Supported date formats:<br />- timestamp (milliseconds since 1/1/1970 00:00:00 GMT)<br />- "yyyy-MM-dd HH:mm:ss"<br />- "yyyyMMddHHmmss"<br />- "yyyy-MM-dd HH:mm:ss.SSSZ"<br />- "yyyy-MM-dd"<br />Time zone: UTC
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;rating&gt;
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> GPS quality/accuracy information (metres)
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;speed&gt;
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> Speed when creating the measurement, in metres/second
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;direction&gt;
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> Heading direction when creating the measurement<br />(0=north, 90=east)
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;act&gt;
+</td>
+<td title="Data type"> string
+</td>
+<td title="Description"> Network access type; currently supported:<br />1xRTT, CDMA, eHRPD, IS95A, IS95B, EVDO_0, EVDO_A, EVDO_B, UMTS, HSPA+, HSDPA, HSUPA, HSPA, TDSCDMA, LTE, LTECATM, NR, NBIOT, EDGE, GPRS, GSM<br />
+<table class="wikitable sortable" style="font-size: 85%; text-align: left;">
+
+<tr>
+<th scope="col"> Technology
+</th>
+<th scope="col"> Type
+</th>
+<th scope="col"> Description
+</th></tr>
+<tr>
+<td title="Technology"> CDMA
+</td>
+<td title="Type"> 1xRTT
+</td>
+<td title="Description"> single-carrier Radio Transmission Technology (2.5G)
+</td></tr>
+<tr>
+<td title="Technology"> CDMA
+</td>
+<td title="Type"> CDMA (includes IS95A, IS95B)
+</td>
+<td title="Description"> Code division multiple access
+</td></tr>
+<tr>
+<td title="Technology"> CDMA
+</td>
+<td title="Type"> eHRPD
+</td>
+<td title="Description"> Enhanced High Rate Packet Data
+</td></tr>
+<tr>
+<td title="Technology"> CDMA
+</td>
+<td title="Type"> EVDO_0
+</td>
+<td title="Description"> Evolution-Data Optimized Revision 0
+</td></tr>
+<tr>
+<td title="Technology"> CDMA
+</td>
+<td title="Type"> EVDO_A
+</td>
+<td title="Description"> Evolution-Data Optimized Revision A
+</td></tr>
+<tr>
+<td title="Technology"> CDMA
+</td>
+<td title="Type"> EVDO_B
+</td>
+<td title="Description"> Evolution-Data Optimized Revision B
+</td></tr>
+<tr>
+<td title="Technology"> UMTS
+</td>
+<td title="Type"> UMTS
+</td>
+<td title="Description"> UMTS access
+</td></tr>
+<tr>
+<td title="Technology"> UMTS
+</td>
+<td title="Type"> HSPA+
+</td>
+<td title="Description"> High speed Packet Access
+</td></tr>
+<tr>
+<td title="Technology"> UMTS
+</td>
+<td title="Type"> HSDPA
+</td>
+<td title="Description"> High Speed Downlink Packet Access
+</td></tr>
+<tr>
+<td title="Technology"> UMTS
+</td>
+<td title="Type"> HSUPA
+</td>
+<td title="Description"> High Speed Uplink Packet Access
+</td></tr>
+<tr>
+<td title="Technology"> UMTS
+</td>
+<td title="Type"> HSPA
+</td>
+<td title="Description"> = "HSDPA/HSUPA" = High Speed Packet Access (both downlink and uplink)
+</td></tr>
+<tr>
+<td title="Technology"> UMTS
+</td>
+<td title="Type"> TDSCDMA
+</td>
+<td title="Description"> = "TDSCDMA" = Time Division Synchronous Code Division Multiple Access (TD-SCDMA)
+</td></tr>
+<tr>
+<td title="Technology"> LTE
+</td>
+<td title="Type"> LTE
+</td>
+<td title="Description"> Long term evolution
+</td></tr>
+<tr>
+<td title="Technology"> LTE
+</td>
+<td title="Type"> LTECATM
+</td>
+<td title="Description"> Long term evolution CAT-M network
+</td></tr>
+<tr>
+<td title="Technology"> NR
+</td>
+<td title="Type"> NR
+</td>
+<td title="Description"> New Radio (5G)
+</td></tr>
+<tr>
+<td title="Technology"> NBIOT
+</td>
+<td title="Type"> NBIOT
+</td>
+<td title="Description"> Narrowband IoT
+</td></tr>
+<tr>
+<td title="Technology"> iDEN
+</td>
+<td title="Type"> iDEN
+</td>
+<td title="Description"> Integrated Digital Enhanced Network
+</td></tr>
+<tr>
+<td title="Technology"> GSM
+</td>
+<td title="Type"> EDGE
+</td>
+<td title="Description"> Enhanced Data Rates for GSM Evolution
+</td></tr>
+<tr>
+<td title="Technology"> GSM
+</td>
+<td title="Type"> GPRS
+</td>
+<td title="Description"> GPRS access
+</td></tr></table>
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;ta&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Timing advance; only for GSM and LTE
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;psc&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Primary scrambling code; only for UMTS and TDSCDMA
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;tac&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Tracking area code; only for LTE or NR
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;pci&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Physical cell Id; only for LTE or NR
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;sid&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> System identifier; only for CDMA
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;nid&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Network id; only for CDMA
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;bid&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Base station id; only for CDMA
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;devn&gt;
+</td>
+<td title="Data type"> string
+</td>
+<td title="Description"> Device name as concatenated strings with the manufacturer and the model name; max 50 characters
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;txp&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> TX power in dBm
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;tsrf&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Temperature in the RF module; in degrees Celsius; only with &lt;txp&gt; parameter
+</td>
+<td title="Optional"> yes
+</td></tr></table>
+<p><br />
+</p>
+<h2><span class="mw-headline" id="Error_codes">Error codes</span></h2>
+<p>The following error codes might be returned by OpenCellID services:
+</p>
+<table class="wikitable sortable" style="font-size: 85%; text-align: left;">
+
+<tr>
+<th scope="col"> Error code
+</th>
+<th scope="col"> HTTP code
+</th>
+<th scope="col"> Description
+</th></tr>
+<tr>
+<td title="Error code"> 1
+</td>
+<td title="HTTP code"> 200
+</td>
+<td title="Description"> Cell not found
+</td></tr>
+<tr>
+<td title="Error code"> 2
+</td>
+<td title="HTTP code"> 401
+</td>
+<td title="Description"> Invalid API key
+</td></tr>
+<tr>
+<td title="Error code"> 3
+</td>
+<td title="HTTP code"> 400
+</td>
+<td title="Description"> Invalid input data
+</td></tr>
+<tr>
+<td title="Error code"> 4
+</td>
+<td title="HTTP code"> 403
+</td>
+<td title="Description"> Your API key must be white listed in order to run this operation. This service is free of charge as long as your application contributes to the OpenCellID project. Should your application meet this requirement, please contact <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="dcb1bdaeb7a9af9cb3acb9b2bfb9b0b0b5b8f2b3aebb">[email&#160;protected]</a> for the authorisation of your API key.<br /><br />For further details please visit:<br /><a rel="nofollow" class="external free" href="https://wiki.opencellid.org/wiki/Commercial_users">https://wiki.opencellid.org/wiki/Commercial_users</a><br /><a rel="nofollow" class="external free" href="https://wiki.opencellid.org/wiki/Request_whitelisting">https://wiki.opencellid.org/wiki/Request_whitelisting</a><br /><br />You can alternatively download the database here:<br /><a rel="nofollow" class="external free" href="https://opencellid.org/downloads/">https://opencellid.org/downloads/</a>
+</td></tr>
+<tr>
+<td title="Error code"> 5
+</td>
+<td title="HTTP code"> 500
+</td>
+<td title="Description"> Internal server error
+</td></tr>
+<tr>
+<td title="Error code"> 6
+</td>
+<td title="HTTP code"> 503
+</td>
+<td title="Description"> Too many requests. Try later again.
+</td></tr>
+<tr>
+<td title="Error code"> 7
+</td>
+<td title="HTTP code"> 429
+</td>
+<td title="Description"> Daily limit 1000 requests exceeded for your API key.<br /><br />For further details please visit:<br /><a rel="nofollow" class="external free" href="https://wiki.opencellid.org/wiki/Commercial_users">https://wiki.opencellid.org/wiki/Commercial_users</a><br /><br />You can alternatively download the database here:<br /><a rel="nofollow" class="external free" href="https://opencellid.org/downloads/">https://opencellid.org/downloads/</a>
+</td></tr></table>
+<h2><span class="mw-headline" id="Adding_a_single_measurement">Adding a single measurement</span></h2>
+<p>GET/POST request to
+</p>
+<pre>
+https://&lt;WebServiceURL&gt;/measure/add
+</pre>
+<h3><span class="mw-headline" id="Parameters">Parameters</span></h3>
+<p>&lt;WebServiceURL&gt;: the URL to the web service
+</p>
+<h3><span class="mw-headline" id="Payload">Payload</span></h3>
+<p>key=&lt;apiKey&gt;&amp;lat=&lt;lat&gt;&amp;lon=&lt;lon&gt;&amp;mcc=&lt;mcc&gt;&amp;mnc=&lt;mnc&gt;&amp;lac=&lt;lac&gt;&amp;cellid=&lt;cellid&gt;&amp;signal=&lt;signal&gt;&amp;measured_at=&lt;measured_at&gt;&amp;rating=&lt;rating&gt;&amp;speed=&lt;speed&gt;&amp;direction=&lt;direction&gt;&amp;act=&lt;act&gt;&amp;ta=&lt;ta&gt;&amp;psc=&lt;psc&gt;&amp;tac=&lt;tac&gt;&amp;pci=&lt;pci&gt;&amp;sid=&lt;sid&gt;&amp;nid=&lt;nid&gt;&amp;bid=&lt;bid&gt;&amp;devn=&lt;devn&gt;&amp;txp=&lt;txp&gt;&amp;tsrf=&lt;tsrf&gt;
+</p><p>Where
+</p><p><br />
+</p>
+<h3><span class="mw-headline" id="Response">Response</span></h3>
+<p>Upon successful insert, HTTP 200 is returned with the string "Your measurement has been inserted."
+</p>
+<h3><span class="mw-headline" id="Example">Example</span></h3>
+<p><u><a rel="nofollow" class="external free" href="https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;mnc=10&amp;lac=11&amp;cellid=12&amp;rating=10&amp;direction=90&amp;act=GPRS">https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;mnc=10&amp;lac=11&amp;cellid=12&amp;rating=10&amp;direction=90&amp;act=GPRS</a></u><br />
+<u><a rel="nofollow" class="external free" href="https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;mnc=10&amp;lac=11&amp;cellid=12&amp;rating=10.1&amp;direction=90.3&amp;speed=12.3&amp;act=GPRS&amp;ta=3">https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;mnc=10&amp;lac=11&amp;cellid=12&amp;rating=10.1&amp;direction=90.3&amp;speed=12.3&amp;act=GPRS&amp;ta=3</a></u><br />
+<u><a rel="nofollow" class="external free" href="https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;mnc=10&amp;lac=11&amp;cellid=12&amp;rating=10.1&amp;direction=90.3&amp;speed=12.3&amp;act=HSPA+&amp;psc=3">https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;mnc=10&amp;lac=11&amp;cellid=12&amp;rating=10.1&amp;direction=90.3&amp;speed=12.3&amp;act=HSPA+&amp;psc=3</a></u><br />
+<u><a rel="nofollow" class="external free" href="https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;mnc=10&amp;lac=11&amp;cellid=12&amp;rating=10.1&amp;direction=90.3&amp;speed=12.3&amp;act=LTE&amp;pci=3">https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;mnc=10&amp;lac=11&amp;cellid=12&amp;rating=10.1&amp;direction=90.3&amp;speed=12.3&amp;act=LTE&amp;pci=3</a></u><br />
+<u><a rel="nofollow" class="external free" href="https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;mnc=10&amp;tac=11&amp;cellid=12&amp;rating=10.1&amp;direction=90.3&amp;speed=12.3&amp;act=LTE&amp;pci=3">https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;mnc=10&amp;tac=11&amp;cellid=12&amp;rating=10.1&amp;direction=90.3&amp;speed=12.3&amp;act=LTE&amp;pci=3</a></u><br />
+<u><a rel="nofollow" class="external free" href="https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;mnc=10&amp;lac=11&amp;cellid=12&amp;rating=10.1&amp;direction=90.3&amp;speed=12.3&amp;act=1xRTT">https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;mnc=10&amp;lac=11&amp;cellid=12&amp;rating=10.1&amp;direction=90.3&amp;speed=12.3&amp;act=1xRTT</a></u><br />
+<u><a rel="nofollow" class="external free" href="https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;sid=10&amp;nid=11&amp;bid=12&amp;rating=10.1&amp;direction=90.3&amp;speed=12.3&amp;act=1xRTT">https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;sid=10&amp;nid=11&amp;bid=12&amp;rating=10.1&amp;direction=90.3&amp;speed=12.3&amp;act=1xRTT</a></u><br />
+<u><a rel="nofollow" class="external free" href="https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;sid=10&amp;nid=11&amp;bid=12&amp;rating=10.1&amp;direction=90.3&amp;speed=12.3&amp;act=eHRPD">https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;sid=10&amp;nid=11&amp;bid=12&amp;rating=10.1&amp;direction=90.3&amp;speed=12.3&amp;act=eHRPD</a></u><br />
+<u><a rel="nofollow" class="external free" href="https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;mnc=10&amp;lac=11&amp;cellid=12&amp;act=GSM&amp;devn=Samsung%20GT-S5830L&amp;txp=-45&amp;tsrf=22">https://opencellid.org/measure/add?key=xxx&amp;lat=10.11&amp;lon=11.12&amp;mcc=100&amp;mnc=10&amp;lac=11&amp;cellid=12&amp;act=GSM&amp;devn=Samsung%20GT-S5830L&amp;txp=-45&amp;tsrf=22</a></u>
+</p>
+<h3><span class="mw-headline" id="Time_needed_for_processing_newly_uploaded_measurements">Time needed for processing newly uploaded measurements</span></h3>
+<p>After uploading new measurements to the OpenCellID community servers they are added to our waiting queues and processed in the background.
+We aim the real-time processing, but maximum time depends on traffic on OpenCellID servers. Current throughput of our servers is around 15000 measurements per second.
+</p><p>Measurements are processed in 3 steps: 
+</p>
+<ol>
+<li> parsing and filtering raw data
+</li>
+<li> updating measurement statistics and storing measurements in the database
+</li>
+<li> updating existing cell towers information or adding new cell towers to the database
+</li>
+</ol>
+<p>Our waiting queues for cell towers and for measurements are independent, so you can see your measurements in the OpenCellID database but related cell towers might be not updated yet. This means that if you upload a measurement of a cell tower that was not in the database before and the waiting queue for cell towers has some data to process, you have to expect some times (usually few minutes) until the queue delivers the newly uploaded cell tower information.
+</p>
+<h2><span class="mw-headline" id="Uploading_measurements_from_a_CSV_file">Uploading measurements from a CSV file</span></h2>
+<p>POST request to
+</p>
+<pre>
+https://&lt;WebServiceURL&gt;/measure/uploadCsv
+</pre>
+<h3><span class="mw-headline" id="Parameters_2">Parameters</span></h3>
+<p>&lt;WebServiceURL&gt;: the URL to the web service
+</p>
+<h3><span class="mw-headline" id="Payload_2">Payload</span></h3>
+<p>CSV file of the following format:
+</p>
+<pre>
+mcc,mnc,lac,cellid,lon,lat,signal,measured_at,rating,speed,direction,act,ta,psc,tac,pci,sid,nid,bid
+100,2,434,9200,9.436598,52.892139,4,1389472208000,5.4,0,0,GPRS,3,,,,,,
+100,2,434,9200,9.441658,52.890351,4,1389472225000,20.1,10.4,90.1,HSPA+,,4,,,,,
+100,2,434,9200,9.441658,52.890351,4,1389472225000,20.1,10.4,90.1,LTE,,,,4,,,
+100,2,,9200,9.441658,52.890351,4,1389472225000,20.1,10.4,90.1,LTE,,,434,4,,,
+100,2,432,9200,9.441658,52.890351,4,1389472225000,20.1,10.4,90.1,LTE,,,432,4,,,
+100,1234,432,9201,9.441658,52.890351,4,1389472225000,20.1,10.4,90.1,eHRPD,,,,,,,
+100,1234,432,9201,9.441658,52.890351,4,1389472225000,20.1,10.4,90.1,eHRPD,,,,,1234,432,9201
+100,,,,9.441658,52.890351,4,1389472225000,20.1,10.4,90.1,1xRTT,,,,,1234,432,9201
+,,,,9.441658,52.890351,4,1389472225000,20.1,10.4,90.1,eHRPD,,,,,1234,432,9201
+...
+</pre>
+<p>Column names recognised:<br />
+mcc, mnc, lac, cellid, lat, lon, signal, measured_at, rating, speed, direction, act, ta, psc, tac, pci, sid, nid, bid
+</p><p>Maximum file size:<br />
+2 MB; upload multiple files if you want to upload more data.
+</p><p>Supplemented by the parameter <i>key=&lt;apiKey&gt;</i> as form POST field, which is the user's API key.
+</p><p><br />
+</p>
+<h3><span class="mw-headline" id="Response_2">Response</span></h3>
+<p>Upon successful insert, HTTP 200 is returned with the string "0,OK".
+</p>
+<h3><span class="mw-headline" id="Business_logic">Business logic</span></h3>
+<p>The request is handled by de.enaikoon.gpssuite.web.measure.NewMeasureController.
+</p>
+<h3><span class="mw-headline" id="cURL_command">cURL command</span></h3>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="bash source-bash"><pre class="de1">curl <span class="re5">-F</span> <span class="st0">&quot;key=apiKey&quot;</span> <span class="re5">-F</span> <span class="st0">&quot;datafile=@/path/to/file/mydata.csv;type=text/plain&quot;</span> https:<span class="sy0">//</span>opencellid.org<span class="sy0">/</span>measure<span class="sy0">/</span>uploadCsv</pre></div></div>
+<h3><span class="mw-headline" id="Time_needed_for_processing_newly_uploaded_measurements_2">Time needed for processing newly uploaded measurements</span></h3>
+<p>After uploading new measurements to the OpenCellID community servers they are added to our waiting queues and processed in the background.
+We aim the real-time processing, but maximum time depends on traffic on OpenCellID servers. Current throughput of our servers is around 15000 measurements per second.
+</p><p>Measurements are processed in 3 steps: 
+</p>
+<ol>
+<li> parsing and filtering raw data
+</li>
+<li> updating measurement statistics and storing measurements in the database
+</li>
+<li> updating existing cell towers information or adding new cell towers to the database
+</li>
+</ol>
+<p>Our waiting queues for cell towers and for measurements are independent, so you can see your measurements in the OpenCellID database but related cell towers might be not updated yet. This means that if you upload a measurement of a cell tower that was not in the database before and the waiting queue for cell towers has some data to process, you have to expect some times (usually few minutes) until the queue delivers the newly uploaded cell tower information.
+</p>
+<h3><span class="mw-headline" id="FAQ">FAQ</span></h3>
+<p><b>What does "optional" mean?</b><br />
+"optional" means that this field is not required in the csv file.<br />
+Minimal csv file looks as follows:<br />
+</p>
+<pre>
+mcc,mnc,lac,cellid,lon,lat
+262,2,434,9200,9.436598,52.892139
+</pre>
+<p><b>What does "Supplemented by the parameter key=&lt;apiKey&gt; as form POST field, which is the user's API key" mean?</b><br />
+This means that the user must send his data (apiKey and csv file) in the same way as from the following form:<br />
+</p>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="html5 source-html5"><pre class="de1"><span class="sc2">&lt;<span class="kw2">form</span> <span class="kw3">method</span><span class="sy0">=</span><span class="st0">&quot;post&quot;</span> <span class="kw3">action</span><span class="sy0">=</span><span class="st0">&quot;https://opencellid.org/measure/uploadCsv&quot;</span> <span class="kw3">enctype</span><span class="sy0">=</span><span class="st0">&quot;multipart/form-data&quot;</span>&gt;</span>
+  apiKey: <span class="sc2">&lt;<span class="kw2">input</span> <span class="kw3">type</span><span class="sy0">=</span><span class="st0">&quot;text&quot;</span> <span class="kw3">name</span><span class="sy0">=</span><span class="st0">&quot;key&quot;</span> <span class="sy0">/</span>&gt;</span>
+  CSV (max 2MB): <span class="sc2">&lt;<span class="kw2">input</span> <span class="kw3">type</span><span class="sy0">=</span><span class="st0">&quot;file&quot;</span> <span class="kw3">name</span><span class="sy0">=</span><span class="st0">&quot;datafile&quot;</span> <span class="sy0">/</span>&gt;</span>
+  <span class="sc2">&lt;<span class="kw2">input</span> <span class="kw3">type</span><span class="sy0">=</span><span class="st0">&quot;submit&quot;</span> <span class="kw3">name</span><span class="sy0">=</span><span class="st0">&quot;upload&quot;</span> <span class="kw3">value</span><span class="sy0">=</span><span class="st0">&quot;Upload&quot;</span><span class="sy0">/</span>&gt;</span>
+<span class="sc2">&lt;<span class="sy0">/</span><span class="kw2">form</span>&gt;</span></pre></div></div>
+<p><b>What does the following error mean?</b><br />
+</p>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="xml source-xml"><pre class="de1"><span class="sc3"><span class="re1">&lt;?xml</span> <span class="re0">version</span>=<span class="st0">&quot;1.0&quot;</span> <span class="re0">encoding</span>=<span class="st0">&quot;UTF-8&quot;</span><span class="re2">?&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;rsp</span> <span class="re0">stat</span>=<span class="st0">&quot;fail&quot;</span><span class="re2">&gt;</span><span class="re1">&lt;err</span> <span class="re0">info</span>=<span class="st0">&quot;cell not found&quot;</span> <span class="re0">code</span>=<span class="st0">&quot;1&quot;</span><span class="re2">/&gt;</span><span class="re1">&lt;/rsp<span class="re2">&gt;</span></span></span></pre></div></div>
+<p>This error message means that no cell was found for the given user criteria (mcc-mnc-lac-cid combination was not found in database).
+</p><p><b>Can I upload CDMA using mcc-mnc-lac-cellid parameters?</b><br />
+Yes, you can use mnc as sid, lac as nid and cellid as bid.
+</p>
+<h2><span class="mw-headline" id="Uploading_measurements_from_a_JSON_file">Uploading measurements from a JSON file</span></h2>
+<p>POST request to
+</p>
+<pre>
+https://&lt;WebServiceURL&gt;/measure/uploadJson
+</pre>
+<h3><span class="mw-headline" id="Parameters_3">Parameters</span></h3>
+<p>&lt;WebServiceURL&gt;: the URL to the web service
+</p>
+<h3><span class="mw-headline" id="Payload_3">Payload</span></h3>
+<p>JSON file (send in <i>datafile</i> parameter) of the following format:
+</p>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="javascript source-javascript"><pre class="de1"><span class="br0">&#123;</span>
+    <span class="st0">&quot;measurements&quot;</span><span class="sy0">:</span> <span class="br0">&#91;</span>
+        <span class="br0">&#123;</span>
+            <span class="st0">&quot;lon&quot;</span><span class="sy0">:</span> <span class="nu0">9.436598</span><span class="sy0">,</span>
+            <span class="st0">&quot;lat&quot;</span><span class="sy0">:</span> <span class="nu0">52.892139</span><span class="sy0">,</span>
+            <span class="st0">&quot;mcc&quot;</span><span class="sy0">:</span> <span class="nu0">100</span><span class="sy0">,</span>
+            <span class="st0">&quot;mnc&quot;</span><span class="sy0">:</span> <span class="nu0">2</span><span class="sy0">,</span>
+            <span class="st0">&quot;lac&quot;</span><span class="sy0">:</span> <span class="nu0">434</span><span class="sy0">,</span>
+            <span class="st0">&quot;cellid&quot;</span><span class="sy0">:</span> <span class="nu0">9200</span><span class="sy0">,</span>
+            <span class="st0">&quot;measured_at&quot;</span><span class="sy0">:</span> <span class="nu0">1389472224000</span><span class="sy0">,</span>
+            <span class="st0">&quot;signal&quot;</span><span class="sy0">:</span> <span class="sy0">-</span><span class="nu0">80</span><span class="sy0">,</span>
+            <span class="st0">&quot;rating&quot;</span><span class="sy0">:</span> <span class="nu0">5.4</span><span class="sy0">,</span>
+            <span class="st0">&quot;speed&quot;</span><span class="sy0">:</span> <span class="nu0">2.32</span><span class="sy0">,</span>
+            <span class="st0">&quot;direction&quot;</span><span class="sy0">:</span> <span class="nu0">93.22</span><span class="sy0">,</span>
+            <span class="st0">&quot;act&quot;</span><span class="sy0">:</span> <span class="st0">&quot;EDGE&quot;</span><span class="sy0">,</span>
+            <span class="st0">&quot;ta&quot;</span><span class="sy0">:</span> <span class="nu0">3</span>
+        <span class="br0">&#125;</span><span class="sy0">,</span>
+        <span class="br0">&#123;</span>
+            <span class="st0">&quot;lon&quot;</span><span class="sy0">:</span> <span class="nu0">9.441658</span><span class="sy0">,</span>
+            <span class="st0">&quot;lat&quot;</span><span class="sy0">:</span> <span class="nu0">52.890351</span><span class="sy0">,</span>
+            <span class="st0">&quot;mcc&quot;</span><span class="sy0">:</span> <span class="nu0">100</span><span class="sy0">,</span>
+            <span class="st0">&quot;mnc&quot;</span><span class="sy0">:</span> <span class="nu0">2</span><span class="sy0">,</span>
+            <span class="st0">&quot;lac&quot;</span><span class="sy0">:</span> <span class="nu0">3</span><span class="sy0">,</span>
+            <span class="st0">&quot;cellid&quot;</span><span class="sy0">:</span> <span class="nu0">9200</span><span class="sy0">,</span>
+            <span class="st0">&quot;measured_at&quot;</span><span class="sy0">:</span> <span class="nu0">1389472225000</span><span class="sy0">,</span>
+            <span class="st0">&quot;signal&quot;</span><span class="sy0">:</span> <span class="sy0">-</span><span class="nu0">80</span><span class="sy0">,</span>
+            <span class="st0">&quot;speed&quot;</span><span class="sy0">:</span> <span class="nu0">11.21</span><span class="sy0">,</span>
+            <span class="st0">&quot;act&quot;</span><span class="sy0">:</span> <span class="st0">&quot;HSDPA&quot;</span><span class="sy0">,</span>
+            <span class="st0">&quot;psc&quot;</span><span class="sy0">:</span> <span class="nu0">2</span>
+        <span class="br0">&#125;</span><span class="sy0">,</span>
+        <span class="br0">&#123;</span>
+            <span class="st0">&quot;lon&quot;</span><span class="sy0">:</span> <span class="nu0">9.441658</span><span class="sy0">,</span>
+            <span class="st0">&quot;lat&quot;</span><span class="sy0">:</span> <span class="nu0">52.890351</span><span class="sy0">,</span>
+            <span class="st0">&quot;mcc&quot;</span><span class="sy0">:</span> <span class="nu0">100</span><span class="sy0">,</span>
+            <span class="st0">&quot;mnc&quot;</span><span class="sy0">:</span> <span class="nu0">2</span><span class="sy0">,</span>
+            <span class="st0">&quot;lac&quot;</span><span class="sy0">:</span> <span class="nu0">321</span><span class="sy0">,</span>
+            <span class="st0">&quot;cellid&quot;</span><span class="sy0">:</span> <span class="nu0">9200</span><span class="sy0">,</span>
+            <span class="st0">&quot;measured_at&quot;</span><span class="sy0">:</span> <span class="nu0">1389472226000</span><span class="sy0">,</span>
+            <span class="st0">&quot;signal&quot;</span><span class="sy0">:</span> <span class="sy0">-</span><span class="nu0">80</span><span class="sy0">,</span>
+            <span class="st0">&quot;rating&quot;</span><span class="sy0">:</span> <span class="nu0">11.21</span><span class="sy0">,</span>
+            <span class="st0">&quot;act&quot;</span><span class="sy0">:</span> <span class="st0">&quot;LTE&quot;</span><span class="sy0">,</span>
+            <span class="st0">&quot;pci&quot;</span><span class="sy0">:</span> <span class="nu0">2</span>
+        <span class="br0">&#125;</span><span class="sy0">,</span>
+        <span class="br0">&#123;</span>
+            <span class="st0">&quot;lon&quot;</span><span class="sy0">:</span> <span class="nu0">9.441658</span><span class="sy0">,</span>
+            <span class="st0">&quot;lat&quot;</span><span class="sy0">:</span> <span class="nu0">52.890351</span><span class="sy0">,</span>
+            <span class="st0">&quot;mcc&quot;</span><span class="sy0">:</span> <span class="nu0">100</span><span class="sy0">,</span>
+            <span class="st0">&quot;mnc&quot;</span><span class="sy0">:</span> <span class="nu0">2</span><span class="sy0">,</span>
+            <span class="st0">&quot;tac&quot;</span><span class="sy0">:</span> <span class="nu0">321</span><span class="sy0">,</span>
+            <span class="st0">&quot;cellid&quot;</span><span class="sy0">:</span> <span class="nu0">9200</span><span class="sy0">,</span>
+            <span class="st0">&quot;measured_at&quot;</span><span class="sy0">:</span> <span class="nu0">1389472227000</span><span class="sy0">,</span>
+            <span class="st0">&quot;signal&quot;</span><span class="sy0">:</span> <span class="sy0">-</span><span class="nu0">80</span><span class="sy0">,</span>
+            <span class="st0">&quot;act&quot;</span><span class="sy0">:</span> <span class="st0">&quot;LTE&quot;</span>
+        <span class="br0">&#125;</span><span class="sy0">,</span>
+        <span class="br0">&#123;</span>
+            <span class="st0">&quot;lon&quot;</span><span class="sy0">:</span> <span class="nu0">9.441658</span><span class="sy0">,</span>
+            <span class="st0">&quot;lat&quot;</span><span class="sy0">:</span> <span class="nu0">52.890351</span><span class="sy0">,</span>
+            <span class="st0">&quot;mcc&quot;</span><span class="sy0">:</span> <span class="nu0">100</span><span class="sy0">,</span>
+            <span class="st0">&quot;mnc&quot;</span><span class="sy0">:</span> <span class="nu0">12345</span><span class="sy0">,</span>
+            <span class="st0">&quot;lac&quot;</span><span class="sy0">:</span> <span class="nu0">1</span><span class="sy0">,</span>
+            <span class="st0">&quot;cellid&quot;</span><span class="sy0">:</span> <span class="nu0">2</span><span class="sy0">,</span>
+            <span class="st0">&quot;measured_at&quot;</span><span class="sy0">:</span> <span class="nu0">1389472228000</span><span class="sy0">,</span>
+            <span class="st0">&quot;signal&quot;</span><span class="sy0">:</span> <span class="sy0">-</span><span class="nu0">80</span><span class="sy0">,</span>
+            <span class="st0">&quot;act&quot;</span><span class="sy0">:</span> <span class="st0">&quot;eHRPD&quot;</span>
+        <span class="br0">&#125;</span><span class="sy0">,</span>
+        <span class="br0">&#123;</span>
+            <span class="st0">&quot;lon&quot;</span><span class="sy0">:</span> <span class="nu0">9.441658</span><span class="sy0">,</span>
+            <span class="st0">&quot;lat&quot;</span><span class="sy0">:</span> <span class="nu0">52.890351</span><span class="sy0">,</span>
+            <span class="st0">&quot;mcc&quot;</span><span class="sy0">:</span> <span class="nu0">100</span><span class="sy0">,</span>
+            <span class="st0">&quot;sid&quot;</span><span class="sy0">:</span> <span class="nu0">12345</span><span class="sy0">,</span>
+            <span class="st0">&quot;nid&quot;</span><span class="sy0">:</span> <span class="nu0">1</span><span class="sy0">,</span>
+            <span class="st0">&quot;bid&quot;</span><span class="sy0">:</span> <span class="nu0">2</span><span class="sy0">,</span>
+            <span class="st0">&quot;measured_at&quot;</span><span class="sy0">:</span> <span class="nu0">1389472229000</span><span class="sy0">,</span>
+            <span class="st0">&quot;signal&quot;</span><span class="sy0">:</span> <span class="sy0">-</span><span class="nu0">80</span><span class="sy0">,</span>
+            <span class="st0">&quot;act&quot;</span><span class="sy0">:</span> <span class="st0">&quot;EVDO_0&quot;</span>
+        <span class="br0">&#125;</span>
+    <span class="br0">&#93;</span>
+<span class="br0">&#125;</span></pre></div></div>
+<p>Field names recognised:<br />
+mcc, mnc, lac, cellid, lat, lon, signal, measured_at, rating, speed, direction, act, ta, psc, tac, pci, sid, nid, bid
+</p><p>Maximum file size:<br />
+2 MB; upload multiple files if you want to upload more data.
+</p><p>Supplemented by the parameter <i>key=&lt;apiKey&gt;</i> as form POST field, which is the user's API key.
+</p>
+<h3><span class="mw-headline" id="Response_3">Response</span></h3>
+<p>Upon successful insert, HTTP 200 is returned with <i>application/json</i> content type and following json document as a content: <i>{"code":0,"status":"OK"}</i>
+</p>
+<h3><span class="mw-headline" id="Business_logic_2">Business logic</span></h3>
+<p>The request is handled by de.enaikoon.gpssuite.web.measure.NewMeasureController.
+</p>
+<h3><span class="mw-headline" id="cURL_command_2">cURL command</span></h3>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="bash source-bash"><pre class="de1">curl <span class="re5">-F</span> <span class="st0">&quot;key=apiKey&quot;</span> <span class="re5">-F</span> <span class="st0">&quot;datafile=@/path/to/file/mydata.json;type=text/plain&quot;</span> https:<span class="sy0">//</span>opencellid.org<span class="sy0">/</span>measure<span class="sy0">/</span>uploadJson</pre></div></div>
+<h3><span class="mw-headline" id="Time_needed_for_processing_newly_uploaded_measurements_3">Time needed for processing newly uploaded measurements</span></h3>
+<p>After uploading new measurements to the OpenCellID community servers they are added to our waiting queues and processed in the background.
+We aim the real-time processing, but maximum time depends on traffic on OpenCellID servers. Current throughput of our servers is around 15000 measurements per second.
+</p><p>Measurements are processed in 3 steps: 
+</p>
+<ol>
+<li> parsing and filtering raw data
+</li>
+<li> updating measurement statistics and storing measurements in the database
+</li>
+<li> updating existing cell towers information or adding new cell towers to the database
+</li>
+</ol>
+<p>Our waiting queues for cell towers and for measurements are independent, so you can see your measurements in the OpenCellID database but related cell towers might be not updated yet. This means that if you upload a measurement of a cell tower that was not in the database before and the waiting queue for cell towers has some data to process, you have to expect some times (usually few minutes) until the queue delivers the newly uploaded cell tower information.
+</p>
+<h3><span class="mw-headline" id="FAQ_2">FAQ</span></h3>
+<p><b>What does "optional" mean?</b><br />
+"optional" means that this field is not required in the json file.<br />
+Minimal json file looks as follows:<br />
+</p>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="javascript source-javascript"><pre class="de1"><span class="br0">&#123;</span>
+    <span class="st0">&quot;measurements&quot;</span><span class="sy0">:</span> <span class="br0">&#91;</span>
+        <span class="br0">&#123;</span>
+            <span class="st0">&quot;lon&quot;</span><span class="sy0">:</span> <span class="nu0">9.436598</span><span class="sy0">,</span>
+            <span class="st0">&quot;lat&quot;</span><span class="sy0">:</span> <span class="nu0">52.892139</span><span class="sy0">,</span>
+            <span class="st0">&quot;mcc&quot;</span><span class="sy0">:</span> <span class="nu0">262</span><span class="sy0">,</span>
+            <span class="st0">&quot;mnc&quot;</span><span class="sy0">:</span> <span class="nu0">2</span><span class="sy0">,</span>
+            <span class="st0">&quot;lac&quot;</span><span class="sy0">:</span> <span class="nu0">434</span><span class="sy0">,</span>
+            <span class="st0">&quot;cellid&quot;</span><span class="sy0">:</span> <span class="nu0">9200</span>
+        <span class="br0">&#125;</span>
+    <span class="br0">&#93;</span>
+<span class="br0">&#125;</span></pre></div></div>
+<p><b>What does "Supplemented by the parameter key=&lt;apiKey&gt; as form POST field, which is the user's API key" mean?</b><br />
+This means that the user must send his data (apiKey and json file) in the same way as from the following form:<br />
+</p>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="html5 source-html5"><pre class="de1"><span class="sc2">&lt;<span class="kw2">form</span> <span class="kw3">method</span><span class="sy0">=</span><span class="st0">&quot;post&quot;</span> <span class="kw3">action</span><span class="sy0">=</span><span class="st0">&quot;https://opencellid.org/measure/uploadJson&quot;</span> <span class="kw3">enctype</span><span class="sy0">=</span><span class="st0">&quot;multipart/form-data&quot;</span>&gt;</span>
+  apiKey: <span class="sc2">&lt;<span class="kw2">input</span> <span class="kw3">type</span><span class="sy0">=</span><span class="st0">&quot;text&quot;</span> <span class="kw3">name</span><span class="sy0">=</span><span class="st0">&quot;key&quot;</span> <span class="sy0">/</span>&gt;</span>
+  JSON (max 2MB): <span class="sc2">&lt;<span class="kw2">input</span> <span class="kw3">type</span><span class="sy0">=</span><span class="st0">&quot;file&quot;</span> <span class="kw3">name</span><span class="sy0">=</span><span class="st0">&quot;datafile&quot;</span> <span class="sy0">/</span>&gt;</span>
+  <span class="sc2">&lt;<span class="kw2">input</span> <span class="kw3">type</span><span class="sy0">=</span><span class="st0">&quot;submit&quot;</span> <span class="kw3">name</span><span class="sy0">=</span><span class="st0">&quot;upload&quot;</span> <span class="kw3">value</span><span class="sy0">=</span><span class="st0">&quot;Upload&quot;</span><span class="sy0">/</span>&gt;</span>
+<span class="sc2">&lt;<span class="sy0">/</span><span class="kw2">form</span>&gt;</span></pre></div></div>
+<p><b>What does the following error mean?</b><br />
+</p>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="xml source-xml"><pre class="de1"><span class="sc3"><span class="re1">&lt;?xml</span> <span class="re0">version</span>=<span class="st0">&quot;1.0&quot;</span> <span class="re0">encoding</span>=<span class="st0">&quot;UTF-8&quot;</span><span class="re2">?&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;rsp</span> <span class="re0">stat</span>=<span class="st0">&quot;fail&quot;</span><span class="re2">&gt;</span><span class="re1">&lt;err</span> <span class="re0">info</span>=<span class="st0">&quot;cell not found&quot;</span> <span class="re0">code</span>=<span class="st0">&quot;1&quot;</span><span class="re2">/&gt;</span><span class="re1">&lt;/rsp<span class="re2">&gt;</span></span></span></pre></div></div>
+<p>This error message means that no cell was found for the given user criteria (mcc-mnc-lac-cid combination was not found in database).
+</p><p><b>Can I upload CDMA using mcc-mnc-lac-cellid parameters?</b><br />
+Yes, you can use mnc as sid, lac as nid and cellid as bid.
+</p>
+<h2><span class="mw-headline" id="Uploading_measurements_from_CLF3_file">Uploading measurements from CLF3 file</span></h2>
+<p>POST request to
+</p>
+<pre>
+https://&lt;WebServiceURL&gt;/measure/uploadClf
+</pre>
+<h3><span class="mw-headline" id="Parameters_4">Parameters</span></h3>
+<p>&lt;WebServiceURL&gt;: The URL to the web service
+</p>
+<h3><span class="mw-headline" id="Payload_4">Payload</span></h3>
+<p>CLF version 3.0 file (to be sent in datafile parameter) of the following format:
+</p>
+<pre>
+//mcc+mnc;cellid;lac;rnc;lat;lon;ratio;data;rfu
+26202;07812;03101;0;45.894375;31.51312;0;City Square;0
+</pre>
+<p>Columns are semicolon separated and have the following strict order:<br />
+mcc+mnc, lac, cellid, rnc, lat, lon, ratio, data, rfu
+</p><p>There is no header in CLF3 files.
+Therefore the columns must be provided in the order given above and all values must be there.<br />
+</p><p>You can add comments to CLF3 files.<br />
+Comments in CLF3 start with // and extend to the end of the physical line.
+</p><p>Maximum file size:<br />
+2 MB; upload multiple files if you want to upload more data.
+</p><p>Supplemented by the parameter key=&lt;apiKey&gt; as form POST field, which is the user's API key
+</p>
+<table class="wikitable sortable" style="font-size: 85%; text-align: left;">
+
+
+Supported columns:
+<tr>
+<th scope="col"> Column name
+</th>
+<th scope="col"> Data type
+</th>
+<th scope="col"> Description
+</th>
+<th scope="col"> Optional
+</th></tr>
+<tr>
+<td title="Column name"> &lt;mcc+mnc&gt;
+</td>
+<td title="Data type"> string
+</td>
+<td title="Description"> Mobile country code and mobile network code
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Column name"> lac
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Local area code
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Column name"> cellid
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Cell tower id
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Column name"> rnc
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Radio network controller;<br />provide "0", (zero, without the quotation marks) or an empty string in case there is no rnc value.
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Column name"> lat
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> Latitude
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Column name"> lon
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> Latitude
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Column name"> ratio
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Accuracy of the cell coordinates. Use -1 for the exact position.
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Column name"> data
+</td>
+<td title="Data type"> string
+</td>
+<td title="Description"> Short cell description
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Column name"> rfu
+</td>
+<td title="Data type"> string
+</td>
+<td title="Description">  Not really used; use 0 if unknown
+</td>
+<td title="Optional"> yes
+</td></tr></table>
+<h3><span class="mw-headline" id="Response_4">Response</span></h3>
+<p>On successful insert return HTTP 200 with the string "0,OK".
+</p>
+<h3><span class="mw-headline" id="Business_logic_3">Business logic</span></h3>
+<p>The request is handled by de.enaikoon.gpssuite.web.measure.NewMeasureController.
+</p>
+<h3><span class="mw-headline" id="Time_needed_for_processing_newly_uploaded_measurements_4">Time needed for processing newly uploaded measurements</span></h3>
+<p>After uploading new measurements to the OpenCellID community servers they are added to our waiting queues and processed in the background.
+We aim the real-time processing, but maximum time depends on traffic on OpenCellID servers. Current throughput of our servers is around 15000 measurements per second.
+</p><p>Measurements are processed in 3 steps: 
+</p>
+<ol>
+<li> parsing and filtering raw data
+</li>
+<li> updating measurement statistics and storing measurements in the database
+</li>
+<li> updating existing cell towers information or adding new cell towers to the database
+</li>
+</ol>
+<p>Our waiting queues for cell towers and for measurements are independent, so you can see your measurements in the OpenCellID database but related cell towers might be not updated yet. This means that if you upload a measurement of a cell tower that was not in the database before and the waiting queue for cell towers has some data to process, you have to expect some times (usually few minutes) until the queue delivers the newly uploaded cell tower information.
+</p>
+<h2><span class="mw-headline" id="Getting_cell_position">Getting cell position</span></h2>
+<p>GET/POST request to
+</p>
+<pre>
+https://&lt;WebServiceURL&gt;/cell/get
+</pre>
+<h3><span class="mw-headline" id="Parameters_5">Parameters</span></h3>
+<p>&lt;WebServiceURL&gt;: the URL to the web service
+</p>
+<h3><span class="mw-headline" id="Headers">Headers</span></h3>
+<p><b>JSON:</b><br />Content-Type: application/json;charset=UTF-8
+</p><p><b>XML:</b><br />Content-Type: text/xml;charset=utf-8
+</p><p><b>AT:</b><br />Content-Type: text/plain;charset=utf-8
+</p>
+<h3><span class="mw-headline" id="Payload_5">Payload</span></h3>
+<p>key=&lt;apiKey&gt;&amp;mcc=&lt;mcc&gt;&amp;mnc=&lt;mnc&gt;&amp;lac=&lt;lac&gt;&amp;cellid=&lt;cellid&gt;&amp;radio=&lt;radio&gt;&amp;format=&lt;format&gt;
+</p><p>Where
+</p>
+<table class="wikitable sortable" style="font-size: 85%; text-align: left;">
+
+<tr>
+<th scope="col"> Parameter
+</th>
+<th scope="col"> Data type
+</th>
+<th scope="col"> Description
+</th>
+<th scope="col"> Optional
+</th></tr>
+<tr>
+<td title="Parameter"> &lt;apiKey&gt;
+</td>
+<td title="Data type"> string
+</td>
+<td title="Description"> API key assigned to the user
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;mcc&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Mobile country code
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;mnc&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Mobile network code or system identifier
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;lac&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Local area code, tracking area code or network id
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;cellid&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Cell id or base station id
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;radio&gt;
+</td>
+<td title="Data type"> string
+</td>
+<td title="Description"> You can specifiy GSM, UMTS, LTE, NBIOT, NR or CDMA as the radio of returned cell. Otherwise first matched cell will be returned.
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;format&gt;
+</td>
+<td title="Data type"> string
+</td>
+<td title="Description"> You can specifiy xml, at or json as output. Default is xml.
+</td>
+<td title="Optional"> yes
+</td></tr></table>
+<h3><span class="mw-headline" id="Response_5">Response</span></h3>
+<h4><span class="mw-headline" id="XML">XML</span></h4>
+<p>Upon successful request, HTTP 200 is returned with XML of the following format:
+</p>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="xml source-xml"><pre class="de1"><span class="sc3"><span class="re1">&lt;?xml</span> <span class="re0">version</span>=<span class="st0">&quot;1.0&quot;</span> <span class="re0">encoding</span>=<span class="st0">&quot;UTF-8&quot;</span><span class="re2">?&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;rsp</span> <span class="re0">stat</span>=<span class="st0">&quot;ok&quot;</span><span class="re2">&gt;</span></span>
+  <span class="sc3"><span class="re1">&lt;cell</span> <span class="re0">lat</span>=<span class="st0">&quot;52.891587&quot;</span> </span>
+<span class="sc3">        <span class="re0">lon</span>=<span class="st0">&quot;9.438145&quot;</span> </span>
+<span class="sc3">        <span class="re0">mcc</span>=<span class="st0">&quot;262&quot;</span> </span>
+<span class="sc3">        <span class="re0">mnc</span>=<span class="st0">&quot;2&quot;</span> </span>
+<span class="sc3">        <span class="re0">lac</span>=<span class="st0">&quot;434&quot;</span> </span>
+<span class="sc3">        <span class="re0">cellid</span>=<span class="st0">&quot;9200&quot;</span> </span>
+<span class="sc3">        <span class="re0">averageSignalStrength</span>=<span class="st0">&quot;-81&quot;</span> </span>
+<span class="sc3">        <span class="re0">range</span>=<span class="st0">&quot;123&quot;</span> </span>
+<span class="sc3">        <span class="re0">samples</span>=<span class="st0">&quot;13&quot;</span> </span>
+<span class="sc3">        <span class="re0">changeable</span>=<span class="st0">&quot;1&quot;</span> </span>
+<span class="sc3">        <span class="re0">radio</span>=<span class="st0">&quot;GSM&quot;</span><span class="re2">/&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;/rsp<span class="re2">&gt;</span></span></span></pre></div></div>
+<p><br />
+</p>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="xml source-xml"><pre class="de1"><span class="sc3"><span class="re1">&lt;?xml</span> <span class="re0">version</span>=<span class="st0">&quot;1.0&quot;</span> <span class="re0">encoding</span>=<span class="st0">&quot;UTF-8&quot;</span><span class="re2">?&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;rsp</span> <span class="re0">stat</span>=<span class="st0">&quot;ok&quot;</span><span class="re2">&gt;</span></span>
+  <span class="sc3"><span class="re1">&lt;cell</span> <span class="re0">lat</span>=<span class="st0">&quot;51.206&quot;</span> </span>
+<span class="sc3">        <span class="re0">lon</span>=<span class="st0">&quot;20.424&quot;</span> </span>
+<span class="sc3">        <span class="re0">mcc</span>=<span class="st0">&quot;260&quot;</span> </span>
+<span class="sc3">        <span class="re0">mnc</span>=<span class="st0">&quot;2&quot;</span> </span>
+<span class="sc3">        <span class="re0">lac</span>=<span class="st0">&quot;52712&quot;</span> </span>
+<span class="sc3">        <span class="re0">cellid</span>=<span class="st0">&quot;59350690&quot;</span> </span>
+<span class="sc3">        <span class="re0">averageSignalStrength</span>=<span class="st0">&quot;-96&quot;</span> </span>
+<span class="sc3">        <span class="re0">range</span>=<span class="st0">&quot;1234&quot;</span> </span>
+<span class="sc3">        <span class="re0">samples</span>=<span class="st0">&quot;5&quot;</span> </span>
+<span class="sc3">        <span class="re0">changeable</span>=<span class="st0">&quot;1&quot;</span> </span>
+<span class="sc3">        <span class="re0">radio</span>=<span class="st0">&quot;UMTS&quot;</span> </span>
+<span class="sc3">        <span class="re0">rnc</span>=<span class="st0">&quot;905&quot;</span> </span>
+<span class="sc3">        <span class="re0">cid</span>=<span class="st0">&quot;40610&quot;</span><span class="re2">/&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;/rsp<span class="re2">&gt;</span></span></span></pre></div></div>
+<p><br />
+</p>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="xml source-xml"><pre class="de1"><span class="sc3"><span class="re1">&lt;?xml</span> <span class="re0">version</span>=<span class="st0">&quot;1.0&quot;</span> <span class="re0">encoding</span>=<span class="st0">&quot;UTF-8&quot;</span><span class="re2">?&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;rsp</span> <span class="re0">stat</span>=<span class="st0">&quot;ok&quot;</span><span class="re2">&gt;</span></span>
+  <span class="sc3"><span class="re1">&lt;cell</span> <span class="re0">lat</span>=<span class="st0">&quot;51.90994&quot;</span> </span>
+<span class="sc3">        <span class="re0">lon</span>=<span class="st0">&quot;19.505&quot;</span> </span>
+<span class="sc3">        <span class="re0">mcc</span>=<span class="st0">&quot;260&quot;</span> </span>
+<span class="sc3">        <span class="re0">mnc</span>=<span class="st0">&quot;6&quot;</span> </span>
+<span class="sc3">        <span class="re0">lac</span>=<span class="st0">&quot;12&quot;</span> </span>
+<span class="sc3">        <span class="re0">cellid</span>=<span class="st0">&quot;864246&quot;</span> </span>
+<span class="sc3">        <span class="re0">averageSignalStrength</span>=<span class="st0">&quot;-100&quot;</span> </span>
+<span class="sc3">        <span class="re0">range</span>=<span class="st0">&quot;12345&quot;</span> </span>
+<span class="sc3">        <span class="re0">samples</span>=<span class="st0">&quot;4&quot;</span> </span>
+<span class="sc3">        <span class="re0">changeable</span>=<span class="st0">&quot;1&quot;</span> </span>
+<span class="sc3">        <span class="re0">radio</span>=<span class="st0">&quot;LTE&quot;</span> </span>
+<span class="sc3">        <span class="re0">tac</span>=<span class="st0">&quot;12&quot;</span><span class="re2">/&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;/rsp<span class="re2">&gt;</span></span></span></pre></div></div>
+<p><br />
+</p>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="xml source-xml"><pre class="de1"><span class="sc3"><span class="re1">&lt;?xml</span> <span class="re0">version</span>=<span class="st0">&quot;1.0&quot;</span> <span class="re0">encoding</span>=<span class="st0">&quot;UTF-8&quot;</span><span class="re2">?&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;rsp</span> <span class="re0">stat</span>=<span class="st0">&quot;ok&quot;</span><span class="re2">&gt;</span></span>
+  <span class="sc3"><span class="re1">&lt;cell</span> <span class="re0">lat</span>=<span class="st0">&quot;42.46&quot;</span> </span>
+<span class="sc3">        <span class="re0">lon</span>=<span class="st0">&quot;-73.245&quot;</span> </span>
+<span class="sc3">        <span class="re0">mcc</span>=<span class="st0">&quot;310&quot;</span> </span>
+<span class="sc3">        <span class="re0">mnc</span>=<span class="st0">&quot;119&quot;</span> </span>
+<span class="sc3">        <span class="re0">lac</span>=<span class="st0">&quot;48&quot;</span> </span>
+<span class="sc3">        <span class="re0">cellid</span>=<span class="st0">&quot;4127&quot;</span> </span>
+<span class="sc3">        <span class="re0">averageSignalStrength</span>=<span class="st0">&quot;-90&quot;</span> </span>
+<span class="sc3">        <span class="re0">range</span>=<span class="st0">&quot;123&quot;</span> </span>
+<span class="sc3">        <span class="re0">samples</span>=<span class="st0">&quot;5&quot;</span> </span>
+<span class="sc3">        <span class="re0">changeable</span>=<span class="st0">&quot;1&quot;</span> </span>
+<span class="sc3">        <span class="re0">radio</span>=<span class="st0">&quot;CDMA&quot;</span> </span>
+<span class="sc3">        <span class="re0">sid</span>=<span class="st0">&quot;119&quot;</span> </span>
+<span class="sc3">        <span class="re0">nid</span>=<span class="st0">&quot;48&quot;</span> </span>
+<span class="sc3">        <span class="re0">bid</span>=<span class="st0">&quot;4127&quot;</span><span class="re2">/&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;/rsp<span class="re2">&gt;</span></span></span></pre></div></div>
+<h4><span class="mw-headline" id="JSON">JSON</span></h4>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="javascript source-javascript"><pre class="de1"><span class="br0">&#123;</span>
+  <span class="st0">&quot;lon&quot;</span><span class="sy0">:</span> <span class="sy0">-</span><span class="nu0">73.245</span><span class="sy0">,</span>
+  <span class="st0">&quot;lat&quot;</span><span class="sy0">:</span> <span class="nu0">42.46</span><span class="sy0">,</span>
+  <span class="st0">&quot;mcc&quot;</span><span class="sy0">:</span> <span class="nu0">310</span><span class="sy0">,</span>
+  <span class="st0">&quot;mnc&quot;</span><span class="sy0">:</span> <span class="nu0">119</span><span class="sy0">,</span>
+  <span class="st0">&quot;lac&quot;</span><span class="sy0">:</span> <span class="nu0">48</span><span class="sy0">,</span>
+  <span class="st0">&quot;cellid&quot;</span><span class="sy0">:</span> <span class="nu0">4127</span><span class="sy0">,</span>
+  <span class="st0">&quot;averageSignalStrength&quot;</span><span class="sy0">:</span> <span class="sy0">-</span><span class="nu0">90</span><span class="sy0">,</span>
+  <span class="st0">&quot;range&quot;</span><span class="sy0">:</span> <span class="nu0">123</span><span class="sy0">,</span>
+  <span class="st0">&quot;samples&quot;</span><span class="sy0">:</span> <span class="nu0">5</span><span class="sy0">,</span>
+  <span class="st0">&quot;changeable&quot;</span><span class="sy0">:</span> <span class="kw2">true</span><span class="sy0">,</span>
+  <span class="st0">&quot;radio&quot;</span><span class="sy0">:</span> <span class="st0">&quot;CDMA&quot;</span><span class="sy0">,</span>
+  <span class="st0">&quot;sid&quot;</span><span class="sy0">:</span> <span class="nu0">119</span><span class="sy0">,</span>
+  <span class="st0">&quot;nid&quot;</span><span class="sy0">:</span> <span class="nu0">48</span><span class="sy0">,</span>
+  <span class="st0">&quot;bid&quot;</span><span class="sy0">:</span> <span class="nu0">4127</span>
+<span class="br0">&#125;</span></pre></div></div>
+<h4><span class="mw-headline" id="AT">AT</span></h4>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="text source-text"><pre class="de1">+Location:42.46,-73.245,1483228800</pre></div></div>
+<h3><span class="mw-headline" id="Business_logic_4">Business logic</span></h3>
+<p>The request is handled by de.enaikoon.gpssuite.web.cell.CellController.<br />
+It uses de.enaikoon.m2m.gsmcellmanagment.dao.mongodb.GsmCellDao to calculate the average cell measurement, and builds an XML string to return to the user.
+</p>
+<h3><span class="mw-headline" id="Example_2">Example</span></h3>
+<p><u><a rel="nofollow" class="external free" href="https://opencellid.org/cell/get?key=xxx&amp;mcc=260&amp;mnc=2&amp;lac=10250&amp;cellid=26511">https://opencellid.org/cell/get?key=xxx&amp;mcc=260&amp;mnc=2&amp;lac=10250&amp;cellid=26511</a></u><br />
+<u><a rel="nofollow" class="external free" href="https://opencellid.org/cell/get?key=xxx&amp;mcc=260&amp;mnc=2&amp;lac=10250&amp;cellid=26511&amp;radio=UMTS">https://opencellid.org/cell/get?key=xxx&amp;mcc=260&amp;mnc=2&amp;lac=10250&amp;cellid=26511&amp;radio=UMTS</a></u><br />
+<u><a rel="nofollow" class="external free" href="https://opencellid.org/cell/get?key=xxx&amp;mcc=260&amp;mnc=2&amp;lac=10250&amp;cellid=26511&amp;format=json">https://opencellid.org/cell/get?key=xxx&amp;mcc=260&amp;mnc=2&amp;lac=10250&amp;cellid=26511&amp;format=json</a></u>
+</p>
+<h3><span class="mw-headline" id="Availability">Availability</span></h3>
+<p>This feature is available free of charge in case your application contributes data to OpenCellID at the same time.<br />
+In case you want to use this service without contributing to OpenCellID please refer to <u><a href="/wiki/Commercial_users" title="Commercial users">the commercial users guideline</a></u>.<br />
+An automated check for providing this service to white-listed apiKeys only was activated on Jun 15th, 2014
+</p>
+<h2><span class="mw-headline" id="Getting_the_list_of_cells_in_a_specified_area">Getting the list of cells in a specified area</span></h2>
+<p>GET request to
+</p>
+<pre>
+https://&lt;WebServiceURL&gt;/cell/getInArea
+</pre>
+<h3><span class="mw-headline" id="Parameters_6">Parameters</span></h3>
+<p>&lt;WebServiceURL&gt;: the URL to the web service
+</p>
+<h3><span class="mw-headline" id="Payload_6">Payload</span></h3>
+<p>key=&lt;apiKey&gt;&amp;BBOX=&lt;latmin&gt;,&lt;lonmin&gt;,&lt;latmax&gt;,&lt;lonmax&gt;&amp;mcc=&lt;mcc&gt;&amp;mnc=&lt;mnc&gt;&amp;lac=&lt;lac&gt;&amp;radio=&lt;radio&gt;&amp;limit=&lt;limit&gt;&amp;offset=&lt;offset&gt;&amp;format=&lt;format&gt;
+</p><p>Where
+</p>
+<table class="wikitable sortable" style="font-size: 85%; text-align: left;">
+
+<tr>
+<th scope="col"> Parameter
+</th>
+<th scope="col"> Data type
+</th>
+<th scope="col"> Description
+</th>
+<th scope="col"> Optional
+</th></tr>
+<tr>
+<td title="Parameter"> &lt;apiKey&gt;
+</td>
+<td title="Data type"> string
+</td>
+<td title="Description"> API key assigned to the user
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;latmin&gt;
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> Minimal bounding latitude
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;lonmin&gt;
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> Minimal bounding longitude
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;latmax&gt;
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> Maximal bounding latitude
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;lonmax&gt;
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> Maximal bounding longitude
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;mcc&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Mobile country code; If you want to restrict the result to a specific country
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;mnc&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Mobile network code or system identifier; If you want to restrict the result
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;lac&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Local area code, tracking area code or network id; If you want to restrict the result
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;radio&gt;
+</td>
+<td title="Data type"> string
+</td>
+<td title="Description"> You can specifiy GSM, UMTS, LTE, NR, NBIOT or CDMA as the radio of returned cells. Otherwise cells with any radios will be returned.
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;limit&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> A number defining maximum size of the returned list. Default and maximum value is 50. Use together with <code>offset</code> for paginating through large result sets.
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;offset&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> The number of items to skip before beginning to return results. Default is 0. Use together with <code>limit</code> for pagination (e.g., for page 2 with 20 items per page, use <code>offset=20</code>). Note: Since the database is updated minutely, the order of cells may change between API calls. For more consistent results when paginating through large datasets, consider using smaller bounding boxes when the getInAreaSize endpoint indicates a large number of cells.
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;format&gt;
+</td>
+<td title="Data type"> string
+</td>
+<td title="Description"> You can specify kml, xml, csv or json as output. Default is kml.<br />In csv type of output, there is a first line defining the content of the list.
+</td>
+<td title="Optional"> yes
+</td></tr></table>
+<p>For the total number of cells in a specified area, please use /cell/getInAreaSize (described below).
+</p>
+<h3><span class="mw-headline" id="Response_6">Response</span></h3>
+<p>Upon successful request, HTTP 200 is returned with one of the following output structures:
+</p>
+<h4><span class="mw-headline" id="XML_2">XML</span></h4>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="xml source-xml"><pre class="de1"><span class="sc3"><span class="re1">&lt;?xml</span> <span class="re0">version</span>=<span class="st0">&quot;1.0&quot;</span> <span class="re0">encoding</span>=<span class="st0">&quot;UTF-8&quot;</span><span class="re2">?&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;rsp</span> <span class="re0">stat</span>=<span class="st0">&quot;ok&quot;</span><span class="re2">&gt;</span></span>
+  <span class="sc3"><span class="re1">&lt;cell</span> <span class="re0">lat</span>=<span class="st0">&quot;52.9523755&quot;</span> </span>
+<span class="sc3">        <span class="re0">lon</span>=<span class="st0">&quot;9.252112&quot;</span> </span>
+<span class="sc3">        <span class="re0">mcc</span>=<span class="st0">&quot;262&quot;</span> </span>
+<span class="sc3">        <span class="re0">mnc</span>=<span class="st0">&quot;2&quot;</span> </span>
+<span class="sc3">        <span class="re0">lac</span>=<span class="st0">&quot;1434&quot;</span> </span>
+<span class="sc3">        <span class="re0">cellid</span>=<span class="st0">&quot;17275&quot;</span> </span>
+<span class="sc3">        <span class="re0">averageSignalStrength</span>=<span class="st0">&quot;-70&quot;</span> </span>
+<span class="sc3">        <span class="re0">range</span>=<span class="st0">&quot;123&quot;</span> </span>
+<span class="sc3">        <span class="re0">samples</span>=<span class="st0">&quot;12&quot;</span> </span>
+<span class="sc3">        <span class="re0">changeable</span>=<span class="st0">&quot;1&quot;</span> </span>
+<span class="sc3">        <span class="re0">radio</span>=<span class="st0">&quot;GSM&quot;</span><span class="re2">/&gt;</span></span>
+  <span class="sc3"><span class="re1">&lt;cell</span> <span class="re0">lat</span>=<span class="st0">&quot;52.9463072&quot;</span> </span>
+<span class="sc3">        <span class="re0">lon</span>=<span class="st0">&quot;9.258809&quot;</span> </span>
+<span class="sc3">        <span class="re0">mcc</span>=<span class="st0">&quot;262&quot;</span> </span>
+<span class="sc3">        <span class="re0">mnc</span>=<span class="st0">&quot;2&quot;</span> </span>
+<span class="sc3">        <span class="re0">lac</span>=<span class="st0">&quot;1434&quot;</span> </span>
+<span class="sc3">        <span class="re0">cellid</span>=<span class="st0">&quot;17276&quot;</span> </span>
+<span class="sc3">        <span class="re0">averageSignalStrength</span>=<span class="st0">&quot;-98&quot;</span> </span>
+<span class="sc3">        <span class="re0">range</span>=<span class="st0">&quot;1234&quot;</span> </span>
+<span class="sc3">        <span class="re0">samples</span>=<span class="st0">&quot;11&quot;</span> </span>
+<span class="sc3">        <span class="re0">changeable</span>=<span class="st0">&quot;1&quot;</span> </span>
+<span class="sc3">        <span class="re0">radio</span>=<span class="st0">&quot;LTE&quot;</span> </span>
+<span class="sc3">        <span class="re0">tac</span>=<span class="st0">&quot;1434&quot;</span><span class="re2">/&gt;</span></span>
+  <span class="sc3"><span class="re1">&lt;cell</span> <span class="re0">lat</span>=<span class="st0">&quot;52.9367185&quot;</span> </span>
+<span class="sc3">        <span class="re0">lon</span>=<span class="st0">&quot;9.27343925&quot;</span> </span>
+<span class="sc3">        <span class="re0">mcc</span>=<span class="st0">&quot;260&quot;</span> </span>
+<span class="sc3">        <span class="re0">mnc</span>=<span class="st0">&quot;16256&quot;</span> </span>
+<span class="sc3">        <span class="re0">lac</span>=<span class="st0">&quot;1434&quot;</span> </span>
+<span class="sc3">        <span class="re0">cellid</span>=<span class="st0">&quot;17272&quot;</span> </span>
+<span class="sc3">        <span class="re0">averageSignalStrength</span>=<span class="st0">&quot;-93&quot;</span> </span>
+<span class="sc3">        <span class="re0">range</span>=<span class="st0">&quot;12345&quot;</span> </span>
+<span class="sc3">        <span class="re0">samples</span>=<span class="st0">&quot;12&quot;</span> </span>
+<span class="sc3">        <span class="re0">changeable</span>=<span class="st0">&quot;1&quot;</span> </span>
+<span class="sc3">        <span class="re0">radio</span>=<span class="st0">&quot;CDMA&quot;</span> </span>
+<span class="sc3">        <span class="re0">sid</span>=<span class="st0">&quot;16256&quot;</span> </span>
+<span class="sc3">        <span class="re0">bid</span>=<span class="st0">&quot;1434&quot;</span> </span>
+<span class="sc3">        <span class="re0">nid</span>=<span class="st0">&quot;17272&quot;</span><span class="re2">/&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;/rsp<span class="re2">&gt;</span></span></span></pre></div></div>
+<h4><span class="mw-headline" id="KML_.28default.29">KML (default)</span></h4>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="xml source-xml"><pre class="de1"><span class="sc3"><span class="re1">&lt;?xml</span> <span class="re0">version</span>=<span class="st0">&quot;1.0&quot;</span> <span class="re0">encoding</span>=<span class="st0">&quot;UTF-8&quot;</span><span class="re2">?&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;kml</span> <span class="re0">xmlns</span>=<span class="st0">&quot;http://earth.google.com/kml/2.1&quot;</span><span class="re2">&gt;</span></span>
+  <span class="sc3"><span class="re1">&lt;Document<span class="re2">&gt;</span></span></span>
+    <span class="sc3"><span class="re1">&lt;name<span class="re2">&gt;</span></span></span>OpenCellID Cells<span class="sc3"><span class="re1">&lt;/name<span class="re2">&gt;</span></span></span>
+    <span class="sc3"><span class="re1">&lt;description<span class="re2">&gt;</span></span></span>List of available cells<span class="sc3"><span class="re1">&lt;/description<span class="re2">&gt;</span></span></span>
+    <span class="sc3"><span class="re1">&lt;Placemark<span class="re2">&gt;</span></span></span>
+      <span class="sc3"><span class="re1">&lt;name<span class="re2">&gt;</span></span><span class="re1">&lt;/name<span class="re2">&gt;</span></span></span>
+      <span class="sc3"><span class="re1">&lt;description<span class="re2">&gt;</span></span></span><span class="sc2">&lt;![CDATA[lat: &lt;b&gt;52.9523755&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            lon: &lt;b&gt;9.252112&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            mcc: &lt;b&gt;262&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            mnc: &lt;b&gt;2&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            lac: &lt;b&gt;1434&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            cellid: &lt;b&gt;17275&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            averageSignalStrength: &lt;b&gt;-73&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            range: &lt;b&gt;123&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            samples: &lt;b&gt;12&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            changeable: &lt;b&gt;1&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            radio: &lt;b&gt;GSM&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            rnc: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            cid: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            tac: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            sid: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            nid: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            bid: &lt;b&gt;&lt;/b&gt;]]&gt;</span>
+      <span class="sc3"><span class="re1">&lt;/description<span class="re2">&gt;</span></span></span>
+      <span class="sc3"><span class="re1">&lt;Point<span class="re2">&gt;</span></span><span class="re1">&lt;coordinates<span class="re2">&gt;</span></span></span>9.252112,52.9523755,0<span class="sc3"><span class="re1">&lt;/coordinates<span class="re2">&gt;</span></span><span class="re1">&lt;/Point<span class="re2">&gt;</span></span></span>
+    <span class="sc3"><span class="re1">&lt;/Placemark<span class="re2">&gt;</span></span></span>
+    <span class="sc3"><span class="re1">&lt;Placemark<span class="re2">&gt;</span></span></span>
+      <span class="sc3"><span class="re1">&lt;name<span class="re2">&gt;</span></span><span class="re1">&lt;/name<span class="re2">&gt;</span></span></span>
+      <span class="sc3"><span class="re1">&lt;description<span class="re2">&gt;</span></span></span><span class="sc2">&lt;![CDATA[lat: &lt;b&gt;52.9463072&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            lon: &lt;b&gt;21.1525&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            mcc: &lt;b&gt;260&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            mnc: &lt;b&gt;2&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            lac: &lt;b&gt;1434&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            cellid: &lt;b&gt;17272&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            averageSignalStrength: &lt;b&gt;-83&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            range: &lt;b&gt;1234&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            samples: &lt;b&gt;11&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            changeable: &lt;b&gt;1&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            radio: &lt;b&gt;LTE&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            rnc: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            cid: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            tac: &lt;b&gt;1434&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            sid: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            nid: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            bid: &lt;b&gt;&lt;/b&gt;]]&gt;</span>
+      <span class="sc3"><span class="re1">&lt;/description<span class="re2">&gt;</span></span></span>
+      <span class="sc3"><span class="re1">&lt;Point<span class="re2">&gt;</span></span><span class="re1">&lt;coordinates<span class="re2">&gt;</span></span></span>21.1525,52.9463072,0<span class="sc3"><span class="re1">&lt;/coordinates<span class="re2">&gt;</span></span><span class="re1">&lt;/Point<span class="re2">&gt;</span></span></span>
+    <span class="sc3"><span class="re1">&lt;/Placemark<span class="re2">&gt;</span></span></span>
+    <span class="sc3"><span class="re1">&lt;Placemark<span class="re2">&gt;</span></span></span>
+      <span class="sc3"><span class="re1">&lt;name<span class="re2">&gt;</span></span><span class="re1">&lt;/name<span class="re2">&gt;</span></span></span>
+      <span class="sc3"><span class="re1">&lt;description<span class="re2">&gt;</span></span></span><span class="sc2">&lt;![CDATA[lat: &lt;b&gt;53.9367185&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            lon: &lt;b&gt;12.27343925&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            mcc: &lt;b&gt;262&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            mnc: &lt;b&gt;16256&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            lac: &lt;b&gt;1434&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            cellid: &lt;b&gt;17272&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            averageSignalStrength: &lt;b&gt;-91&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            range: &lt;b&gt;12345&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            samples: &lt;b&gt;2&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            changeable: &lt;b&gt;1&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            radio: &lt;b&gt;CDMA&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            rnc: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            cid: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            tac: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            sid: &lt;b&gt;16256&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            nid: &lt;b&gt;1434&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            bid: &lt;b&gt;17272&lt;/b&gt;]]&gt;</span>
+      <span class="sc3"><span class="re1">&lt;/description<span class="re2">&gt;</span></span></span>
+      <span class="sc3"><span class="re1">&lt;Point<span class="re2">&gt;</span></span><span class="re1">&lt;coordinates<span class="re2">&gt;</span></span></span>12.27343925,53.9367185,0<span class="sc3"><span class="re1">&lt;/coordinates<span class="re2">&gt;</span></span><span class="re1">&lt;/Point<span class="re2">&gt;</span></span></span>
+    <span class="sc3"><span class="re1">&lt;/Placemark<span class="re2">&gt;</span></span></span>
+    <span class="sc3"><span class="re1">&lt;Placemark<span class="re2">&gt;</span></span></span>
+      <span class="sc3"><span class="re1">&lt;name<span class="re2">&gt;</span></span><span class="re1">&lt;/name<span class="re2">&gt;</span></span></span>
+      <span class="sc3"><span class="re1">&lt;description<span class="re2">&gt;</span></span></span><span class="sc2">&lt;![CDATA[lat: &lt;b&gt;52.1322157&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            lon: &lt;b&gt;21.065345&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            mcc: &lt;b&gt;260&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            mnc: &lt;b&gt;2&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            lac: &lt;b&gt;1434&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            cellid: &lt;b&gt;42042781&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            averageSignalStrength: &lt;b&gt;-89&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            range: &lt;b&gt;1231&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            samples: &lt;b&gt;5&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            changeable: &lt;b&gt;1&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            radio: &lt;b&gt;UMTS&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            rnc: &lt;b&gt;641&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            cid: &lt;b&gt;34205&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            tac: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            sid: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            nid: &lt;b&gt;&lt;/b&gt;&lt;br/&gt;</span>
+<span class="sc2">                            bid: &lt;b&gt;&lt;/b&gt;]]&gt;</span>
+      <span class="sc3"><span class="re1">&lt;/description<span class="re2">&gt;</span></span></span>
+      <span class="sc3"><span class="re1">&lt;Point<span class="re2">&gt;</span></span><span class="re1">&lt;coordinates<span class="re2">&gt;</span></span></span>21.065345,52.1322157,0<span class="sc3"><span class="re1">&lt;/coordinates<span class="re2">&gt;</span></span><span class="re1">&lt;/Point<span class="re2">&gt;</span></span></span>
+    <span class="sc3"><span class="re1">&lt;/Placemark<span class="re2">&gt;</span></span></span>
+  <span class="sc3"><span class="re1">&lt;/Document<span class="re2">&gt;</span></span></span>
+<span class="sc3"><span class="re1">&lt;/kml<span class="re2">&gt;</span></span></span></pre></div></div>
+<h4><span class="mw-headline" id="CSV">CSV</span></h4>
+<pre>lat,lon,mcc,mnc,lac,cellid,averageSignalStrength,range,samples,changeable,radio,rnc,cid,tac,sid,nid,bid
+52.275505,21.016382,260,2,45080,21728,-55,123,2,1,GSM,,,,,,
+52.201454,21.065345,260,2,58140,42042781,-59,1234,3,1,UMTS,641,34205,,,,
+52.207123,21.029972,260,6,58,119093,-80,122,2,1,LTE,,,58,,,
+52.274612,21.034485,260,16256,45,22613,-98,134,2,1,CDMA,,,,16256,45,22613</pre>
+<h4><span class="mw-headline" id="JSON_2">JSON</span></h4>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="javascript source-javascript"><pre class="de1"><span class="br0">&#123;</span>
+  <span class="st0">&quot;count&quot;</span><span class="sy0">:</span> <span class="nu0">3</span><span class="sy0">,</span>
+  <span class="st0">&quot;cells&quot;</span><span class="sy0">:</span> <span class="br0">&#91;</span>
+    <span class="br0">&#123;</span>
+      <span class="st0">&quot;lon&quot;</span><span class="sy0">:</span> <span class="nu0">21.014</span><span class="sy0">,</span>
+      <span class="st0">&quot;lat&quot;</span><span class="sy0">:</span> <span class="nu0">52.278</span><span class="sy0">,</span>
+      <span class="st0">&quot;mcc&quot;</span><span class="sy0">:</span> <span class="nu0">260</span><span class="sy0">,</span>
+      <span class="st0">&quot;mnc&quot;</span><span class="sy0">:</span> <span class="nu0">2</span><span class="sy0">,</span>
+      <span class="st0">&quot;lac&quot;</span><span class="sy0">:</span> <span class="nu0">45080</span><span class="sy0">,</span>
+      <span class="st0">&quot;cellid&quot;</span><span class="sy0">:</span> <span class="nu0">22613</span><span class="sy0">,</span>
+      <span class="st0">&quot;averageSignalStrength&quot;</span><span class="sy0">:</span> <span class="sy0">-</span><span class="nu0">70</span><span class="sy0">,</span>
+      <span class="st0">&quot;range&quot;</span><span class="sy0">:</span> <span class="nu0">123</span><span class="sy0">,</span>
+      <span class="st0">&quot;samples&quot;</span><span class="sy0">:</span> <span class="nu0">2</span><span class="sy0">,</span>
+      <span class="st0">&quot;changeable&quot;</span><span class="sy0">:</span> <span class="kw2">true</span><span class="sy0">,</span>
+      <span class="st0">&quot;radio&quot;</span><span class="sy0">:</span> <span class="st0">&quot;GSM&quot;</span> 
+    <span class="br0">&#125;</span><span class="sy0">,</span>
+    <span class="br0">&#123;</span>
+      <span class="st0">&quot;lon&quot;</span><span class="sy0">:</span> <span class="nu0">21.04</span><span class="sy0">,</span>
+      <span class="st0">&quot;lat&quot;</span><span class="sy0">:</span> <span class="nu0">52.2234</span><span class="sy0">,</span>
+      <span class="st0">&quot;mcc&quot;</span><span class="sy0">:</span> <span class="nu0">260</span><span class="sy0">,</span>
+      <span class="st0">&quot;mnc&quot;</span><span class="sy0">:</span> <span class="nu0">2</span><span class="sy0">,</span>
+      <span class="st0">&quot;lac&quot;</span><span class="sy0">:</span> <span class="nu0">58140</span><span class="sy0">,</span>
+      <span class="st0">&quot;cellid&quot;</span><span class="sy0">:</span> <span class="nu0">42042781</span><span class="sy0">,</span>
+      <span class="st0">&quot;averageSignalStrength&quot;</span><span class="sy0">:</span> <span class="sy0">-</span><span class="nu0">90</span><span class="sy0">,</span>
+      <span class="st0">&quot;range&quot;</span><span class="sy0">:</span> <span class="nu0">125</span><span class="sy0">,</span>
+      <span class="st0">&quot;samples&quot;</span><span class="sy0">:</span> <span class="nu0">2</span><span class="sy0">,</span>
+      <span class="st0">&quot;changeable&quot;</span><span class="sy0">:</span> <span class="kw2">true</span><span class="sy0">,</span>
+      <span class="st0">&quot;radio&quot;</span><span class="sy0">:</span> <span class="st0">&quot;UMTS&quot;</span><span class="sy0">,</span>
+      <span class="st0">&quot;rnc&quot;</span><span class="sy0">:</span> <span class="nu0">641</span><span class="sy0">,</span>
+      <span class="st0">&quot;cid&quot;</span><span class="sy0">:</span> <span class="nu0">34205</span>
+    <span class="br0">&#125;</span><span class="sy0">,</span>
+    <span class="br0">&#123;</span>
+      <span class="st0">&quot;lon&quot;</span><span class="sy0">:</span> <span class="nu0">21.5604</span><span class="sy0">,</span>
+      <span class="st0">&quot;lat&quot;</span><span class="sy0">:</span> <span class="nu0">52.284</span><span class="sy0">,</span>
+      <span class="st0">&quot;mcc&quot;</span><span class="sy0">:</span> <span class="nu0">260</span><span class="sy0">,</span>
+      <span class="st0">&quot;mnc&quot;</span><span class="sy0">:</span> <span class="nu0">2</span><span class="sy0">,</span>
+      <span class="st0">&quot;lac&quot;</span><span class="sy0">:</span> <span class="nu0">581</span><span class="sy0">,</span>
+      <span class="st0">&quot;cellid&quot;</span><span class="sy0">:</span> <span class="nu0">42048</span><span class="sy0">,</span>
+      <span class="st0">&quot;averageSignalStrength&quot;</span><span class="sy0">:</span> <span class="sy0">-</span><span class="nu0">90</span><span class="sy0">,</span>
+      <span class="st0">&quot;range&quot;</span><span class="sy0">:</span> <span class="nu0">12345</span><span class="sy0">,</span>
+      <span class="st0">&quot;samples&quot;</span><span class="sy0">:</span> <span class="nu0">9</span><span class="sy0">,</span>
+      <span class="st0">&quot;changeable&quot;</span><span class="sy0">:</span> <span class="kw2">true</span><span class="sy0">,</span>
+      <span class="st0">&quot;radio&quot;</span><span class="sy0">:</span> <span class="st0">&quot;LTE&quot;</span><span class="sy0">,</span>
+      <span class="st0">&quot;tac&quot;</span><span class="sy0">:</span> <span class="nu0">581</span>
+    <span class="br0">&#125;</span>
+  <span class="br0">&#93;</span>
+<span class="br0">&#125;</span></pre></div></div>
+<h3><span class="mw-headline" id="Business_logic_5">Business logic</span></h3>
+<p>The request is handled by de.enaikoon.gpssuite.web.measure.CellController.
+</p>
+<h3><span class="mw-headline" id="Example_3">Example</span></h3>
+<p><u><a rel="nofollow" class="external free" href="https://www.opencellid.org/cell/getInArea?key=xxx&amp;BBOX=52.0,21.0,52.5,21.5&amp;mcc=260&amp;mnc=2&amp;lac=45070&amp;limit=4&amp;offset=16&amp;format=kml">https://www.opencellid.org/cell/getInArea?key=xxx&amp;BBOX=52.0,21.0,52.5,21.5&amp;mcc=260&amp;mnc=2&amp;lac=45070&amp;limit=4&amp;offset=16&amp;format=kml</a></u><br />
+<u><a rel="nofollow" class="external free" href="https://www.opencellid.org/cell/getInArea?key=xxx&amp;BBOX=52.0,21.0,52.5,21.5&amp;mcc=260&amp;mnc=2&amp;lac=45070&amp;radio=CDMA&amp;limit=4&amp;offset=16&amp;format=json">https://www.opencellid.org/cell/getInArea?key=xxx&amp;BBOX=52.0,21.0,52.5,21.5&amp;mcc=260&amp;mnc=2&amp;lac=45070&amp;radio=CDMA&amp;limit=4&amp;offset=16&amp;format=json</a></u>
+</p>
+<h3><span class="mw-headline" id="Availability_2">Availability</span></h3>
+<ul>
+<li> This feature is available free of charge for applications that contribute data to OpenCellID
+</li>
+<li> Each cell returned counts as 1 API request credit. We recommend using the getInAreaSize endpoint first to check how many cells to expect before querying this endpoint
+</li>
+<li> In case you want to use this service without contributing to OpenCellID please refer to <u><a href="/wiki/Commercial_users" title="Commercial users">the commercial users guideline</a></u>.<br />
+</li>
+</ul>
+<h2><span class="mw-headline" id="Getting_the_number_of_cells_in_a_specified_area">Getting the number of cells in a specified area</span></h2>
+<p>GET request to
+</p>
+<pre>
+https://&lt;WebServiceURL&gt;/cell/getInAreaSize
+</pre>
+<h3><span class="mw-headline" id="Parameters_7">Parameters</span></h3>
+<p>&lt;WebServiceURL&gt;: the URL to the web service
+</p>
+<h3><span class="mw-headline" id="Payload_7">Payload</span></h3>
+<p>key=&lt;apiKey&gt;&amp;BBOX=&lt;latmin&gt;,&lt;lonmin&gt;,&lt;latmax&gt;,&lt;lonmax&gt;&amp;mcc=&lt;mcc&gt;&amp;mnc=&lt;mnc&gt;&amp;lac=&lt;lac&gt;&amp;radio=&lt;radio&gt;&amp;format=&lt;format&gt;
+</p><p>Where
+</p>
+<table class="wikitable sortable" style="font-size: 85%; text-align: left;">
+
+<tr>
+<th scope="col"> Parameter
+</th>
+<th scope="col"> Data type
+</th>
+<th scope="col"> Description
+</th>
+<th scope="col"> Optional
+</th></tr>
+<tr>
+<td title="Parameter"> &lt;apiKey&gt;
+</td>
+<td title="Data type"> string
+</td>
+<td title="Description"> API key assigned to the user
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;latmin&gt;
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> Minimal bounding latitude
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;lonmin&gt;
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> Minimal bounding longitude
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;latmax&gt;
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> Maximal bounding latitude
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;lonmax&gt;
+</td>
+<td title="Data type"> double
+</td>
+<td title="Description"> Maximal bounding longitude
+</td>
+<td title="Optional"> no
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;mcc&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Mobile country code; If you want to restrict the result to a specific country
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;mnc&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Mobile network code or system identifier; If you want to restrict the result
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;lac&gt;
+</td>
+<td title="Data type"> integer
+</td>
+<td title="Description"> Local area code, tracking area code or network id; If you want to restrict the result
+</td>
+<td title="Optional"> yes
+</td></tr>
+<tr>
+<td title="Parameter"> &lt;format&gt;
+</td>
+<td title="Data type"> string
+</td>
+<td title="Description"> You can specifiy xml or json as output. Default is xml.
+</td>
+<td title="Optional"> yes
+</td></tr></table>
+<h3><span class="mw-headline" id="Response_7">Response</span></h3>
+<p>Upon successful request, HTTP 200 is returned with XML in the following format:
+</p>
+<h4><span class="mw-headline" id="XML_3">XML</span></h4>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="xml source-xml"><pre class="de1"><span class="sc3"><span class="re1">&lt;?xml</span> <span class="re0">version</span>=<span class="st0">&quot;1.0&quot;</span> <span class="re0">encoding</span>=<span class="st0">&quot;UTF-8&quot;</span><span class="re2">?&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;rsp</span> <span class="re0">stat</span>=<span class="st0">&quot;ok&quot;</span><span class="re2">&gt;</span></span>
+  <span class="sc3"><span class="re1">&lt;cells</span> <span class="re0">count</span>=<span class="st0">&quot;5&quot;</span><span class="re2">/&gt;</span></span>
+<span class="sc3"><span class="re1">&lt;/rsp<span class="re2">&gt;</span></span></span></pre></div></div>
+<h4><span class="mw-headline" id="JSON_3">JSON</span></h4>
+<div dir="ltr" class="mw-geshi mw-code mw-content-ltr"><div class="javascript source-javascript"><pre class="de1"><span class="br0">&#123;</span>
+  <span class="st0">&quot;count&quot;</span><span class="sy0">:</span> <span class="nu0">123</span>
+<span class="br0">&#125;</span></pre></div></div>
+<h3><span class="mw-headline" id="Business_logic_6">Business logic</span></h3>
+<p>The request is handled by de.enaikoon.gpssuite.web.measure.CellController.
+</p>
+<h3><span class="mw-headline" id="Example_4">Example</span></h3>
+<p><u><a rel="nofollow" class="external free" href="https://www.opencellid.org/cell/getInAreaSize?key=xxx&amp;BBOX=52.0,21.0,52.5,21.5&amp;mcc=260&amp;mnc=2&amp;lac=45070">https://www.opencellid.org/cell/getInAreaSize?key=xxx&amp;BBOX=52.0,21.0,52.5,21.5&amp;mcc=260&amp;mnc=2&amp;lac=45070</a></u><br />
+<u><a rel="nofollow" class="external free" href="https://www.opencellid.org/cell/getInAreaSize?key=xxx&amp;BBOX=52.0,21.0,52.5,21.5&amp;mcc=260&amp;mnc=2&amp;lac=45070&amp;format=json">https://www.opencellid.org/cell/getInAreaSize?key=xxx&amp;BBOX=52.0,21.0,52.5,21.5&amp;mcc=260&amp;mnc=2&amp;lac=45070&amp;format=json</a></u>
+</p>
+<h3><span class="mw-headline" id="Availability_3">Availability</span></h3>
+<ul>
+<li> Each API request counts as 2 API request credits.
+</li>
+<li> This feature is available free of charge for applications that contribute data to OpenCellID
+</li>
+<li> If you want to use this service without contributing to OpenCellID, please refer to <u><a href="/wiki/Commercial_users" title="Commercial users">the commercial users guideline</a></u>
+</li>
+</ul>
+<p><br />
+</p>
+<!-- 
+NewPP limit report
+CPU time usage: 0.035 seconds
+Real time usage: 0.037 seconds
+Preprocessor visited node count: 532/1000000
+Preprocessor generated node count: 876/1000000
+Post‐expand include size: 0/2097152 bytes
+Template argument size: 0/2097152 bytes
+Highest expansion depth: 2/40
+Expensive parser function count: 0/100
+-->
+
+<!-- Saved in parser cache with key opencellid:pcache:idhash:5-0!*!0!!en!*!* and timestamp 20260730221805
+ -->
+</div>								<div class="printfooter">
+				Retrieved from "<a href="https://wiki.opencellid.org/index.php?title=API&amp;oldid=3652">http://wiki.opencellid.org/index.php?title=API&amp;oldid=3652</a>"				</div>
+												<div id='catlinks' class='catlinks catlinks-allhidden'></div>												<div class="visualClear"></div>
+							</div>
+		</div>
+		<div id="mw-navigation">
+			<h2>Navigation menu</h2>
+			<div id="mw-head">
+				<div id="p-personal" role="navigation" class="" aria-labelledby="p-personal-label">
+	<h3 id="p-personal-label">Personal tools</h3>
+	<ul>
+<li id="pt-login"><a href="/index.php?title=Special:UserLogin&amp;returnto=API" title="You are encouraged to log in; however, it is not mandatory [o]" accesskey="o">Log in</a></li>	</ul>
+</div>
+				<div id="left-navigation">
+					<div id="p-namespaces" role="navigation" class="vectorTabs" aria-labelledby="p-namespaces-label">
+	<h3 id="p-namespaces-label">Namespaces</h3>
+	<ul>
+					<li  id="ca-nstab-main" class="selected"><span><a href="/wiki/API"  title="View the content page [c]" accesskey="c">Page</a></span></li>
+					<li  id="ca-talk"><span><a href="/wiki/Talk:API"  title="Discussion about the content page [t]" accesskey="t">Discussion</a></span></li>
+			</ul>
+</div>
+<div id="p-variants" role="navigation" class="vectorMenu emptyPortlet" aria-labelledby="p-variants-label">
+	<h3 id="mw-vector-current-variant">
+		</h3>
+	<h3 id="p-variants-label"><span>Variants</span><a href="#"></a></h3>
+	<div class="menu">
+		<ul>
+					</ul>
+	</div>
+</div>
+				</div>
+				<div id="right-navigation">
+					<div id="p-views" role="navigation" class="vectorTabs" aria-labelledby="p-views-label">
+	<h3 id="p-views-label">Views</h3>
+	<ul>
+					<li id="ca-view" class="selected"><span><a href="/wiki/API" >Read</a></span></li>
+					<li id="ca-viewsource"><span><a href="/index.php?title=API&amp;action=edit"  title="This page is protected.&#10;You can view its source [e]" accesskey="e">View source</a></span></li>
+					<li id="ca-history" class="collapsible"><span><a href="/index.php?title=API&amp;action=history"  title="Past revisions of this page [h]" accesskey="h">View history</a></span></li>
+			</ul>
+</div>
+<div id="p-cactions" role="navigation" class="vectorMenu emptyPortlet" aria-labelledby="p-cactions-label">
+	<h3 id="p-cactions-label"><span>Actions</span><a href="#"></a></h3>
+	<div class="menu">
+		<ul>
+					</ul>
+	</div>
+</div>
+<div id="p-search" role="search">
+	<h3><label for="searchInput">Search</label></h3>
+	<form action="/index.php" id="searchform">
+				<div id="simpleSearch">
+						<input name="search" placeholder="Search" title="Search OpenCellID wiki [f]" accesskey="f" id="searchInput" />						<button type="submit" name="button" title="Search the pages for this text" id="searchButton"><img src="/skins/vector/images/search-ltr.png?303" alt="Search" width="12" height="13" /></button>								<input type='hidden' name="title" value="Special:Search"/>
+		</div>
+	</form>
+</div>
+				</div>
+			</div>
+			<div id="mw-panel">
+					<div id="p-logo" role="banner"><a style="background-image: url(/skins/common/images/opencellid.png);" href="/wiki/Main_Page"  title="Visit the main page"></a></div>
+				<div class="portal" role="navigation" id='p-Contribute' aria-labelledby='p-Contribute-label'>
+	<h3 id='p-Contribute-label'>Contribute</h3>
+	<div class="body">
+		<ul>
+			<li id="n-Contribute-to-OpenCellID"><a href="https://wiki.opencellid.org/wiki/Data_sources" rel="nofollow">Contribute to OpenCellID</a></li>
+		</ul>
+	</div>
+</div>
+<div class="portal" role="navigation" id='p-OpenCellID' aria-labelledby='p-OpenCellID-label'>
+	<h3 id='p-OpenCellID-label'>OpenCellID</h3>
+	<div class="body">
+		<ul>
+			<li id="n-What-is-OpenCellID"><a href="/wiki/What_is_OpenCellID">What is OpenCellID</a></li>
+			<li id="n-How-to-join"><a href="/wiki/How_to_join">How to join</a></li>
+			<li id="n-How-to-contribute"><a href="/wiki/How_to_contribute">How to contribute</a></li>
+			<li id="n-Smartphone-apps"><a href="/wiki/Data_sources">Smartphone apps</a></li>
+		</ul>
+	</div>
+</div>
+<div class="portal" role="navigation" id='p-Software' aria-labelledby='p-Software-label'>
+	<h3 id='p-Software-label'>Software</h3>
+	<div class="body">
+		<ul>
+			<li id="n-API"><a href="/wiki/API">API</a></li>
+			<li id="n-Android-library"><a href="/wiki/Android_library">Android library</a></li>
+			<li id="n-CSV-upload"><a href="/wiki/CSV_upload">CSV upload</a></li>
+		</ul>
+	</div>
+</div>
+<div class="portal" role="navigation" id='p-Database' aria-labelledby='p-Database-label'>
+	<h3 id='p-Database-label'>Database</h3>
+	<div class="body">
+		<ul>
+			<li id="n-Download-database"><a href="/wiki/Database_format">Download database</a></li>
+			<li id="n-Statistics"><a href="/wiki/Statistics">Statistics</a></li>
+			<li id="n-CC-BY-SA-4.0-License"><a href="/wiki/Licensing:">CC-BY-SA 4.0 License</a></li>
+			<li id="n-Commercial-users"><a href="/wiki/Commercial_users">Commercial users</a></li>
+		</ul>
+	</div>
+</div>
+<div class="portal" role="navigation" id='p-Other' aria-labelledby='p-Other-label'>
+	<h3 id='p-Other-label'>Other</h3>
+	<div class="body">
+		<ul>
+			<li id="n-FAQ"><a href="/wiki/FAQ">FAQ</a></li>
+			<li id="n-Project-History"><a href="/wiki/Page_history">Project History</a></li>
+			<li id="n-Glossary"><a href="/wiki/Glossary">Glossary</a></li>
+			<li id="n-Links"><a href="/wiki/Links">Links</a></li>
+		</ul>
+	</div>
+</div>
+<div class="portal" role="navigation" id='p-Back' aria-labelledby='p-Back-label'>
+	<h3 id='p-Back-label'>Back</h3>
+	<div class="body">
+		<ul>
+			<li id="n-Back-to-opencellid.org"><a href="http://www.opencellid.org" rel="nofollow">Back to opencellid.org</a></li>
+		</ul>
+	</div>
+</div>
+<div class="portal" role="navigation" id='p-tb' aria-labelledby='p-tb-label'>
+	<h3 id='p-tb-label'>Tools</h3>
+	<div class="body">
+		<ul>
+			<li id="t-whatlinkshere"><a href="/wiki/Special:WhatLinksHere/API" title="A list of all wiki pages that link here [j]" accesskey="j">What links here</a></li>
+			<li id="t-recentchangeslinked"><a href="/wiki/Special:RecentChangesLinked/API" title="Recent changes in pages linked from this page [k]" accesskey="k">Related changes</a></li>
+			<li id="t-specialpages"><a href="/wiki/Special:SpecialPages" title="A list of all special pages [q]" accesskey="q">Special pages</a></li>
+			<li id="t-print"><a href="/index.php?title=API&amp;printable=yes" rel="alternate" title="Printable version of this page [p]" accesskey="p">Printable version</a></li>
+			<li id="t-permalink"><a href="/index.php?title=API&amp;oldid=3652" title="Permanent link to this revision of the page">Permanent link</a></li>
+			<li id="t-info"><a href="/index.php?title=API&amp;action=info">Page information</a></li>
+		</ul>
+	</div>
+</div>
+			</div>
+		</div>
+		<div id="footer" role="contentinfo">
+							<ul id="footer-info">
+											<li id="footer-info-lastmod"> This page was last modified on 16 April 2025, at 15:47.</li>
+											<li id="footer-info-viewcount">This page has been accessed 2,236,172 times.</li>
+									</ul>
+							<ul id="footer-places">
+											<li id="footer-places-privacy"><a href="/wiki/Wiki:Privacy_policy" title="Wiki:Privacy policy">Privacy policy</a></li>
+											<li id="footer-places-about"><a href="/wiki/Wiki:About" title="Wiki:About">About OpenCellID wiki</a></li>
+											<li id="footer-places-disclaimer"><a href="/wiki/Wiki:General_disclaimer" title="Wiki:General disclaimer">Disclaimers</a></li>
+									</ul>
+										<ul id="footer-icons" class="noprint">
+					<li id="footer-poweredbyico">
+						<a href="//www.mediawiki.org/"><img src="/skins/common/images/poweredby_mediawiki_88x31.png" alt="Powered by MediaWiki" width="88" height="31" /></a>
+					</li>
+				</ul>
+						<div style="clear:both"></div>
+		</div>
+		<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>/*<![CDATA[*/window.jQuery && jQuery.ready();/*]]>*/</script><script>if(window.mw){
+mw.loader.state({"site":"loading","user":"ready","user.groups":"ready"});
+}</script>
+<script>if(window.mw){
+mw.loader.load(["mediawiki.action.view.postEdit","mediawiki.user","mediawiki.hidpi","mediawiki.page.ready","mediawiki.searchSuggest","skins.vector.collapsibleNav"],null,true);
+}</script>
+<script>if(window.mw){
+mw.loader.state({"site":"ready"});
+}</script>
+<!-- Served in 0.040 secs. -->
+	</body>
+</html>

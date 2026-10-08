@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tra cứu chuyển mạng giữ số</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script src="/auth.js"></script>
+  <style>
+    :root {
+      --bg-body: #f0f2f5;
+      --bg-surface: rgba(255,255,255,0.97);
+      --bg-surface2: rgba(0,0,0,0.03);
+      --bg-hover: rgba(0,0,0,0.06);
+      --bg-btn-primary: #4444cc;
+      --bg-btn-success: #22aa44;
+      --bg-btn-danger: #cc3333;
+      --text-primary: #1a1a2e;
+      --text-secondary: #444466;
+      --text-muted: #888899;
+      --text-faint: #aaaabb;
+      --border-color: rgba(0,0,0,0.1);
+      --border-hover: rgba(68,68,204,0.3);
+      --border-focus: #4444cc;
+      --header-bg: rgba(255,255,255,0.95);
+      --shadow: 0 10px 40px rgba(0,0,0,0.1);
+      --transition: 0.3s ease;
+    }
+    [data-theme="dark"] {
+      --bg-body: #111122;
+      --bg-surface: rgba(15,15,40,0.95);
+      --bg-surface2: rgba(255,255,255,0.04);
+      --bg-hover: rgba(255,255,255,0.1);
+      --bg-btn-primary: #4444cc;
+      --bg-btn-success: #22aa44;
+      --bg-btn-danger: #cc3333;
+      --text-primary: #e0e0ff;
+      --text-secondary: #aaaacc;
+      --text-muted: #666688;
+      --text-faint: #555577;
+      --border-color: rgba(255,255,255,0.08);
+      --border-hover: rgba(100,100,255,0.3);
+      --border-focus: #6666ff;
+      --header-bg: rgba(15,15,40,0.92);
+      --shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-primary);
+      transition: background var(--transition), color var(--transition);
+      min-height: 100vh;
+    }
+    /* Nav bar */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--header-bg);
+      backdrop-filter: blur(12px);
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border-color);
+      height: 48px;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .topbar-left h1 { font-size: 16px; color: var(--text-primary); }
+    .topbar-right { display: flex; align-items: center; gap: 8px; }
+    .btn {
+      padding: 7px 14px; border: 1px solid var(--border-color);
+      border-radius: 6px; background: var(--bg-surface2);
+      color: var(--text-secondary); cursor: pointer; font-size: 12px; transition: all 0.2s;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .btn-primary { background: var(--bg-btn-primary); border-color: var(--bg-btn-primary); color: white; }
+    .btn-primary:hover { filter: brightness(1.15); }
+
+    /* Container */
+    .container {
+      max-width: 640px;
+      margin: 40px auto;
+      padding: 0 16px;
+    }
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+    .card h2 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: var(--text-primary);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .form-group { margin-bottom: 14px; }
+    .form-group label {
+      display: block; color: var(--text-muted); font-size: 11px; margin-bottom: 4px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .form-group input {
+      width: 100%; padding: 9px 12px;
+      border: 1px solid var(--border-color); border-radius: 6px;
+      background: var(--bg-surface2); color: var(--text-primary); font-size: 14px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus { border-color: var(--border-focus); }
+
+    .captcha-row {
+      display: flex; gap: 12px; align-items: flex-end;
+    }
+    .captcha-row .form-group { flex: 1; margin-bottom: 0; }
+    .captcha-img {
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      height: 42px;
+      cursor: pointer;
+    }
+    .result-box {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+    .result-box.show { display: block; }
+    .result-box.success { background: rgba(34,170,68,0.1); border: 1px solid rgba(34,170,68,0.3); }
+    .result-box.error { background: rgba(204,51,51,0.1); border: 1px solid rgba(204,51,51,0.3); }
+    .result-box .carrier {
+      font-size: 22px; font-weight: 700; margin-bottom: 8px;
+    }
+    .result-box .detail-row {
+      display: flex; justify-content: space-between; padding: 4px 0;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 13px;
+    }
+    .result-box .detail-row:last-child { border-bottom: none; }
+    .result-box .detail-label { color: var(--text-muted); }
+    .result-box .detail-value { color: var(--text-primary); font-weight: 500; }
+    .spinner { display: inline-block; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .status-msg {
+      margin-top: 10px; font-size: 13px; color: var(--text-muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar"></nav>
+
+  <div class="container">
+    <div class="card">
+      <h2><i class="fas fa-phone-alt"></i> Tra cứu chuyển mạng giữ số</h2>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+        Nhập số điện thoại để kiểm tra số thuộc mạng nào. Dữ liệu từ Cục Viễn thông (VNTA).
+      </p>
+
+      <div class="form-group">
+        <label>Số điện thoại</label>
+        <input type="text" id="phoneInput" placeholder="VD: 0912345678" maxlength="15" onkeydown="if(event.key==='Enter') checkPhone()">
+      </div>
+
+      <div class="form-group">
+        <label>Mã xác nhận (Captcha)</label>
+        <div class="captcha-row">
+          <img id="captchaImg" class="captcha-img" src="" alt="Captcha" title="Nhấn để tải lại captcha" onclick="loadCaptcha()" style="min-width:140px">
+          <div class="form-group" style="flex:1">
+            <input type="text" id="captchaInput" placeholder="Nhập captcha" maxlength="10" onkeydown="if(event.key==='Enter') checkPhone()">
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-block" onclick="checkPhone()" id="checkBtn">
+        <i class="fas fa-search"></i> Tra cứu
+      </button>
+
+      <div class="status-msg" id="statusMsg"></div>
+
+      <div class="result-box" id="resultBox">
+        <div class="carrier" id="resultCarrier"></div>
+        <div id="resultDetails"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ========== Auth check ==========
+    (() => {
+      const user = Auth.getUser();
+      if (!user) {
+        window.location.href = '/login.html';
+        return;
+      }
+      Auth.initNavbar();
+    })();
+
+    // ========== Captcha + Check ==========
+    let currentSessionId = null;
+
+    async function loadCaptcha() {
+      const statusEl = document.getElementById('statusMsg');
+      statusEl.innerHTML = '<i class="fas fa-spinner spinner"></i> Đang tải captcha...';
+      try {
+        const token = Auth.getToken();
+        const res = await fetch('/api/tools/port-check/captcha', {
+          headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Lỗi tải captcha');
+        document.getElementById('captchaImg').src = 'data:image/png;base64,' + data.captchaBase64;
+        currentSessionId = data.sessionId;
+        statusEl.innerHTML = '';
+      } catch (e) {
+        statusEl.innerHTML = '<span style="color:var(--bg-btn-danger)">Lỗi: ' + e.message + '</span>';
+      }
+    }
+
+    async function checkPhone() {
+      const phone = document.getElementById('phoneInput').value.trim();
+      const captcha = document.getElementById('captchaInput').value.trim();
+      const statusEl = document.getElementById('statusMsg');
+      const resultBox = document.getElementById('resultBox');
+      const btn = document.getElementById('checkBtn');
+
+      if (!phone) { statusEl.innerHTML = '<span style="color:var(--bg-btn-danger)">Nhập số điện thoại</span>'; return; }
+      if (!captcha) { statusEl.innerHTML = '<span style="color:var(--bg-btn-danger)">Nhập mã captcha</span>'; return; }
+      if (!currentSessionId) { statusEl.innerHTML = '<span style="color:var(--bg-btn-danger)">Captcha chưa tải, nhấn vào ảnh captcha để tải lại</span>'; return; }
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner spinner"></i> Đang tra...';
+      statusEl.innerHTML = '<i class="fas fa-spinner spinner"></i> Đang tra cứu...';
+      resultBox.classList.remove('show');
+
+      try {
+        const token = Auth.getToken();
+        const res = await fetch('/api/tools/port-check/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+          },
+          body: JSON.stringify({ phone, captcha, sessionId: currentSessionId })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          statusEl.innerHTML = '<span style="color:var(--bg-btn-danger)">Lỗi: ' + (data.error || 'Tra cứu thất bại') + '</span>';
+          // Reload captcha on error
+          loadCaptcha();
+          document.getElementById('captchaInput').value = '';
+          return;
+        }
+
+        statusEl.innerHTML = '';
+        resultBox.className = 'result-box show success';
+        document.getElementById('resultCarrier').textContent = data.carrier || 'Không xác định';
+
+        let html = '';
+        if (data.subscriber) html += '<div class="detail-row"><span class="detail-label">Thuê bao</span><span class="detail-value">' + data.subscriber + '</span></div>';
+        if (data.originalCarrier) html += '<div class="detail-row"><span class="detail-label">Mạng gốc</span><span class="detail-value">' + data.originalCarrier + '</span></div>';
+        if (data.currentCarrier) html += '<div class="detail-row"><span class="detail-label">Mạng hiện tại</span><span class="detail-value">' + data.currentCarrier + '</span></div>';
+        if (data.phone) html += '<div class="detail-row"><span class="detail-label">Số điện thoại</span><span class="detail-value">' + data.phone + '</span></div>';
+        if (data.details) html += '<div class="detail-row"><span class="detail-label">Chi tiết</span><span class="detail-value">' + data.details + '</span></div>';
+
+        document.getElementById('resultDetails').innerHTML = html;
+
+        // Reload captcha for next search
+        loadCaptcha();
+        document.getElementById('captchaInput').value = '';
+      } catch (e) {
+        statusEl.innerHTML = '<span style="color:var(--bg-btn-danger)">Lỗi kết nối: ' + e.message + '</span>';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-search"></i> Tra cứu';
+      }
+    }
+
+    // Auto load captcha on page load
+    loadCaptcha();
+  </script>
+</body>
+</html>

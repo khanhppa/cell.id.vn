@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đổi eNB ID ↔ ECI</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script src="/auth.js"></script>
+  <style>
+    :root {
+      --bg-body: #f0f2f5;
+      --bg-surface: rgba(255,255,255,0.97);
+      --bg-surface2: rgba(0,0,0,0.03);
+      --bg-hover: rgba(0,0,0,0.06);
+      --bg-btn-primary: #4444cc;
+      --bg-btn-success: #22aa44;
+      --bg-btn-danger: #cc3333;
+      --text-primary: #1a1a2e;
+      --text-secondary: #444466;
+      --text-muted: #888899;
+      --text-faint: #aaaabb;
+      --border-color: rgba(0,0,0,0.1);
+      --border-hover: rgba(68,68,204,0.3);
+      --border-focus: #4444cc;
+      --header-bg: rgba(255,255,255,0.95);
+      --shadow: 0 10px 40px rgba(0,0,0,0.1);
+      --transition: 0.3s ease;
+    }
+    [data-theme="dark"] {
+      --bg-body: #111122;
+      --bg-surface: rgba(15,15,40,0.95);
+      --bg-surface2: rgba(255,255,255,0.04);
+      --bg-hover: rgba(255,255,255,0.1);
+      --bg-btn-primary: #4444cc;
+      --bg-btn-success: #22aa44;
+      --bg-btn-danger: #cc3333;
+      --text-primary: #e0e0ff;
+      --text-secondary: #aaaacc;
+      --text-muted: #666688;
+      --text-faint: #555577;
+      --border-color: rgba(255,255,255,0.08);
+      --border-hover: rgba(100,100,255,0.3);
+      --border-focus: #6666ff;
+      --header-bg: rgba(15,15,40,0.92);
+      --shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-primary);
+      transition: background var(--transition), color var(--transition);
+      min-height: 100vh;
+    }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--header-bg);
+      backdrop-filter: blur(12px);
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border-color);
+      height: 48px;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .topbar-left h1 { font-size: 16px; color: var(--text-primary); }
+    .topbar-right { display: flex; align-items: center; gap: 8px; }
+    .btn {
+      padding: 7px 14px; border: 1px solid var(--border-color);
+      border-radius: 6px; background: var(--bg-surface2);
+      color: var(--text-secondary); cursor: pointer; font-size: 12px; transition: all 0.2s;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .btn-primary { background: var(--bg-btn-primary); border-color: var(--bg-btn-primary); color: white; }
+    .btn-primary:hover { filter: brightness(1.15); }
+    .btn-block { width: 100%; justify-content: center; }
+
+    .container { max-width: 640px; margin: 40px auto; padding: 0 16px; }
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      font-size: 18px; margin-bottom: 20px; color: var(--text-primary);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .card p.hint { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label {
+      display: block; color: var(--text-muted); font-size: 11px; margin-bottom: 4px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .form-group input {
+      width: 100%; padding: 9px 12px;
+      border: 1px solid var(--border-color); border-radius: 6px;
+      background: var(--bg-surface2); color: var(--text-primary); font-size: 14px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus { border-color: var(--border-focus); }
+    .form-row { display: flex; gap: 12px; }
+    .form-row .form-group { flex: 1; }
+
+    .result-box {
+      margin-top: 16px; padding: 16px; border-radius: 8px; font-size: 14px;
+      display: none;
+    }
+    .result-box.show { display: block; }
+    .result-box.success { background: rgba(34,170,68,0.1); border: 1px solid rgba(34,170,68,0.3); }
+    .result-box.error { background: rgba(204,51,51,0.1); border: 1px solid rgba(204,51,51,0.3); }
+    .result-box .big { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .result-box .detail-row {
+      display: flex; justify-content: space-between; padding: 4px 0;
+      border-bottom: 1px solid var(--border-color); font-size: 13px;
+    }
+    .result-box .detail-row:last-child { border-bottom: none; }
+    .result-box .detail-label { color: var(--text-muted); }
+    .result-box .detail-value { color: var(--text-primary); font-weight: 500; font-family: monospace; }
+    .status-msg { margin-top: 10px; font-size: 13px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <nav class="navbar"></nav>
+
+  <div class="container">
+    <div class="card">
+      <h2><i class="fas fa-exchange-alt"></i> Đổi eNB ID ↔ ECI</h2>
+      <p class="hint">
+        ECI (E-UTRAN Cell Identity) = eNB ID × 256 + Sector. Ngược lại: eNB ID = ECI ÷ 256 (làm tròn xuống),
+        Sector = ECI mod 256. Theo 3GPP TS 36.331 (ECI 28 bit = eNB 20 bit + Cell 8 bit).
+      </p>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cell ID (Short / eNB)</label>
+          <input type="number" id="enbInput" placeholder="VD: 662079" min="0" onkeydown="if(event.key==='Enter') convertEnb()">
+        </div>
+        <div class="form-group">
+          <label>Sector / Cell (0–255)</label>
+          <input type="number" id="sectorInput" placeholder="VD: 13" min="0" max="255" onkeydown="if(event.key==='Enter') convertEnb()">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" onclick="convertEnb()"><i class="fas fa-arrow-right"></i> Đổi sang ECI (Long)</button>
+      <div class="result-box" id="enbResult"></div>
+    </div>
+
+    <div class="card">
+      <h2><i class="fas fa-exchange-alt" style="transform:rotate(180deg)"></i> Đổi ECI → eNB ID</h2>
+      <div class="form-group">
+        <label>ECI (Long / Cell ID đầy đủ)</label>
+        <input type="number" id="eciInput" placeholder="VD: 169492237" min="0" onkeydown="if(event.key==='Enter') convertEci()">
+      </div>
+      <button class="btn btn-primary btn-block" onclick="convertEci()"><i class="fas fa-arrow-left"></i> Đổi sang eNB ID (Short)</button>
+      <div class="status-msg" id="eciStatus"></div>
+      <div class="result-box" id="eciResult"></div>
+    </div>
+  </div>
+
+  <script>
+    // ========== Auth check ==========
+    (() => {
+      const user = Auth.getUser();
+      if (!user) { window.location.href = '/login.html'; return; }
+      Auth.initNavbar();
+    })();
+
+    // ========== Helpers (same formula as app.js / cell-id.js) ==========
+    const ECI_MAX = 0xFFFFFFF;
+    const SHORT_THRESHOLD = 0x100000; // 2^20 = max eNB ID + 1
+
+    function classifyCellId(value) {
+      const n = parseInt(value, 10);
+      if (isNaN(n)) return 'short';
+      return n > SHORT_THRESHOLD && n <= ECI_MAX ? 'long' : 'short';
+    }
+    function enbToEci(enbId, sector) {
+      const enb = parseInt(enbId, 10);
+      const sec = parseInt(sector, 10) || 0;
+      if (isNaN(enb)) return NaN;
+      return enb * 256 + (sec & 0xFF);
+    }
+    function eciToEnb(eci) {
+      const n = parseInt(eci, 10);
+      if (isNaN(n)) return { enbId: NaN, sector: NaN };
+      return { enbId: Math.floor(n / 256), sector: n & 0xFF };
+    }
+
+    function row(label, value) {
+      return `<div class="detail-row"><span class="detail-label">${label}</span><span class="detail-value">${value}</span></div>`;
+    }
+
+    function convertEnb() {
+      const enbVal = document.getElementById('enbInput').value;
+      const secVal = document.getElementById('sectorInput').value;
+      const box = document.getElementById('enbResult');
+      if (enbVal === '') { box.className = 'result-box show error'; box.innerHTML = 'Nhập Cell ID (Short / eNB).'; return; }
+
+      // Auto-detect: if user pasted a long ECI into the short box, treat as ECI.
+      if (classifyCellId(enbVal) === 'long') {
+        const { enbId, sector } = eciToEnb(enbVal);
+        box.className = 'result-box show success';
+        box.innerHTML = `<div class="big">${enbVal}</div>` +
+          row('Phân loại', 'ECI (Long)') + row('eNB ID', enbId) + row('Sector', sector);
+        return;
+      }
+
+      const enb = parseInt(enbVal, 10);
+      const sec = secVal === '' ? 0 : (parseInt(secVal, 10) || 0);
+      const eci = enbToEci(enb, sec);
+      box.className = 'result-box show success';
+      box.innerHTML = `<div class="big">${eci}</div>` +
+        row('eNB ID', enb) + row('Sector', sec & 0xFF) + row('ECI (Long)', eci);
+    }
+
+    function convertEci() {
+      const val = document.getElementById('eciInput').value;
+      const box = document.getElementById('eciResult');
+      const status = document.getElementById('eciStatus');
+      status.textContent = '';
+      if (val === '') { box.className = 'result-box show error'; box.innerHTML = 'Nhập ECI (Long).'; return; }
+
+      if (classifyCellId(val) === 'short') {
+        status.textContent = 'Giá trị này nhỏ (≤ 16,777,216) — có thể là eNB ID (Short) chứ không phải ECI.';
+      }
+      const { enbId, sector } = eciToEnb(val);
+      box.className = 'result-box show success';
+      box.innerHTML = `<div class="big">eNB ID: ${enbId}</div>` +
+        row('eNB ID (Short)', enbId) + row('Sector', sector) + row('ECI', val);
+    }
+  </script>
+</body>
+</html>

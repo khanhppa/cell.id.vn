@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cell Tracker - Admin</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="/auth.js"></script>
+  <style>
+    :root {
+      --bg-body: #f0f2f5;
+      --bg-surface: rgba(255,255,255,0.97);
+      --bg-surface2: rgba(0,0,0,0.03);
+      --bg-hover: rgba(0,0,0,0.06);
+      --bg-btn-primary: #4444cc;
+      --bg-btn-success: #22aa44;
+      --bg-btn-danger: #cc3333;
+      --text-primary: #1a1a2e;
+      --text-secondary: #444466;
+      --text-muted: #888899;
+      --text-faint: #aaaabb;
+      --border-color: rgba(0,0,0,0.1);
+      --border-hover: rgba(68,68,204,0.3);
+      --border-focus: #4444cc;
+      --header-bg: rgba(255,255,255,0.95);
+      --shadow: 0 10px 40px rgba(0,0,0,0.1);
+      --transition: 0.3s ease;
+    }
+    [data-theme="dark"] {
+      --bg-body: #111122;
+      --bg-surface: rgba(15,15,40,0.95);
+      --bg-surface2: rgba(255,255,255,0.04);
+      --bg-hover: rgba(255,255,255,0.1);
+      --bg-btn-primary: #4444cc;
+      --bg-btn-success: #22aa44;
+      --bg-btn-danger: #cc3333;
+      --text-primary: #e0e0ff;
+      --text-secondary: #aaaacc;
+      --text-muted: #666688;
+      --text-faint: #555577;
+      --border-color: rgba(255,255,255,0.08);
+      --border-hover: rgba(100,100,255,0.3);
+      --border-focus: #6666ff;
+      --header-bg: rgba(15,15,40,0.92);
+      --shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg-body); color: var(--text-primary); transition: background var(--transition), color var(--transition); }
+    .nav-badge {
+      background: rgba(255,100,100,0.2);
+      color: #ff6666;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .navbar-right .user-info { color: var(--text-muted, #8888aa); font-size: 13px; }
+    .btn {
+      padding: 8px 16px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: var(--bg-surface2);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .btn-primary { background: var(--bg-btn-primary); border-color: var(--bg-btn-primary); color: white; }
+    .btn-primary:hover { background: #5555dd; }
+    .btn-danger { background: var(--bg-btn-danger); border-color: var(--bg-btn-danger); color: white; }
+    .btn-danger:hover { background: #dd4444; }
+    .btn-success { background: var(--bg-btn-success); border-color: var(--bg-btn-success); color: white; }
+    .btn-success:hover { background: #33bb55; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    body { margin: 0; }
+    .container { display: flex; gap: 0; height: calc(100vh - 48px); margin-top: 48px; }
+    .sidebar {
+      width: 260px;
+      background: var(--bg-surface2);
+      border-right: 1px solid var(--border-color);
+      padding: 16px 0;
+      flex-shrink: 0;
+    }
+    .sidebar-item {
+      padding: 12px 20px;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.2s;
+      border-left: 3px solid transparent;
+    }
+    .sidebar-item:hover { color: var(--text-secondary); background: var(--bg-hover); }
+    .sidebar-item.active { color: var(--text-primary); background: rgba(100,100,255,0.1); border-left-color: var(--border-focus); }
+    .sidebar-item i { width: 18px; text-align: center; }
+    .content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+    .section { display: none; }
+    .section.active { display: block; }
+    .section h3 { font-size: 20px; margin-bottom: 20px; color: var(--text-primary); }
+    .card {
+      background: var(--bg-surface2);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .card h4 { color: var(--text-secondary); font-size: 14px; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card {
+      background: var(--bg-surface2);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-card .num { font-size: 32px; font-weight: 700; color: var(--text-primary); }
+    .stat-card .label { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 13px; }
+    th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; }
+    td { color: var(--text-secondary); }
+    tr:hover td { background: var(--bg-hover); }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-active { background: rgba(50,255,50,0.15); color: #66ff66; }
+    .badge-pending { background: rgba(255,200,50,0.15); color: #ffcc44; }
+    .badge-admin { background: rgba(255,50,50,0.15); color: #ff6666; }
+    .badge-user { background: rgba(50,150,255,0.15); color: #6699ff; }
+    .filter-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-bar input, .filter-bar select {
+      padding: 8px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: var(--bg-surface2);
+      color: var(--text-primary);
+      font-size: 13px;
+      outline: none;
+    }
+    .filter-bar input:focus, .filter-bar select:focus { border-color: var(--border-focus); }
+    .upload-zone {
+      border: 2px dashed var(--border-color);
+      border-radius: 12px;
+      padding: 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-bottom: 16px;
+    }
+    .upload-zone:hover, .upload-zone.dragover { border-color: var(--border-focus); background: rgba(100,100,255,0.05); }
+    .upload-zone i { font-size: 48px; color: var(--border-focus); margin-bottom: 12px; }
+    .upload-zone p { color: var(--text-muted); font-size: 14px; }
+    .progress-bar {
+      width: 100%;
+      height: 20px;
+      background: var(--bg-surface2);
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 12px 0;
+      display: none;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4444cc, #6666ff);
+      border-radius: 10px;
+      transition: width 0.3s;
+      width: 0%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .progress-info { color: var(--text-muted); font-size: 13px; margin-top: 8px; display: none; }
+    .upload-result { display: none; padding: 12px; border-radius: 8px; margin-top: 12px; font-size: 13px; }
+    .upload-result.success { display: block; background: rgba(50,255,50,0.1); color: #66ff66; border: 1px solid rgba(50,255,50,0.2); }
+    .upload-result.error { display: block; background: rgba(255,50,50,0.1); color: #ff6666; border: 1px solid rgba(255,50,50,0.2); }
+    .search-table-wrap { max-height: 400px; overflow-y: auto; }
+    .loading { text-align: center; padding: 40px; color: var(--text-muted); }
+    .loading i { margin-right: 8px; }
+    .toast {
+      position: fixed; top: 70px; right: 20px;
+      background: var(--header-bg); backdrop-filter: blur(10px);
+      border: 1px solid var(--border-color);
+      border-radius: 10px; padding: 14px 20px;
+      color: var(--text-primary); font-size: 13px;
+      z-index: 9999; display: none;
+      min-width: 250px;
+      box-shadow: var(--shadow);
+    }
+    .toast.show { display: block; }
+    .toast i { margin-right: 8px; }
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+      display: none; align-items: center; justify-content: center;
+      z-index: 10000;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--bg-surface); border: 1px solid var(--border-color);
+      border-radius: 16px; padding: 24px; width: 100%;
+      max-width: 520px; max-height: 85vh; overflow-y: auto;
+      color: var(--text-primary);
+    }
+    .modal h3 { margin-bottom: 16px; }
+    .modal .form-group { margin-bottom: 14px; }
+    .modal .btn-row, .btn-row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; color: var(--text-secondary); font-size: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%; padding: 10px 12px;
+      border: 1px solid var(--border-color); border-radius: 8px;
+      background: var(--bg-surface2); color: var(--text-primary); font-size: 14px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--border-focus); }
+    .form-group input[type="file"] { padding: 8px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+    .form-grid .full { grid-column: 1 / -1; }
+    @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+    .muted-text { color: var(--text-muted) !important; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-color); margin-bottom: 18px; }
+    .tab-btn {
+      padding: 10px 16px;
+      background: none; border: none; border-bottom: 3px solid transparent;
+      color: var(--text-muted); font-size: 14px; cursor: pointer;
+      font-weight: 600; transition: all 0.2s;
+    }
+    .tab-btn:hover { color: var(--text-secondary); }
+    .tab-btn.active { color: var(--border-focus); border-bottom-color: var(--border-focus); }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+    .online-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+    .online-row .form-group input { min-width: 0; }
+    #sourceFormCard { max-width: 720px; }
+    .sub-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .sub-head h3 { margin: 0; }
+    .sub-head .filter-bar { margin: 0; }
+    .page-actions { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-color); }
+    .checklist { max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; margin-top: 8px; }
+    .checklist label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 13px; color: var(--text-secondary); cursor: pointer; }
+    .checklist label:hover { background: var(--bg-hover); border-radius: 6px; }
+    .bulk-preview { max-height: 220px; overflow-y: auto; }
+    .hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <nav class="navbar"></nav>
+
+  <div class="container">
+    <div class="sidebar">
+      <div class="sidebar-item active" data-section="dashboard" onclick="switchSection('dashboard')">
+        <i class="fas fa-tachometer-alt"></i> Dashboard
+      </div>
+      <div class="sidebar-item" data-section="cells" onclick="switchSection('cells')">
+        <i class="fas fa-database"></i> Cell ID Database
+      </div>
+      <div class="sidebar-item" data-section="users" onclick="switchSection('users')">
+        <i class="fas fa-users"></i> User Management
+      </div>
+      <div class="sidebar-item" data-section="settings" onclick="switchSection('settings')">
+        <i class="fas fa-sliders-h"></i> Cấu hình
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- Dashboard -->
+      <div id="section-dashboard" class="section active">
+        <h3>Dashboard</h3>
+        <div class="stats-grid" id="dashStats">
+          <div class="stat-card"><div class="num" id="statUsers">0</div><div class="label">Users</div></div>
+          <div class="stat-card"><div class="num" id="statCells">0</div><div class="label">Cell IDs</div></div>
+          <div class="stat-card"><div class="num" id="statRecords">0</div><div class="label">Records</div></div>
+          <div class="stat-card"><div class="num" id="statPending">0</div><div class="label">Pending Users</div></div>
+        </div>
+        <div class="card">
+          <h4>Recent Activity</h4>
+          <div id="dashActivity" class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div id="section-settings" class="section">
+        <h3>Cấu hình hệ thống</h3>
+        <div class="card" style="max-width:640px">
+          <div class="form-group">
+            <label>Số cell tối đa tra online mỗi lần (max_online_resolve)</label>
+            <input type="number" id="setMaxOnline" min="0" placeholder="50">
+            <div class="hint">Giới hạn số lượt tra nguồn online cho mỗi lần xử lý batch. Đặt 0 để tắt tra online. Đặt bất kỳ số nào (không trần).</div>
+          </div>
+          <div class="form-group">
+            <label>Số ngày lưu lịch sử tra cứu (lookup_history_retention_days)</label>
+            <input type="number" id="setRetention" min="1" placeholder="90">
+            <div class="hint">Lịch sử tra cứu cũ hơn số ngày này sẽ tự động bị xóa (job chạy 03:30 mỗi ngày).</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> Lưu cấu hình</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cell ID Database -->
+      <div id="section-cells" class="section">
+        <h3>Cell ID Database</h3>
+        <div class="card">
+          <h4>Quản lý dữ liệu Cell</h4>
+          <div class="filter-bar">
+            <button class="btn btn-primary" onclick="showSourcePage()"><i class="fas fa-cloud-download-alt"></i> Nguồn Online</button>
+            <button class="btn btn-primary" onclick="showBulkPage()"><i class="fas fa-file-csv"></i> Upload CSV</button>
+            <button class="btn btn-primary" onclick="showClfPage()"><i class="fas fa-exchange-alt"></i> Chuyển đổi CLF</button>
+          </div>
+          <p class="muted-text" style="font-size:12px">Tải cell từ nguồn OpenCellID / t0stbrot / Combain hoặc upload file CSV/GZ/ZIP vào cơ sở dữ liệu. Chuyển đổi qua lại định dạng CLF V4.1 cho G-MoN Pro.</p>
+        </div>
+      </div>
+
+      <!-- Cell ID Database - Sub-page: Nguồn Online -->
+      <div id="sub-sources" class="section">
+        <h3>Nguồn Online (OpenCellID / t0stbrot / Combain)</h3>
+        <div class="sub-head">
+          <div></div>
+          <div class="filter-bar">
+            <button class="btn" onclick="goBackToCells()"><i class="fas fa-arrow-left"></i> Quay lại</button>
+            <button class="btn btn-success btn-sm" onclick="resetSourceForm()"><i class="fas fa-plus"></i> Thêm nguồn</button>
+          </div>
+        </div>
+        <div class="card" id="sourceFormCard" style="display:none">
+          <h4><span id="sourceFormTitle">Thêm nguồn</span></h4>
+          <div class="online-row">
+            <div class="form-group"><label>Tên nguồn *</label><input type="text" id="srcName" placeholder="OpenCellID"></div>
+            <div class="form-group"><label>Chọn nguồn</label>
+              <select id="srcType" onchange="onSourceTypeChange()">
+                <option value="opencellid">OpenCellID.org</option>
+                <option value="t0stbrot">t0stbrot.net</option>
+                <option value="combain">Combain.com</option>
+              </select>
+            </div>
+            <div class="form-group"><label>API Key</label><input type="text" id="srcApiKey" placeholder="OpenCellID key"></div>
+            <div class="form-group"><label>Trạng thái</label>
+              <select id="srcEnabled">
+                <option value="1">Bật</option>
+                <option value="0">Tắt</option>
+              </select>
+            </div>
+          </div>
+          <div class="hint" id="srcHint">Lấy API key miễn phí tại <a href="https://opencellid.org" target="_blank" rel="noopener">opencellid.org</a>.</div>
+          <div class="btn-row">
+            <button class="btn" onclick="resetSourceForm()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveSource()">Lưu nguồn</button>
+          </div>
+        </div>
+        <div class="card">
+          <h4>Danh sách nguồn</h4>
+          <p class="muted-text" style="font-size:12px">Tra cứu luôn thử CSDL nội bộ (Local) trước. Sau đó chạy lần lượt các nguồn Online theo thứ tự ưu tiên (từ trên xuống), dừng lại ngay khi tìm thấy. Dùng nút ▲▼ để sắp xếp.</p>
+          <table>
+            <thead><tr><th>ID</th><th>Ưu tiên</th><th>Tên</th><th>Loại</th><th>Trạng thái</th><th>Actions</th></tr></thead>
+            <tbody id="sourceTableBody"><tr><td colspan="6" class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr></tbody>
+          </table>
+        </div>
+
+        <!-- Đồng bộ tự động OpenCellID -->
+        <div class="card">
+          <h4><i class="fas fa-sync-alt"></i> Đồng bộ tự động (OpenCellID VN)</h4>
+          <p class="muted-text" style="font-size:12px">Tự động tải và thêm cell mới từ OpenCellID theo lịch cron. Mặc định chạy 03:00 hằng ngày, MCC 452 (Việt Nam). Chỉ thêm cell mới, không ghi đè dữ liệu cũ.</p>
+          <div class="card" id="syncFormCard" style="display:none; background:rgba(255,255,255,0.03)">
+            <h4><span id="syncFormTitle">Thêm lịch đồng bộ</span></h4>
+            <div class="online-row">
+              <div class="form-group"><label>Nguồn</label>
+                <select id="syncSource"><option value="">-- OpenCellID --</option></select>
+              </div>
+              <div class="form-group"><label>Lịch cron *</label><input type="text" id="syncCron" value="0 3 * * *" placeholder="0 3 * * *"></div>
+              <div class="form-group"><label>MCC</label><input type="text" id="syncMcc" value="452" placeholder="452"></div>
+              <div class="form-group"><label>Trạng thái</label>
+                <select id="syncEnabled"><option value="1">Bật</option><option value="0">Tắt</option></select>
+              </div>
+            </div>
+            <div class="hint">Lịch cron 5 trường (phút giờ ngày tháng thứ). Vd <code>0 3 * * *</code> = 03:00 mỗi ngày (giờ VN).</div>
+            <div class="btn-row">
+              <button class="btn" onclick="resetSyncForm()">Cancel</button>
+              <button class="btn btn-primary" onclick="saveSyncJob()">Lưu lịch</button>
+            </div>
+          </div>
+          <div class="sub-head">
+            <div></div>
+            <div class="filter-bar">
+              <button class="btn btn-success btn-sm" onclick="resetSyncForm()"><i class="fas fa-plus"></i> Thêm lịch</button>
+              <button class="btn btn-sm" onclick="loadSyncJobs()"><i class="fas fa-redo"></i> Làm mới</button>
+            </div>
+          </div>
+          <table>
+            <thead><tr><th>ID</th><th>Nguồn</th><th>Lịch cron</th><th>MCC</th><th>Trạng thái</th><th>Lần chạy cuối</th><th>Kết quả</th><th>Actions</th></tr></thead>
+            <tbody id="syncTableBody"><tr><td colspan="8" class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Cell ID Database - Sub-page: Thêm CSV -->
+      <div id="sub-bulk" class="section">
+        <h3>Nhập hàng loạt từ CSV</h3>
+        <div class="sub-head">
+          <div></div>
+          <div class="filter-bar">
+            <button class="btn" onclick="goBackToCells()"><i class="fas fa-arrow-left"></i> Quay lại</button>
+          </div>
+        </div>
+        <div class="card" style="max-width:720px">
+          <h4>Upload file CSV (.csv / .gz / .zip)</h4>
+          <div class="upload-zone" id="bulkZone" onclick="document.getElementById('bulkCsvFile').click()">
+            <i class="fas fa-cloud-upload-alt"></i>
+            <p><strong>Click to select CSV</strong> or drag & drop</p>
+            <p class="muted-text" style="font-size:12px;margin-top:8px">
+              Hỗ trợ: <strong>.csv</strong> (text/UTF-8), <strong>.gz</strong> (gzip nén CSV), <strong>.zip</strong> (chứa file CSV)
+              <br>Columns: mcc, mnc, lac, cellid, lat, lon (range optional)
+              <br>Hoặc định dạng OpenCellID: net, area, cell, lat, lon
+            </p>
+          </div>
+          <input type="file" id="bulkCsvFile" accept=".csv,.gz,.zip" style="display:none" onchange="handleBulkFile(event)">
+          <div class="progress-bar" id="bulkProgressBar"><div class="progress-fill" id="bulkProgressFill">0%</div></div>
+          <div class="progress-info" id="bulkProgressInfo"></div>
+          <div class="upload-result" id="bulkResult"></div>
+          <div class="bulk-preview" id="bulkPreview"></div>
+        </div>
+        <div class="card" style="max-width:720px;border-color:rgba(255,60,60,0.35);margin-top:16px">
+          <h4 style="color:#ff5555"><i class="fas fa-exclamation-triangle"></i> Nguy hiểm</h4>
+          <p class="muted-text" style="font-size:13px">
+            Xóa <b>toàn bộ</b> cell ID trong cơ sở dữ liệu để tải lên bộ cellid mới.
+            Hành động này <b>không thể hoàn tác</b>.
+          </p>
+          <button class="btn btn-danger btn-sm" id="clearAllCellsBtn" onclick="clearAllCells()">
+            <i class="fas fa-trash"></i> Xóa toàn bộ cell ID
+          </button>
+        </div>
+      </div>
+
+      <!-- Cell ID Database - Sub-page: Chuyển đổi CLF -->
+      <div id="sub-clf" class="section">
+        <h3>Chuyển đổi CLF V4.1 (G-MoN Pro)</h3>
+        <div class="sub-head">
+          <div></div>
+          <div class="filter-bar">
+            <button class="btn" onclick="goBackToCells()"><i class="fas fa-arrow-left"></i> Quay lại</button>
+          </div>
+        </div>
+
+        <div class="card" style="max-width:860px">
+          <h4>Chiều chuyển đổi</h4>
+          <div class="filter-bar">
+            <button class="btn btn-primary" id="clfDirCsvToClf" onclick="setClfDirection('csv2clf')">
+              <i class="fas fa-file-import"></i> CSV &rarr; CLF
+            </button>
+            <button class="btn" id="clfDirClfToCsv" onclick="setClfDirection('clf2csv')">
+              <i class="fas fa-file-export"></i> CLF &rarr; CSV
+            </button>
+          </div>
+          <p class="muted-text" style="font-size:12px" id="clfDirHint">
+            OpenCellID CSV (radio,mcc,net,area,cell,unit,lon,lat,range,samples,...) &rarr; CLF V4.1.
+          </p>
+        </div>
+
+        <div class="card" style="max-width:860px">
+          <h4 id="clfUploadTitle">Upload file nguồn</h4>
+          <div class="upload-zone" id="clfZone" onclick="document.getElementById('clfFile').click()">
+            <i class="fas fa-exchange-alt"></i>
+            <p><strong>Click để chọn file</strong> hoặc kéo thả</p>
+            <p class="muted-text" style="font-size:12px;margin-top:8px" id="clfZoneHint">
+              Hỗ trợ: <strong>.csv</strong> (OpenCellID world database dump)
+            </p>
+          </div>
+          <input type="file" id="clfFile" accept=".csv,.clf,.txt" style="display:none" onchange="handleClfFile(event)">
+          <div id="clfSelected" class="muted-text" style="font-size:12px;margin-top:8px"></div>
+          <div class="filter-bar" style="margin-top:12px">
+            <button class="btn btn-primary" id="clfConvertBtn" onclick="convertClf()" disabled>
+              <i class="fas fa-play"></i> Chuyển đổi
+            </button>
+            <button class="btn" onclick="convertClfDefault()" id="clfDefaultBtn">
+              <i class="fas fa-database"></i> Dùng Database_free.csv có sẵn
+            </button>
+            <button class="btn" onclick="resetClfForm()"><i class="fas fa-redo"></i> Làm lại</button>
+          </div>
+          <div class="progress-bar" id="clfProgressBar" style="display:none"><div class="progress-fill" id="clfProgressFill">0%</div></div>
+          <div class="upload-result" id="clfResult"></div>
+        </div>
+
+        <div class="card" style="max-width:860px;display:none" id="clfOutputCard">
+          <h4><i class="fas fa-check-circle" style="color:#4ade80"></i> Kết quả</h4>
+          <div id="clfStats" class="muted-text" style="font-size:13px"></div>
+          <div style="margin-top:12px">
+            <button class="btn btn-success" id="clfDownloadBtn"><i class="fas fa-download"></i> Tải file kết quả</button>
+          </div>
+          <div style="margin-top:14px">
+            <div class="muted-text" style="font-size:12px;margin-bottom:6px" id="clfFormatLabel">Định dạng trường:</div>
+            <code id="clfFields" class="muted-text" style="font-size:11px;word-break:break-all"></code>
+          </div>
+          <div style="margin-top:14px">
+            <div class="muted-text" style="font-size:12px;margin-bottom:6px">Xem trước:</div>
+            <pre id="clfSample" style="font-size:11px;overflow:auto;max-height:260px;background:var(--bg-secondary);padding:10px;border-radius:6px"></pre>
+          </div>
+          <div id="clfErrors" class="muted-text" style="font-size:12px;margin-top:10px"></div>
+        </div>
+      </div>
+
+      <!-- User Management -->
+      <div id="section-users" class="section">
+        <h3>User Management</h3>
+        <div class="card">
+          <div class="filter-bar">
+            <button class="btn btn-primary btn-sm" onclick="showAddUserModal()"><i class="fas fa-plus"></i> Add User</button>
+          </div>
+          <table>
+            <thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+            <tbody id="userTableBody"><tr><td colspan="6" class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Add User Modal -->
+  <div class="modal-overlay" id="addUserModal">
+    <div class="modal">
+      <h3><span id="userModalTitle">Add User</span></h3>
+      <div class="form-group"><label>Username</label><input type="text" id="userFormUsername"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="userFormPassword" placeholder="Leave blank to keep"></div>
+      <div class="form-group"><label>Role</label><select id="userFormRole"><option value="user">User</option><option value="admin">Admin</option></select></div>
+      <div class="form-group"><label>Status</label><select id="userFormStatus"><option value="pending">Pending</option><option value="active">Active</option></select></div>
+      <div class="btn-row">
+        <button class="btn" onclick="document.getElementById('addUserModal').classList.remove('show')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveUser()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="app.title">Cell Tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@0.79.0/dist/L.Control.Locate.min.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@0.79.0/dist/L.Control.Locate.min.js" charset="utf-8"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/gokertanrisever/leaflet-ruler@master/src/leaflet-ruler.css" />
+  <script src="https://cdn.jsdelivr.net/gh/gokertanrisever/leaflet-ruler@master/src/leaflet-ruler.js"></script>
+  <script src="/auth.js"></script>
+  <style>
+    :root {
+      --bg-body: #f0f2f5;
+      --bg-surface: rgba(255,255,255,0.97);
+      --bg-surface2: rgba(0,0,0,0.03);
+      --bg-hover: rgba(0,0,0,0.06);
+      --bg-btn-primary: #4444cc;
+      --bg-btn-success: #22aa44;
+      --bg-btn-danger: #cc3333;
+      --text-primary: #1a1a2e;
+      --text-secondary: #444466;
+      --text-muted: #888899;
+      --text-faint: #aaaabb;
+      --border-color: rgba(0,0,0,0.1);
+      --border-hover: rgba(68,68,204,0.3);
+      --border-focus: #4444cc;
+      --header-bg: rgba(255,255,255,0.95);
+      --shadow: 0 10px 40px rgba(0,0,0,0.1);
+      --map-bg: #d4e3f0;
+      --sidebar-width: 340px;
+      --sidebar-collapsed: -340px;
+      --transition: 0.3s ease;
+    }
+    [data-theme="dark"] {
+      --bg-body: #111122;
+      --bg-surface: rgba(15,15,40,0.95);
+      --bg-surface2: rgba(255,255,255,0.04);
+      --bg-hover: rgba(255,255,255,0.1);
+      --bg-btn-primary: #4444cc;
+      --bg-btn-success: #22aa44;
+      --bg-btn-danger: #cc3333;
+      --text-primary: #e0e0ff;
+      --text-secondary: #aaaacc;
+      --text-muted: #666688;
+      --text-faint: #555577;
+      --border-color: rgba(255,255,255,0.08);
+      --border-hover: rgba(100,100,255,0.3);
+      --border-focus: #6666ff;
+      --header-bg: rgba(15,15,40,0.92);
+      --shadow: 0 10px 40px rgba(0,0,0,0.5);
+      --map-bg: #1a1a2e;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-primary);
+      transition: background var(--transition), color var(--transition);
+    }
+    html, body { height: 100%; overflow: hidden; }
+    #map { width: 100%; height: 100%; z-index: 1; }
+    .leaflet-container { background: var(--map-bg); }
+
+
+    /* Sidebar - Fixed left panel */
+    .sidebar {
+      position: fixed; top: 48px; left: 0;
+      width: var(--sidebar-width);
+      height: calc(100vh - 48px);
+      background: var(--bg-surface);
+      backdrop-filter: blur(12px);
+      border-right: 1px solid var(--border-color);
+      z-index: 999;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform var(--transition);
+    }
+    .sidebar.collapsed {
+      transform: translateX(var(--sidebar-collapsed));
+    }
+    .sidebar-toggle {
+      position: fixed; top: 52px; left: var(--toggle-left, 8px);
+      z-index: 1001;
+      width: 32px; height: 32px;
+      border-radius: 6px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      transition: left var(--transition);
+    }
+    .sidebar-toggle.show { display: flex; }
+
+    .sidebar-header {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+      flex-shrink: 0;
+    }
+    .sidebar-header h3 { font-size: 13px; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .sidebar-header button {
+      background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px; padding: 2px;
+    }
+    .sidebar-header button:hover { color: var(--text-primary); }
+
+    .sidebar-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border-color);
+      flex-shrink: 0;
+    }
+    .sidebar-tab {
+      flex: 1; padding: 8px; text-align: center;
+      color: var(--text-muted); font-size: 11px; cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      display: flex; align-items: center; justify-content: center;
+      gap: 4px; white-space: nowrap; min-width: 0;
+    }
+    .sidebar-tab span { overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-tab:hover { color: var(--text-secondary); }
+    .sidebar-tab.active { color: var(--text-primary); border-bottom-color: var(--bg-btn-primary); }
+
+    .sidebar-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 8px 12px;
+      min-height: 0;
+    }
+    .sidebar-body::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+    /* Form elements */
+    .form-group { margin-bottom: 6px; }
+    .form-group label { display: block; color: var(--text-muted); font-size: 11px; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%; padding: 7px 10px;
+      border: 1px solid var(--border-color); border-radius: 6px;
+      background: var(--bg-surface2); color: var(--text-primary); font-size: 13px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--border-focus); }
+    .form-group textarea { resize: vertical; font-family: monospace; }
+    .form-row { display: flex; gap: 8px; }
+    .form-row .form-group { flex: 1; }
+    /* Bỏ mũi tên lên/xuống trên input number */
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+    /* Đồng bộ chiều cao select/input với nút trong form-row */
+    .form-row .form-group select,
+    .form-row .form-group input,
+    .form-row .file-upload-btn { height: 34px; box-sizing: border-box; }
+    .form-row .file-upload-btn { display: flex; align-items: center; justify-content: center; }
+    .btn { 
+      padding: 7px 14px; border: 1px solid var(--border-color);
+      border-radius: 6px; background: var(--bg-surface2);
+      color: var(--text-secondary); cursor: pointer; font-size: 12px; transition: all 0.2s;
+    }
+    .btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .btn-primary { background: var(--bg-btn-primary); border-color: var(--bg-btn-primary); color: white; }
+    .btn-primary:hover { filter: brightness(1.15); }
+    .btn-success { background: var(--bg-btn-success); border-color: var(--bg-btn-success); color: white; }
+    .btn-success:hover { filter: brightness(1.15); }
+    .btn-danger { background: var(--bg-btn-danger); border-color: var(--bg-btn-danger); color: white; }
+    .btn-danger:hover { filter: brightness(1.15); }
+    .btn-sm { padding: 4px 8px; font-size: 11px; }
+    .btn-block { width: 100%; display: block; }
+    .btn-group { display: flex; gap: 6px; }
+
+    /* Subscriber list */
+    .subscriber-item {
+      padding: 8px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    .subscriber-item:hover { background: var(--bg-surface2); border-color: var(--border-hover); }
+    .subscriber-item .phone { color: var(--text-primary); }
+    .subscriber-item .count { color: var(--text-muted); font-size: 11px; }
+    .subscriber-item .active-indicator { color: #66ff66; font-size: 8px; display: none; }
+    .subscriber-item.active { border-color: var(--border-focus); background: rgba(100,100,255,0.08); }
+    .subscriber-item.active .active-indicator { display: inline; }
+
+    /* Mini table */
+    .mini-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+    .mini-table th { color: var(--text-muted); padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .mini-table td { color: var(--text-secondary); padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.03); font-family: monospace; }
+    .mini-table tr:hover td { background: var(--bg-surface2); }
+
+    /* Map controls reposition to right — increased margin-top to clear header */
+    .leaflet-top.leaflet-right {
+      margin-top: 56px;
+    }
+    .leaflet-draw.leaflet-control,
+    .leaflet-control-zoom,
+    .leaflet-control-locate,
+    .leaflet-ruler.leaflet-control {
+      margin-top: 4px;
+    }
+
+    /* Đo khoảng cách — đồng bộ nút với locate / các control còn lại (glyph FA) */
+    .leaflet-ruler.leaflet-control a {
+      width: 34px;
+      height: 34px;
+      line-height: 34px;
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-image: none !important;
+      text-indent: 0 !important;
+      font-family: 'Font Awesome 6 Free' !important;
+      font-weight: 900 !important;
+    }
+    .leaflet-ruler.leaflet-control a:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: var(--border-hover);
+    }
+    .leaflet-ruler.leaflet-control a.active {
+      color: var(--bg-btn-primary);
+      border-color: var(--border-focus);
+    }
+    .leaflet-ruler.leaflet-control a::before { content: "\f545"; line-height: 34px; }
+
+    /* Ensure draw toolbar items are visible — increase z-index on leaflet controls */
+    .leaflet-control-container .leaflet-top.leaflet-right {
+      z-index: 1002;
+    }
+
+    /* Legend */
+    .legend-toggle {
+      position: fixed; bottom: 76px; right: 12px;
+      z-index: 1000;
+    }
+    .legend-toggle button {
+      background: var(--bg-surface);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    .legend-toggle button:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    .legend-panel {
+      position: fixed; bottom: 116px; right: 12px;
+      width: 200px;
+      background: var(--bg-surface);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      z-index: 1000;
+      padding: 12px 14px;
+      display: none;
+    }
+    .legend-panel.show { display: block; }
+    .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; color: var(--text-secondary); }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Toast */
+    .toast {
+      position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+      background: var(--bg-surface); backdrop-filter: blur(10px);
+      border: 1px solid var(--border-color);
+      border-radius: 10px; padding: 10px 18px;
+      color: var(--text-primary); font-size: 13px;
+      z-index: 9999; display: none;
+      box-shadow: var(--shadow);
+    }
+    .toast.show { display: block; }
+
+    /* File upload inline */
+    .file-upload-btn { position: relative; overflow: hidden; }
+    .file-upload-btn input[type=file] {
+      position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+      opacity: 0; cursor: pointer;
+    }
+
+    /* Upload progress */
+    .upload-progress {
+      margin: 6px 0; padding: 6px;
+      background: var(--bg-surface2);
+      border-radius: 4px; font-size: 11px; color: var(--text-muted);
+      display: none;
+    }
+    .upload-progress.show { display: block; }
+    .progress-bar {
+      height: 4px; background: var(--border-color); border-radius: 2px; margin-top: 4px; overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%; background: var(--bg-btn-primary); border-radius: 2px; transition: width 0.3s; width: 0%;
+    }
+
+    /* Cell lookup result */
+    .cell-lookup-result {
+      margin-top: 6px; padding: 8px;
+      border-radius: 6px; font-size: 12px; display: none;
+    }
+    .cell-lookup-result.show { display: block; }
+    .cell-lookup-result.success { background: rgba(34,170,68,0.1); border: 1px solid rgba(34,170,68,0.3); color: #66dd88; }
+    .cell-lookup-result.error { background: rgba(204,51,51,0.1); border: 1px solid rgba(204,51,51,0.3); color: #ee6666; }
+
+    /* Lookup history */
+    .hist-toolbar {
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px;
+    }
+    .hist-toolbar select { flex: 1; min-width: 120px; }
+    .hist-list {
+      font-size: 12px; flex: 1; min-height: 0; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 6px; padding-right: 2px;
+    }
+    .hist-toolbar-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; padding: 2px 4px;
+    }
+    .hist-selectall { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 11px; cursor: pointer; user-select: none; }
+    .hist-count { color: var(--text-faint); font-size: 11px; }
+    .hist-card {
+      border: 1px solid var(--border-color); border-radius: 8px;
+      padding: 8px 10px; background: var(--bg-surface2);
+      transition: border-color 0.2s, background 0.2s;
+      display: flex; gap: 8px; align-items: flex-start;
+    }
+    .hist-card:hover { border-color: var(--border-hover); background: var(--bg-hover); }
+    .hist-card.selected { border-color: var(--border-focus); background: rgba(100,100,255,0.08); }
+    .hist-card-check { padding-top: 2px; }
+    .hist-card-main { flex: 1; min-width: 0; cursor: pointer; }
+    .hist-card-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .hist-cell { font-family: ui-monospace, monospace; font-weight: 600; color: var(--text-primary); }
+    .hist-meta { font-size: 10px; color: var(--text-faint); display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+    .hist-meta i { margin-right: 3px; }
+    .hist-coords { font-family: ui-monospace, monospace; color: #33bb66; font-size: 11px; margin-top: 3px; }
+    .hist-coords.miss { color: var(--text-faint); font-family: inherit; }
+    .hist-source {
+      display: inline-block; padding: 1px 6px; border-radius: 10px;
+      font-size: 10px; background: var(--bg-surface2); border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+    }
+    .hist-source.local { color: #3366ff; border-color: rgba(51,102,255,0.4); }
+    .hist-source.online { color: #22aa44; border-color: rgba(34,170,68,0.4); }
+    .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+    .badge-single { background: rgba(68,68,204,0.15); color: #6666ee; }
+    .badge-batch { background: rgba(255,136,0,0.15); color: #ee9922; }
+    .hist-del {
+      background: none; border: none; color: var(--text-faint); cursor: pointer;
+      font-size: 12px; padding: 2px 4px; border-radius: 4px; transition: all 0.2s;
+    }
+    .hist-del:hover { color: #ee6666; background: rgba(204,51,51,0.1); }
+    .hist-empty { text-align: center; color: var(--text-faint); padding: 20px 0; }
+
+    /* Data file list */
+    .sample-link { color: var(--border-focus); text-decoration: none; font-size: 11px; cursor: pointer; }
+    .sample-link:hover { text-decoration: underline; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 5000;
+      display: none;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-box {
+      background: var(--bg-surface);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      width: 90%;
+      max-width: 450px;
+      max-height: 80vh;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    .modal-box h2 { font-size: 16px; margin-bottom: 14px; color: var(--text-primary); }
+    .modal-box .btn-group { margin-top: 12px; }
+    .modal-close {
+      float: right; background: none; border: none;
+      color: var(--text-muted); cursor: pointer; font-size: 18px;
+    }
+    .modal-close:hover { color: var(--text-primary); }
+
+    /* My data table in modal */
+    .my-data-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .my-data-table th { color: var(--text-muted); padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 9px; text-transform: uppercase; }
+    .my-data-table td { color: var(--text-secondary); padding: 4px 6px; border-bottom: 1px solid rgba(0,0,0,0.03); font-family: monospace; }
+    .my-data-table tr:hover td { background: var(--bg-surface2); }
+
+    /* =====================================================
+       Improvements for sidebar panel
+       ===================================================== */
+    /* Date/time fields */
+    .filter-datetime .form-group {
+      width: 100%;
+    }
+    .form-row .form-group input,
+    .form-row .form-group select { min-width: 0; }
+    /* Compact buttons in subscriber tab */
+    .compact-section {
+      margin-bottom: 6px;
+    }
+
+    /* =====================================================
+       Movement-history timeline (bottom overlay)
+       ===================================================== */
+    #timelineBar {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      height: 64px; z-index: 900;
+      background: color-mix(in srgb, var(--header-bg) 50%, transparent);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid var(--border-color);
+      overflow: hidden; display: none;
+    }
+    #timelineBar.show { display: block; }
+    #timelineTrack {
+      position: relative; height: 100%;
+      transition: transform 0.3s ease; will-change: transform;
+    }
+    /* Vạch kẻ ngang trục thời gian */
+    .tl-axis {
+      position: absolute; left: 0; top: 50%;
+      height: 1px; background: var(--border-color);
+      transform: translateY(-50%); pointer-events: none;
+    }
+    .tl-node {
+      position: absolute; top: 50%; transform: translate(-50%, -50%);
+      width: 22px; height: 22px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; color: #fff; cursor: pointer;
+      border: 2px solid rgba(255,255,255,0.85);
+      box-sizing: border-box;
+    }
+    .tl-node.active { box-shadow: 0 0 0 3px var(--border-focus); z-index: 2; }
+    /* Vạch kẻ dọc nối icon với nhãn thời gian */
+    .tl-node-tick {
+      position: absolute; top: calc(50% + 11px);
+      width: 1px; height: 8px; background: var(--text-faint);
+      transform: translateX(-50%); pointer-events: none;
+    }
+    .tl-tick {
+      position: absolute; bottom: 4px; font-size: 9px; color: var(--text-muted);
+      transform: translateX(-50%); white-space: nowrap;
+    }
+    /* Cụm nút zoom timeline */
+    .tl-zoom {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      z-index: 3; display: flex; gap: 6px;
+    }
+    .tl-zoom button {
+      width: 28px; height: 28px; border-radius: 6px;
+      border: 1px solid var(--border-color); background: var(--bg-surface2);
+      color: var(--text-secondary); cursor: pointer; font-size: 12px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .tl-zoom button:hover { background: var(--bg-hover); color: var(--text-primary); }
+    /* Icon đến/đi: xoay nhẹ để phân biệt hướng */
+    .tl-node[data-dir="đến"] i { transform: rotate(180deg); }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="timelineBar">
+    <div id="timelineTrack"></div>
+    <div class="tl-zoom">
+      <button onclick="zoomTimeline(-1)" title="Thu nhỏ"><i class="fas fa-search-minus"></i></button>
+      <button onclick="zoomTimeline(1)" title="Phóng to"><i class="fas fa-search-plus"></i></button>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <div class="header"></div>
+
+  <!-- Sidebar Toggle Button -->
+  <button class="sidebar-toggle show" id="sidebarToggleBtn" onclick="toggleSidebar()">
+    <i class="fas fa-chevron-left"></i>
+  </button>
+
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h3><i class="fas fa-tools"></i> <span data-i18n="sidebar.title">Công Cụ</span></h3>
+      <button onclick="toggleSidebar()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="sidebar-tabs">
+      <div class="sidebar-tab active" data-tab="cells" onclick="switchTab('cells')">
+        <i class="fas fa-database"></i> <span data-i18n="tab.cells">Tra cứu</span>
+      </div>
+      <div class="sidebar-tab" data-tab="calllogs" onclick="switchTab('calllogs')">
+        <i class="fas fa-history"></i> <span data-i18n="tab.callLogs">Xem rút list</span>
+      </div>
+      <div class="sidebar-tab" data-tab="lookuphistory" onclick="switchTab('lookuphistory')">
+        <i class="fas fa-clipboard-list"></i> <span data-i18n="tab.lookupHistory">Lịch sử tra cứu</span>
+      </div>
+    </div>
+    <div class="sidebar-body">
+
+      <!-- Tab 1: Call Logs -->
+      <div class="tab-content" id="tab-calllogs">
+        <div class="form-row">
+          <div class="form-group" style="flex:1.4">
+            <label>Chọn Mạng</label>
+            <select id="networkSelect">
+              <option value="auto">Tự động phát hiện</option>
+              <option value="viettel">Viettel</option>
+              <option value="mobifone">Mobifone</option>
+              <option value="vinaphone" disabled>Vinaphone (sắp ra)</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1">
+            <label>Logs Của Tôi</label>
+            <button class="btn btn-sm btn-success btn-block file-upload-btn" style="margin:0">
+              <i class="fas fa-file-import"></i> Tải Excel
+              <input type="file" accept=".xlsx,.xls,.csv" onchange="uploadCallLogExcel(event)">
+            </button>
+          </div>
+        </div>
+
+        <div class="upload-progress" id="callLogUploadProgress">
+          <span id="callLogUploadStatus">Đang tải...</span>
+          <div class="progress-bar"><div class="progress-bar-fill" id="callLogUploadProgressFill"></div></div>
+        </div>
+
+        <div class="cell-lookup-result" id="callLogUploadResult"></div>
+
+        <div style="border-top:1px solid var(--border-color);margin:8px 0;padding-top:8px">
+          <div class="form-group">
+            <label data-i18n="subscribers.actionFilter">Lọc Loại</label>
+            <select id="actionFilter" onchange="applyCallLogFilters()">
+              <option value="all" data-i18n="filter.all">Tất Cả</option>
+              <option value="CALL_IN" data-i18n="filter.callIn">Gọi Đến</option>
+              <option value="CALL_OUT" data-i18n="filter.callOut">Gọi Đi</option>
+              <option value="SMS_IN" data-i18n="filter.smsIn">SMS Đến</option>
+              <option value="SMS_OUT" data-i18n="filter.smsOut">SMS Đi</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label data-i18n="subscribers.from">Từ</label>
+            <input type="datetime-local" id="dateFrom">
+          </div>
+          <div class="form-group">
+            <label data-i18n="subscribers.to">Đến</label>
+            <input type="datetime-local" id="dateTo">
+          </div>
+          <div class="form-row">
+            <button class="btn btn-sm btn-primary compact-section" style="flex:1" onclick="applyCallLogFilters()"><i class="fas fa-map-marker-alt"></i> Hiển Thị Bản Đồ</button>
+            <button class="btn btn-sm btn-success compact-section" id="playBtn" onclick="playCallLogs()" style="display:none;flex:1"><i class="fas fa-route"></i> <span id="playBtnLabel" data-i18n="play.viewHistory">Xem lịch sử</span></button>
+          </div>
+          <div id="playNav" style="display:none;gap:6px;margin-top:6px" class="compact-section">
+            <button class="btn btn-sm" id="playPrevBtn" onclick="playStep(-1)"><i class="fas fa-chevron-left"></i></button>
+            <button class="btn btn-sm btn-block" id="playToggleBtn" onclick="playToggle()"><i class="fas fa-stop"></i> <span id="playToggleLabel" data-i18n="play.stop">Dừng lại</span></button>
+            <button class="btn btn-sm" id="playNextBtn" onclick="playStep(1)"><i class="fas fa-chevron-right"></i></button>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid var(--border-color);margin:8px 0 0;padding-top:8px;flex:1;display:flex;flex-direction:column;min-height:0">
+          <div class="form-group">
+            <label>Tìm Kiếm</label>
+            <input type="text" id="logSearchInput" placeholder="SĐT, mạng, loại, cell..." oninput="searchCallLogs()">
+          </div>
+          <div id="logRecordList" style="font-size:11px;flex:1;min-height:0;overflow-y:auto"></div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+            <button class="btn btn-sm" id="logPrevBtn" onclick="logPage(-1)"><i class="fas fa-chevron-left"></i></button>
+            <span id="logPageInfo" style="font-size:11px;color:var(--text-muted)"></span>
+            <button class="btn btn-sm" id="logNextBtn" onclick="logPage(1)"><i class="fas fa-chevron-right"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Cell DB -->
+      <div class="tab-content active" id="tab-cells">
+        <div class="form-group">
+          <label data-i18n="cells.lookupTitle">Tra Cứu Cell ID</label>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>MCC</label>
+            <input type="number" id="cellMcc" value="452" onkeydown="cellLookupEnter(event)">
+          </div>
+          <div class="form-group">
+            <label>MNC</label>
+            <select id="cellMnc" onkeydown="cellLookupEnter(event)">
+              <option value="04">Viettel (04)</option>
+              <option value="01">Mobifone (01)</option>
+              <option value="02">Vinaphone (02)</option>
+              <option value="05">Vietnamobile (05)</option>
+              <option value="07">Gmobile (07)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>LAC</label>
+            <input type="number" id="cellLac" onkeydown="cellLookupEnter(event)">
+          </div>
+          <div class="form-group">
+            <label>CellID</label>
+            <input type="number" id="cellCellid" onkeydown="cellLookupEnter(event)">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label data-i18n="cells.sector">Sector</label>
+            <input type="number" id="cellSector" min="0" max="255" placeholder="0-255">
+          </div>
+        </div>
+        <div class="btn-group compact-section">
+          <button class="btn btn-sm btn-primary btn-block" onclick="lookupCell()">
+            <i class="fas fa-search"></i> <span data-i18n="cells.lookup">Tra Cứu</span>
+          </button>
+        </div>
+        <div class="cell-lookup-result" id="cellLookupResult"></div>
+
+        <div style="border-top:1px solid var(--border-color);margin:8px 0;padding-top:8px">
+          <div class="form-group">
+            <label data-i18n="cells.search">Tìm Kiếm Cell</label>
+            <div style="position:relative">
+              <input type="text" id="cellSearch" placeholder="MCC,MNC,LAC,CellID" onkeydown="if(event.key==='Enter'){event.preventDefault();searchCells();}">
+              <i class="fas fa-search" onclick="searchCells()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--text-muted)"></i>
+            </div>
+          </div>
+          <div id="cellList" style="font-size:12px;color:var(--text-muted);max-height:180px;overflow-y:auto">
+            <span data-i18n="cells.typeToSearch">Gõ để tìm kiếm...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Lookup History -->
+      <div class="tab-content" id="tab-lookuphistory">
+        <div class="form-group">
+          <label data-i18n="hist.title">Lịch sử tra cứu</label>
+        </div>
+        <div class="hist-toolbar">
+          <select id="histModeFilter" onchange="loadLookupHistory(1)">
+            <option value="" data-i18n="hist.allModes">Tất cả</option>
+            <option value="single" data-i18n="hist.modeSingle">Đơn lẻ</option>
+            <option value="batch" data-i18n="hist.modeBatch">Hàng loạt</option>
+          </select>
+          <button class="btn btn-sm btn-danger" onclick="deleteSelectedLookup()"><i class="fas fa-trash"></i> <span data-i18n="hist.deleteSelected">Xóa đã chọn</span></button>
+          <button class="btn btn-sm btn-danger" onclick="deleteAllLookup()"><i class="fas fa-trash-alt"></i> <span data-i18n="hist.deleteAll">Xóa tất cả</span></button>
+        </div>
+        <div class="hist-toolbar-row">
+          <label class="hist-selectall"><input type="checkbox" id="histSelectAll" onchange="histToggleAll(this.checked)"> <span data-i18n="hist.selectAll">Chọn tất cả</span></label>
+          <span class="hist-count" id="histCount"></span>
+        </div>
+        <div class="hist-list" id="lookupHistoryList">
+          <span data-i18n="hist.loading">Đang tải...</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+          <button class="btn btn-sm" id="histPrevBtn" onclick="histPage(-1)"><i class="fas fa-chevron-left"></i></button>
+          <span id="histPageInfo" style="font-size:11px;color:var(--text-muted);flex:1;text-align:center"></span>
+          <button class="btn btn-sm" id="histNextBtn" onclick="histPage(1)"><i class="fas fa-chevron-right"></i></button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Legend Toggle -->
+  <div class="legend-toggle">
+    <button id="legendBtn" onclick="toggleLegend()"><i class="fas fa-map-signs"></i> <span data-i18n="legend.title">Chú Thích</span></button>
+  </div>
+
+  <!-- Legend Panel -->
+  <div class="legend-panel" id="legendPanel">
+    <div class="legend-item"><span class="legend-dot" style="background:#4444cc;border-radius:0;width:16px;height:4px"></span> <span data-i18n="legend.towerRange">Trạm (có bán kính)</span></div>
+    <div class="legend-item"><span class="legend-dot" style="background:#8888ff;border-radius:0;width:8px;height:8px"></span> <span data-i18n="legend.towerNoRange">Trạm (ko bán kính)</span></div>
+    <div class="legend-item"><span class="legend-dot" style="background:blue"></span> <span data-i18n="legend.callIn">Gọi Đến</span></div>
+    <div class="legend-item"><span class="legend-dot" style="background:red"></span> <span data-i18n="legend.callOut">Gọi Đi</span></div>
+    <div class="legend-item"><span class="legend-dot" style="background:green"></span> <span data-i18n="legend.smsIn">Tin Nhắn Đến</span></div>
+    <div class="legend-item"><span class="legend-dot" style="background:orange"></span> <span data-i18n="legend.smsOut">Tin Nhắn Đi</span></div>
+    <div class="legend-item"><span class="legend-dot" style="background:#6666ff;width:14px;height:3px;border-radius:2px"></span> <span data-i18n="legend.annotations">Chú Thích Bản Đồ</span></div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Change Password Modal -->
+  <div class="modal-overlay" id="changePwdModal">
+    <div class="modal-box">
+      <button class="modal-close" onclick="closeModal('changePwdModal')">&times;</button>
+      <h2><i class="fas fa-key"></i> Đổi mật khẩu</h2>
+      <div class="form-group">
+        <label>Mật khẩu hiện tại</label>
+        <input type="password" id="pwdCurrent" placeholder="Nhập mật khẩu hiện tại">
+      </div>
+      <div class="form-group">
+        <label>Mật khẩu mới</label>
+        <input type="password" id="pwdNew" placeholder="Nhập mật khẩu mới">
+      </div>
+      <div class="form-group">
+        <label>Xác nhận mật khẩu</label>
+        <input type="password" id="pwdConfirm" placeholder="Xác nhận mật khẩu mới">
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary btn-block" onclick="changePassword()"><i class="fas fa-save"></i> Lưu</button>
+        <button class="btn btn-block" onclick="closeModal('changePwdModal')">Hủy</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Data Modal -->
+  <div class="modal-overlay" id="myDataModal">
+    <div class="modal-box">
+      <button class="modal-close" onclick="closeModal('myDataModal')">&times;</button>
+      <h2><i class="fas fa-database"></i> Dữ liệu của tôi</h2>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button class="btn btn-sm btn-primary" onclick="loadMyUploads()"><i class="fas fa-list"></i> Log đã tải</button>
+        <button class="btn btn-sm btn-success" onclick="loadMyCells()"><i class="fas fa-table"></i> Cell đã tải</button>
+      </div>
+      <div id="myDataContent" style="max-height:320px;overflow-y:auto;font-size:12px;color:var(--text-muted)">
+        Nhấn nút trên để xem dữ liệu
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

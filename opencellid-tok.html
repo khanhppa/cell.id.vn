@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="title" content="OpenCelliD - Open Database of Cell Towers & Geolocation">
+    <meta name="keywords" content="cell towers, cell id, wifi positioning, cell database, geolocation, location api, iot location">
+    <meta name="description" content="OpenCelliD is the largest Open Database of Cell Towers & their locations. You can geolocate IoT & Mobile devices without GPS, explore Mobile Operator coverage and more!">
+    <meta name="subject" content="Open Database of Cell Towers, Cell & WiFi geolocation">
+    <meta name="language" content="en">
+    <meta name="robots" content="index,follow">
+    <title>Data Downloads - OpenCelliD - Largest Open Database of Cell Towers & Geolocation - by Unwired Labs</title>
+    <link rel="shortcut icon" href="/favicon.ico">
+    
+    <link rel="stylesheet" href="/startup/flat-ui/bootstrap/css/bootstrap.css?v=1.1.7">
+    <link rel="stylesheet" href="/startup/flat-ui/css/flat-ui.css?v=1.1.7">
+    <link rel="stylesheet" href="/css/style.css?v=1.1.7">
+
+    <script type="text/javascript" src="/startup/common-files/js/jquery-1.10.2.min.js"></script>
+    <script type="text/javascript" src="/startup/flat-ui/js/bootstrap.min.js?v=1.1.7"></script>
+    <script type="text/javascript" src="/startup/common-files/js/modernizr.custom.js?v=1.1.7"></script>
+    <script type="text/javascript" src="/startup/common-files/js/page-transitions.js?v=1.1.7"></script>
+    <script type="text/javascript" src="/startup/common-files/js/easing.min.js?v=1.1.7"></script>
+    <script type="text/javascript" src="/startup/common-files/js/jquery.svg.js?v=1.1.7"></script>
+    <script type="text/javascript" src="/startup/common-files/js/jquery.svganim.js?v=1.1.7"></script>
+    <script type="text/javascript" src="/startup/common-files/js/startup-kit.js?v=1.1.7"></script>
+<script async src="https://pl.opencellid.org/js/pa-_zcPN4EZN2VCgx6koNkQ_.js"></script>
+<script>
+  window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+  plausible.init()
+</script>
+
+    <!-- Add FAQ styles -->
+    <style>
+        .faq-section {
+            padding: 40px 0;
+            margin-top: 30px;
+            background-color: #f8f9fa;
+        }
+        
+        .accordion-item {
+            margin-bottom: 10px;
+            border: 1px solid #e5e5e5;
+        }
+        
+        .accordion-header {
+            margin: 0;
+        }
+        
+        .accordion-button {
+            width: 100%;
+            padding: 15px;
+            background-color: #fff;
+            border: none;
+            text-align: left;
+            font-weight: 500;
+        }
+        
+        .accordion-button:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .accordion-button.collapsed:after {
+            content: '+';
+            float: right;
+        }
+        
+        .accordion-button:not(.collapsed):after {
+            content: '-';
+            float: right;
+        }
+        
+        .accordion-body {
+            padding: 20px;
+            color: #1f1f1f;
+            border-top: 1px solid #e5e5e5;
+            font-size: 14px;
+            text-align: left;
+        }
+        .accordion-body p {
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+<div class="page-wrapper">
+    <!-- header-6 -->
+    <header class="header-6">
+        <div class="container">
+            <div class="row">
+                <div class="navbar col-sm-offset-1 col-sm-10" role="navigation">
+                    <div class="navbar-header">
+                        <button type="button" class="navbar-toggle"></button>
+                        <a class="brand" href="/"  style="z-index: 200;">
+                            <img src="/images/opencellid_logo.png" alt="OpenCelliD">
+                        </a>
+                    </div>
+                    <div class="collapse navbar-collapse">
+                        <ul class="nav">
+                            <!-- <li><a href="#register">GET STARTED</a></li> -->
+                            <li><a href="/stats.php">STATS</a></li>
+                            <li><a href="/downloads.php">DATA</li>
+                            <li><a href="http://wiki.opencellid.org">DOCS</a></li>
+                            <li><a href="https://community.opencellid.org/">COMMUNITY</a></li>
+                            <li><a href="https://my.opencellid.org/dashboard?ref=opencellid">LOGIN</a></li>
+                            <li><a href="https://my.opencellid.org/register">SIGN UP</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+<section class="header-6-sub">
+    <div class="container">
+        <div class="col-sm-12  maintext">
+            <div class="row">
+                <h3>Open Data</h3>
+                <p>On this page, you can download computed Cell Tower data for specific countries. <br>To see the download links, please enter your API Access Token:</p>
+            </div>
+        </div>
+        <div class="row" id="register">
+            <div class="col-sm-offset-1 col-sm-10 downloads-form">
+                <form id="show-files" action="/downloads.php" method="get">
+                    <div class="clearfix">
+                        <input id="token" name="token" type="text" class="form-control" placeholder="API Access Token" required value="test" />
+                        <button type="submit" class="btn btn-primary">
+                            Show Files
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="text-left col-sm-10 col-sm-offset-1" style="margin-top:20px">
+                <h4>License & Attribution requirement</h4>
+                <p>Products or services using data derived from OpenCelliD need to visibly credit "OpenCelliD" and reference "OpenCelliD" with a link to https://opencellid.org/ in the following format:</p>
+                <div class="license">
+                    <a rel="license" href="https://creativecommons.org/licenses/by-sa/4.0/">
+                        <img alt="Creative Commons License" style="border-width:0" src="/images/ccbysa_4.0_80x15.png" />
+                    </a>
+                    <span xmlns:dct="http://purl.org/dc/terms/" property="dct:title"><a xmlns:cc="https://creativecommons.org/ns#" href="https://opencellid.org" property="cc:attributionName" rel="cc:attributionURL">OpenCelliD Project</span>
+                    </a> is licensed under a
+                    <a rel="license" href="https://creativecommons.org/licenses/by-sa/4.0/" target='_blank'>
+                        Creative Commons Attribution-ShareAlike 4.0 International License
+                    </a>
+                </div>
+                <p>Exceptions to OpenCelliD attribution requirement can be in a written form granted by Unwired Labs (<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="f39b969f9f9cb39c83969d90969f9f9a97dd9c8194">[email&#160;protected]</a>). The project contributors grant Unwired Labs the license to give such exceptions on a commercial basis.
+            </div>
+        </div>
+    </div>
+            <div class="container">
+            <div class="row">
+                <div class="col-sm-offset-1 col-sm-10">
+                    <div class="accordion" id="downloadsAccordion1">
+                        <div class="accordion-item">
+                            <h4 class="accordion-header" id="headingCountry">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCountry" aria-expanded="false" aria-controls="collapseCountry">
+                                    Country Specific Exports
+                                </button>
+                            </h4>
+                            <div id="collapseCountry" class="accordion-collapse in" aria-labelledby="headingCountry" data-bs-parent="#downloadsAccordion1">
+                                <div class="accordion-body">
+
+                                    <div class="" style="text-align:center;">
+
+                                        <div class="row" style="padding: 20px;">
+                                            <div class="row-fluid" style="margin-bottom:20px;">
+                                                <p>For details about the CSV file format and field descriptions, please see our
+                                                    <a href="https://wiki.opencellid.org/wiki/Database_format" target="_blank">Database Format Documentation</a>.
+                                                </p>
+                                            </div>
+
+                                            <em style="font-size: 14px">Exports are generated daily by 02:00 AM GMT and include cell towers observed in the last 18 months. In the interest of fair usage, users are limited to 2 downloads of each file, per day.</em>
+                                            <table id="regions" class="display table" style="width:100%; margin-top:20px; text-align: center;">
+                                                <thead>
+                                                    <tr>
+                                                        <th>
+                                                            <center>Country Name</center>
+                                                        </th>
+                                                        <th>
+                                                            <center>Country Code</center>
+                                                        </th>
+                                                        <th>
+                                                            <center>Files (grouped by MCC)</center>
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr><td>Greece</td><td>GR</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=202.csv.gz' target='_blank'>202</a> (495KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=276.csv.gz' target='_blank'>276</a> (21KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=286.csv.gz' target='_blank'>286</a> (298KB)</td></tr><tr><td>Netherlands</td><td>NL</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=204.csv.gz' target='_blank'>204</a> (780KB)</td></tr><tr><td>Belgium</td><td>BE</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=206.csv.gz' target='_blank'>206</a> (1456KB)</td></tr><tr><td>France</td><td>FR</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=208.csv.gz' target='_blank'>208</a> (8591KB)</td></tr><tr><td>Italy</td><td>IT</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=208.csv.gz' target='_blank'>208</a> (8591KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=222.csv.gz' target='_blank'>222</a> (2400KB)</td></tr><tr><td>Jersey</td><td>JE</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=208.csv.gz' target='_blank'>208</a> (8591KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=234.csv.gz' target='_blank'>234</a> (2815KB)</td></tr><tr><td>Monaco</td><td>MC</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=212.csv.gz' target='_blank'>212</a> (32KB)</td></tr><tr><td>Kosovo</td><td>XK</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=212.csv.gz' target='_blank'>212</a> (32KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=221.csv.gz' target='_blank'>221</a> (6KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=293.csv.gz' target='_blank'>293</a> (248KB)</td></tr><tr><td>Andorra</td><td>AD</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=213.csv.gz' target='_blank'>213</a> (1KB)</td></tr><tr><td>Spain</td><td>ES</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=214.csv.gz' target='_blank'>214</a> (1917KB)</td></tr><tr><td>Hungary</td><td>HU</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=216.csv.gz' target='_blank'>216</a> (613KB)</td></tr><tr><td>Bosnia and Herzegovina</td><td>BA</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=218.csv.gz' target='_blank'>218</a> (24KB)</td></tr><tr><td>Croatia</td><td>HR</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=219.csv.gz' target='_blank'>219</a> (603KB)</td></tr><tr><td>Serbia</td><td>RS</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=220.csv.gz' target='_blank'>220</a> (174KB)</td></tr><tr><td>Romania</td><td>RO</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=226.csv.gz' target='_blank'>226</a> (376KB)</td></tr><tr><td>Switzerland</td><td>CH</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=228.csv.gz' target='_blank'>228</a> (891KB)</td></tr><tr><td>Czech Republic</td><td>CZ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=230.csv.gz' target='_blank'>230</a> (767KB)</td></tr><tr><td>Slovakia</td><td>SK</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=231.csv.gz' target='_blank'>231</a> (201KB)</td></tr><tr><td>Austria</td><td>AT</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=232.csv.gz' target='_blank'>232</a> (1129KB)</td></tr><tr><td>Bahamas</td><td>BS</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=234.csv.gz' target='_blank'>234</a> (2815KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=364.csv.gz' target='_blank'>364</a> (2KB)</td></tr><tr><td>Guernsey</td><td>GG</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=234.csv.gz' target='_blank'>234</a> (2815KB)</td></tr><tr><td>Isle of Man</td><td>IM</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=234.csv.gz' target='_blank'>234</a> (2815KB)</td></tr><tr><td>Turks and Caicos Islands</td><td>TC</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=234.csv.gz' target='_blank'>234</a> (2815KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=338.csv.gz' target='_blank'>338</a> (4KB)</td></tr><tr><td>United Kingdom</td><td>UK</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=234.csv.gz' target='_blank'>234</a> (2815KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=730.csv.gz' target='_blank'>730</a> (272KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=748.csv.gz' target='_blank'>748</a> (153KB)</td></tr><tr><td>Denmark</td><td>DK</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=238.csv.gz' target='_blank'>238</a> (383KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=240.csv.gz' target='_blank'>240</a> (628KB)</td></tr><tr><td>Sweden</td><td>SE</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=238.csv.gz' target='_blank'>238</a> (383KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=240.csv.gz' target='_blank'>240</a> (628KB)</td></tr><tr><td>Norway</td><td>NO</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=242.csv.gz' target='_blank'>242</a> (294KB)</td></tr><tr><td>Finland</td><td>FI</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=244.csv.gz' target='_blank'>244</a> (706KB)</td></tr><tr><td>Lithuania</td><td>LT</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=246.csv.gz' target='_blank'>246</a> (182KB)</td></tr><tr><td>Latvia</td><td>LV</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=247.csv.gz' target='_blank'>247</a> (67KB)</td></tr><tr><td>Estonia</td><td>EE</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=248.csv.gz' target='_blank'>248</a> (130KB)</td></tr><tr><td>Russian Federation</td><td>RU</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=250.csv.gz' target='_blank'>250</a> (2159KB)</td></tr><tr><td>Ukraine</td><td>UA</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=255.csv.gz' target='_blank'>255</a> (430KB)</td></tr><tr><td>Belarus</td><td>BY</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=257.csv.gz' target='_blank'>257</a> (219KB)</td></tr><tr><td>Moldova</td><td>MD</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=259.csv.gz' target='_blank'>259</a> (4KB)</td></tr><tr><td>Poland</td><td>PL</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=260.csv.gz' target='_blank'>260</a> (2006KB)</td></tr><tr><td>Germany</td><td>DE</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=262.csv.gz' target='_blank'>262</a> (5446KB)</td></tr><tr><td>Gibraltar</td><td>GI</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=266.csv.gz' target='_blank'>266</a> (1KB)</td></tr><tr><td>Portugal</td><td>PT</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=268.csv.gz' target='_blank'>268</a> (404KB)</td></tr><tr><td>Luxembourg</td><td>LU</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=270.csv.gz' target='_blank'>270</a> (182KB)</td></tr><tr><td>Ireland</td><td>IE</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=272.csv.gz' target='_blank'>272</a> (112KB)</td></tr><tr><td>Iceland</td><td>IS</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=274.csv.gz' target='_blank'>274</a> (24KB)</td></tr><tr><td>Albania</td><td>AL</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=276.csv.gz' target='_blank'>276</a> (21KB)</td></tr><tr><td>Malta</td><td>MT</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=278.csv.gz' target='_blank'>278</a> (21KB)</td></tr><tr><td>Cyprus</td><td>CY</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=280.csv.gz' target='_blank'>280</a> (204KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=286.csv.gz' target='_blank'>286</a> (298KB)</td></tr><tr><td>Georgia</td><td>GE</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=282.csv.gz' target='_blank'>282</a> (69KB)</td></tr><tr><td>Armenia</td><td>AM</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=283.csv.gz' target='_blank'>283</a> (6KB)</td></tr><tr><td>Bulgaria</td><td>BG</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=284.csv.gz' target='_blank'>284</a> (237KB)</td></tr><tr><td>Turkey</td><td>TR</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=286.csv.gz' target='_blank'>286</a> (298KB)</td></tr><tr><td>Faroe Islands</td><td>FO</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=288.csv.gz' target='_blank'>288</a> (6KB)</td></tr><tr><td>Greenland</td><td>GL</td><td>No data in the last 18 months for MCCs: 290</td></tr><tr><td>Slovenia</td><td>SI</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=293.csv.gz' target='_blank'>293</a> (248KB)</td></tr><tr><td>Macedonia</td><td>MK</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=294.csv.gz' target='_blank'>294</a> (49KB)</td></tr><tr><td>Liechtenstein</td><td>LI</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=295.csv.gz' target='_blank'>295</a> (2KB)</td></tr><tr><td>Montenegro</td><td>ME</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=297.csv.gz' target='_blank'>297</a> (46KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=338.csv.gz' target='_blank'>338</a> (4KB)</td></tr><tr><td>Canada</td><td>CA</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=302.csv.gz' target='_blank'>302</a> (1233KB)</td></tr><tr><td>Bermuda</td><td>BM</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=310.csv.gz' target='_blank'>310</a> (11398KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=338.csv.gz' target='_blank'>338</a> (4KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=350.csv.gz' target='_blank'>350</a> (1KB)</td></tr><tr><td>Guam</td><td>GU</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=310.csv.gz' target='_blank'>310</a> (11398KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=311.csv.gz' target='_blank'>311</a> (2929KB)</td></tr><tr><td>Northern Mariana Islands</td><td>MP</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=310.csv.gz' target='_blank'>310</a> (11398KB)</td></tr><tr><td>Puerto Rico</td><td>PR</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=310.csv.gz' target='_blank'>310</a> (11398KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=311.csv.gz' target='_blank'>311</a> (2929KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=312.csv.gz' target='_blank'>312</a> (4KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=313.csv.gz' target='_blank'>313</a> (120KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=330.csv.gz' target='_blank'>330</a> (17KB)</td></tr><tr><td>United States of America</td><td>US</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=310.csv.gz' target='_blank'>310</a> (11398KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=311.csv.gz' target='_blank'>311</a> (2929KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=312.csv.gz' target='_blank'>312</a> (4KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=313.csv.gz' target='_blank'>313</a> (120KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=314.csv.gz' target='_blank'>314</a> (4KB)</td></tr><tr><td>Mexico</td><td>MX</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=334.csv.gz' target='_blank'>334</a> (4242KB)</td></tr><tr><td>Anguilla</td><td>AI</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=338.csv.gz' target='_blank'>338</a> (4KB)</td></tr><tr><td>Barbados</td><td>BB</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=338.csv.gz' target='_blank'>338</a> (4KB)</td></tr><tr><td>Dominica</td><td>DM</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=338.csv.gz' target='_blank'>338</a> (4KB)</td></tr><tr><td>Dominican Republic</td><td>DO</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=338.csv.gz' target='_blank'>338</a> (4KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=370.csv.gz' target='_blank'>370</a> (285KB)</td></tr><tr><td>Grenada</td><td>GD</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=338.csv.gz' target='_blank'>338</a> (4KB)</td></tr><tr><td>Haiti</td><td>HT</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=338.csv.gz' target='_blank'>338</a> (4KB)</td></tr><tr><td>Jamaica</td><td>JM</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=338.csv.gz' target='_blank'>338</a> (4KB)</td></tr><tr><td>Cayman Islands</td><td>KY</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=338.csv.gz' target='_blank'>338</a> (4KB)</td></tr><tr><td>Saint Lucia</td><td>LC</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=338.csv.gz' target='_blank'>338</a> (4KB)</td></tr><tr><td>Montserrat</td><td>MS</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=338.csv.gz' target='_blank'>338</a> (4KB)</td></tr><tr><td>Saint Vincent and the Grenadin</td><td>VC</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=338.csv.gz' target='_blank'>338</a> (4KB)</td></tr><tr><td>Former Netherlands Antilles</td><td>AN</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=340.csv.gz' target='_blank'>340</a> (63KB)</td></tr><tr><td>French Guiana</td><td>GF</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=340.csv.gz' target='_blank'>340</a> (63KB)</td></tr><tr><td>Guadeloupe</td><td>GP</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=340.csv.gz' target='_blank'>340</a> (63KB)</td></tr><tr><td>Martinique</td><td>MQ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=340.csv.gz' target='_blank'>340</a> (63KB)</td></tr><tr><td>Aruba</td><td>AW</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=363.csv.gz' target='_blank'>363</a> (3KB)</td></tr><tr><td>Cuba</td><td>CU</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=368.csv.gz' target='_blank'>368</a> (11KB)</td></tr><tr><td>Trinidad and Tobago</td><td>TT</td><td>No data in the last 18 months for MCCs: 374</td></tr><tr><td>Azerbaijan</td><td>AZ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=400.csv.gz' target='_blank'>400</a> (7KB)</td></tr><tr><td>Kazakhstan</td><td>KZ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=401.csv.gz' target='_blank'>401</a> (809KB)</td></tr><tr><td>Pakistan</td><td>PK</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=410.csv.gz' target='_blank'>410</a> (94KB)</td></tr><tr><td>Afghanistan</td><td>AF</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=412.csv.gz' target='_blank'>412</a> (80KB)</td></tr><tr><td>Sri Lanka</td><td>LK</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=413.csv.gz' target='_blank'>413</a> (52KB)</td></tr><tr><td>Myanmar</td><td>MM</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=414.csv.gz' target='_blank'>414</a> (14KB)</td></tr><tr><td>Lebanon</td><td>LB</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=415.csv.gz' target='_blank'>415</a> (26KB)</td></tr><tr><td>Jordan</td><td>JO</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=416.csv.gz' target='_blank'>416</a> (58KB)</td></tr><tr><td>Syria</td><td>SY</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=417.csv.gz' target='_blank'>417</a> (8KB)</td></tr><tr><td>Iraq</td><td>IQ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=418.csv.gz' target='_blank'>418</a> (28KB)</td></tr><tr><td>Kuwait</td><td>KW</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=419.csv.gz' target='_blank'>419</a> (2KB)</td></tr><tr><td>Saudi Arabia</td><td>SA</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=420.csv.gz' target='_blank'>420</a> (211KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=422.csv.gz' target='_blank'>422</a> (21KB)</td></tr><tr><td>Yemen</td><td>YE</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=421.csv.gz' target='_blank'>421</a> (3KB)</td></tr><tr><td>Oman</td><td>OM</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=422.csv.gz' target='_blank'>422</a> (21KB)</td></tr><tr><td>United Arab Emirates</td><td>AE</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=424.csv.gz' target='_blank'>424</a> (520KB)</td></tr><tr><td>Israel</td><td>IL</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=425.csv.gz' target='_blank'>425</a> (583KB)</td></tr><tr><td>Palestine, State of</td><td>PS</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=425.csv.gz' target='_blank'>425</a> (583KB)</td></tr><tr><td>Bahrain</td><td>BH</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=426.csv.gz' target='_blank'>426</a> (4KB)</td></tr><tr><td>Qatar</td><td>QA</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=427.csv.gz' target='_blank'>427</a> (42KB)</td></tr><tr><td>Mongolia</td><td>MN</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=428.csv.gz' target='_blank'>428</a> (3KB)</td></tr><tr><td>Nepal</td><td>NP</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=429.csv.gz' target='_blank'>429</a> (47KB)</td></tr><tr><td>Iran</td><td>IR</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=432.csv.gz' target='_blank'>432</a> (1900KB)</td></tr><tr><td>Uzbekistan</td><td>UZ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=434.csv.gz' target='_blank'>434</a> (191KB)</td></tr><tr><td>Tajikistan</td><td>TJ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=436.csv.gz' target='_blank'>436</a> (1KB)</td></tr><tr><td>Kyrgyzstan</td><td>KG</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=437.csv.gz' target='_blank'>437</a> (98KB)</td></tr><tr><td>Turkmenistan</td><td>TM</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=438.csv.gz' target='_blank'>438</a> (1KB)</td></tr><tr><td>Japan</td><td>JP</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=440.csv.gz' target='_blank'>440</a> (13925KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=441.csv.gz' target='_blank'>441</a> (3KB)</td></tr><tr><td>South Korea</td><td>KR</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=450.csv.gz' target='_blank'>450</a> (170KB)</td></tr><tr><td>Cambodia</td><td>KH</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=452.csv.gz' target='_blank'>452</a> (187KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=456.csv.gz' target='_blank'>456</a> (75KB)</td></tr><tr><td>Taiwan</td><td>TW</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=452.csv.gz' target='_blank'>452</a> (187KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=466.csv.gz' target='_blank'>466</a> (173KB)</td></tr><tr><td>Vietnam</td><td>VN</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=452.csv.gz' target='_blank'>452</a> (187KB)</td></tr><tr><td>China</td><td>CN</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=454.csv.gz' target='_blank'>454</a> (372KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=455.csv.gz' target='_blank'>455</a> (7KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=460.csv.gz' target='_blank'>460</a> (3088KB)</td></tr><tr><td>Hong Kong</td><td>HK</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=454.csv.gz' target='_blank'>454</a> (372KB)</td></tr><tr><td>Macau</td><td>MO</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=455.csv.gz' target='_blank'>455</a> (7KB)</td></tr><tr><td>Laos</td><td>LA</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=457.csv.gz' target='_blank'>457</a> (1KB)</td></tr><tr><td>Bangladesh</td><td>BD</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=470.csv.gz' target='_blank'>470</a> (134KB)</td></tr><tr><td>Maldives</td><td>MV</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=472.csv.gz' target='_blank'>472</a> (8KB)</td></tr><tr><td>Malaysia</td><td>MY</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=502.csv.gz' target='_blank'>502</a> (1811KB)</td></tr><tr><td>Australia</td><td>AU</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=505.csv.gz' target='_blank'>505</a> (3323KB)</td></tr><tr><td>Norfolk Island</td><td>NF</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=505.csv.gz' target='_blank'>505</a> (3323KB)</td></tr><tr><td>Indonesia</td><td>ID</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=510.csv.gz' target='_blank'>510</a> (878KB)</td></tr><tr><td>East Timor</td><td>TL</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=514.csv.gz' target='_blank'>514</a> (1KB)</td></tr><tr><td>Philippines</td><td>PH</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=515.csv.gz' target='_blank'>515</a> (675KB)</td></tr><tr><td>Thailand</td><td>TH</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=520.csv.gz' target='_blank'>520</a> (596KB)</td></tr><tr><td>Singapore</td><td>SG</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=525.csv.gz' target='_blank'>525</a> (779KB)</td></tr><tr><td>Brunei</td><td>BN</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=528.csv.gz' target='_blank'>528</a> (31KB)</td></tr><tr><td>New Zealand</td><td>NZ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=530.csv.gz' target='_blank'>530</a> (183KB)</td></tr><tr><td>Papua New Guinea</td><td>PG</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=537.csv.gz' target='_blank'>537</a> (15KB)</td></tr><tr><td>Tonga</td><td>TO</td><td>No data in the last 18 months for MCCs: 539</td></tr><tr><td>Solomon Islands</td><td>SB</td><td>No data in the last 18 months for MCCs: 540</td></tr><tr><td>Vanuatu</td><td>VU</td><td>No data in the last 18 months for MCCs: 541</td></tr><tr><td>Fiji</td><td>FJ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=542.csv.gz' target='_blank'>542</a> (1KB)</td></tr><tr><td>New Caledonia</td><td>NC</td><td>No data in the last 18 months for MCCs: 546</td></tr><tr><td>French Polynesia</td><td>PF</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=547.csv.gz' target='_blank'>547</a> (1KB)</td></tr><tr><td>Cook Islands</td><td>CK</td><td>No data in the last 18 months for MCCs: 548</td></tr><tr><td>Marshall Islands</td><td>MH</td><td>No data in the last 18 months for MCCs: 551</td></tr><tr><td>Egypt</td><td>EG</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=602.csv.gz' target='_blank'>602</a> (180KB)</td></tr><tr><td>Algeria</td><td>DZ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=603.csv.gz' target='_blank'>603</a> (398KB)</td></tr><tr><td>Morocco</td><td>MA</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=604.csv.gz' target='_blank'>604</a> (94KB)</td></tr><tr><td>Tunisia</td><td>TN</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=605.csv.gz' target='_blank'>605</a> (33KB)</td></tr><tr><td>Libya</td><td>LY</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=606.csv.gz' target='_blank'>606</a> (13KB)</td></tr><tr><td>Gambia</td><td>GM</td><td>No data in the last 18 months for MCCs: 607</td></tr><tr><td>Senegal</td><td>SN</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=608.csv.gz' target='_blank'>608</a> (23KB)</td></tr><tr><td>Mauritania</td><td>MR</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=609.csv.gz' target='_blank'>609</a> (1KB)</td></tr><tr><td>Mali</td><td>ML</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=610.csv.gz' target='_blank'>610</a> (13KB)</td></tr><tr><td>Guinea</td><td>GN</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=611.csv.gz' target='_blank'>611</a> (65KB)</td></tr><tr><td>Ivory Coast</td><td>CI</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=612.csv.gz' target='_blank'>612</a> (60KB)</td></tr><tr><td>Burkina Faso</td><td>BF</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=613.csv.gz' target='_blank'>613</a> (4KB)</td></tr><tr><td>Niger</td><td>NE</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=614.csv.gz' target='_blank'>614</a> (1KB)</td></tr><tr><td>Togo</td><td>TG</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=615.csv.gz' target='_blank'>615</a> (1KB)</td></tr><tr><td>Benin</td><td>BJ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=616.csv.gz' target='_blank'>616</a> (5KB)</td></tr><tr><td>Mauritius</td><td>MU</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=617.csv.gz' target='_blank'>617</a> (3KB)</td></tr><tr><td>Liberia</td><td>LR</td><td>No data in the last 18 months for MCCs: 618</td></tr><tr><td>Sierra Leone</td><td>SL</td><td>No data in the last 18 months for MCCs: 619</td></tr><tr><td>Ghana</td><td>GH</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=620.csv.gz' target='_blank'>620</a> (310KB)</td></tr><tr><td>Nigeria</td><td>NG</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=621.csv.gz' target='_blank'>621</a> (1937KB)</td></tr><tr><td>Chad</td><td>TD</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=622.csv.gz' target='_blank'>622</a> (5KB)</td></tr><tr><td>Central African Republic</td><td>CF</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=623.csv.gz' target='_blank'>623</a> (1KB)</td></tr><tr><td>Cameroon</td><td>CM</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=624.csv.gz' target='_blank'>624</a> (464KB)</td></tr><tr><td>Cape Verde</td><td>CV</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=625.csv.gz' target='_blank'>625</a> (17KB)</td></tr><tr><td>Equatorial Guinea</td><td>GQ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=627.csv.gz' target='_blank'>627</a> (1KB)</td></tr><tr><td>Gabon</td><td>GA</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=628.csv.gz' target='_blank'>628</a> (23KB)</td></tr><tr><td>Congo</td><td>CG</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=629.csv.gz' target='_blank'>629</a> (2KB)</td></tr><tr><td>Democratic Republic of the Con</td><td>CD</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=630.csv.gz' target='_blank'>630</a> (255KB)</td></tr><tr><td>Angola</td><td>AO</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=631.csv.gz' target='_blank'>631</a> (147KB)</td></tr><tr><td>Guinea-Bissau</td><td>GW</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=632.csv.gz' target='_blank'>632</a> (4KB)</td></tr><tr><td>Sudan</td><td>SD</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=634.csv.gz' target='_blank'>634</a> (1KB)</td></tr><tr><td>Rwanda</td><td>RW</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=635.csv.gz' target='_blank'>635</a> (113KB)</td></tr><tr><td>Ethiopia</td><td>ET</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=636.csv.gz' target='_blank'>636</a> (16KB)</td></tr><tr><td>Somalia</td><td>SO</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=637.csv.gz' target='_blank'>637</a> (1KB)</td></tr><tr><td>Djibouti</td><td>DJ</td><td>No data in the last 18 months for MCCs: 638</td></tr><tr><td>Kenya</td><td>KE</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=639.csv.gz' target='_blank'>639</a> (3068KB)</td></tr><tr><td>Tanzania</td><td>TZ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=640.csv.gz' target='_blank'>640</a> (938KB)</td></tr><tr><td>Uganda</td><td>UG</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=641.csv.gz' target='_blank'>641</a> (731KB)</td></tr><tr><td>Burundi</td><td>BI</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=642.csv.gz' target='_blank'>642</a> (16KB)</td></tr><tr><td>Mozambique</td><td>MZ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=643.csv.gz' target='_blank'>643</a> (9KB)</td></tr><tr><td>Zambia</td><td>ZM</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=645.csv.gz' target='_blank'>645</a> (299KB)</td></tr><tr><td>Madagascar</td><td>MG</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=646.csv.gz' target='_blank'>646</a> (12KB)</td></tr><tr><td>RÃ©union</td><td>RE</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=647.csv.gz' target='_blank'>647</a> (67KB)</td></tr><tr><td>Zimbabwe</td><td>ZW</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=648.csv.gz' target='_blank'>648</a> (190KB)</td></tr><tr><td>Namibia</td><td>NA</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=649.csv.gz' target='_blank'>649</a> (26KB)</td></tr><tr><td>Malawi</td><td>MW</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=650.csv.gz' target='_blank'>650</a> (43KB)</td></tr><tr><td>Lesotho</td><td>LS</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=651.csv.gz' target='_blank'>651</a> (3KB)</td></tr><tr><td>South Africa</td><td>ZA</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=651.csv.gz' target='_blank'>651</a> (3KB), <a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=655.csv.gz' target='_blank'>655</a> (1519KB)</td></tr><tr><td>Botswana</td><td>BW</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=652.csv.gz' target='_blank'>652</a> (82KB)</td></tr><tr><td>Swaziland</td><td>SZ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=653.csv.gz' target='_blank'>653</a> (4KB)</td></tr><tr><td>Eritrea</td><td>ER</td><td>No data in the last 18 months for MCCs: 657</td></tr><tr><td>South Sudan</td><td>SS</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=659.csv.gz' target='_blank'>659</a> (11KB)</td></tr><tr><td>Belize</td><td>BZ</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=702.csv.gz' target='_blank'>702</a> (7KB)</td></tr><tr><td>Guatemala</td><td>GT</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=704.csv.gz' target='_blank'>704</a> (607KB)</td></tr><tr><td>El Salvador</td><td>SV</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=706.csv.gz' target='_blank'>706</a> (195KB)</td></tr><tr><td>Honduras</td><td>HN</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=708.csv.gz' target='_blank'>708</a> (41KB)</td></tr><tr><td>Nicaragua</td><td>NI</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=710.csv.gz' target='_blank'>710</a> (151KB)</td></tr><tr><td>Costa Rica</td><td>CR</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=712.csv.gz' target='_blank'>712</a> (1479KB)</td></tr><tr><td>Panama</td><td>PA</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=714.csv.gz' target='_blank'>714</a> (438KB)</td></tr><tr><td>Peru</td><td>PE</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=716.csv.gz' target='_blank'>716</a> (371KB)</td></tr><tr><td>Argentina</td><td>AR</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=722.csv.gz' target='_blank'>722</a> (138KB)</td></tr><tr><td>Brazil</td><td>BR</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=724.csv.gz' target='_blank'>724</a> (1202KB)</td></tr><tr><td>Chile</td><td>CL</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=730.csv.gz' target='_blank'>730</a> (272KB)</td></tr><tr><td>Colombia</td><td>CO</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=732.csv.gz' target='_blank'>732</a> (296KB)</td></tr><tr><td>Venezuela</td><td>VE</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=734.csv.gz' target='_blank'>734</a> (42KB)</td></tr><tr><td>Bolivia</td><td>BO</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=736.csv.gz' target='_blank'>736</a> (4KB)</td></tr><tr><td>Guyana</td><td>GY</td><td>No data in the last 18 months for MCCs: 738</td></tr><tr><td>Ecuador</td><td>EC</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=740.csv.gz' target='_blank'>740</a> (173KB)</td></tr><tr><td>Paraguay</td><td>PY</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=744.csv.gz' target='_blank'>744</a> (63KB)</td></tr><tr><td>Suriname</td><td>SR</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=746.csv.gz' target='_blank'>746</a> (4KB)</td></tr><tr><td>Uruguay</td><td>UY</td><td><a href='https://opencellid.org/ocid/downloads?token=test&type=mcc&file=748.csv.gz' target='_blank'>748</a> (153KB)</td></tr>                                                </tbody>
+                                            </table>
+                                            <div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion" id="downloadsAccordion3">
+                        <div class="accordion-item">
+                            <h4 class="accordion-header" id="headingWorld">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseWorld" aria-expanded="false" aria-controls="collapseWorld">
+                                    World Exports
+                                </button>
+                            </h4>
+                            <div id="collapseWorld" class="accordion-collapse collapse" aria-labelledby="headingWorld" data-bs-parent="#downloadsAccordion3">
+                                <div class="accordion-body">
+                                    <div class="row text-center" style="padding: 20px; margin-bottom:20px;">
+                                        <p>For details about the CSV file format and field descriptions, please see our
+                                            <a href="https://wiki.opencellid.org/wiki/Database_format" target="_blank">Database Format Documentation</a>.
+                                        </p>
+                                        <div class="col-sm-6">
+                                            <h5>Database</h5>
+                                            <p>
+                                                Includes cell towers observed in the last 18 months.
+                                            <ul style="text-align:left">
+                                                <li>
+                                                    <a href='https://opencellid.org/ocid/downloads?token=test&type=full&file=cell_towers.csv.gz' target='_blank'>cell_towers.csv.gz</a><br><em> Updated: 2026-07-31</em>                                                </li>
+                                            </ul>
+                                            </p>
+                                        </div>
+                                        <div class="col-sm-6">
+                                            <h5>Daily Differential</h5>
+                                            <p>
+                                                Includes cell towers observed in a 24 hour period.
+                                            <ul style="text-align:left">
+                                                <li><a href='https://opencellid.org/ocid/downloads?token=test&type=diff&file=OCID-diff-cell-export-2026-07-31-T000000.csv.gz' target='_blank'>OCID-diff-cell-export-2026-07-31-T000000.csv.gz</a> (1767KB)</li><li><a href='https://opencellid.org/ocid/downloads?token=test&type=diff&file=OCID-diff-cell-export-2026-07-30-T000000.csv.gz' target='_blank'>OCID-diff-cell-export-2026-07-30-T000000.csv.gz</a> (1753KB)</li><li><a href='https://opencellid.org/ocid/downloads?token=test&type=diff&file=OCID-diff-cell-export-2026-07-29-T000000.csv.gz' target='_blank'>OCID-diff-cell-export-2026-07-29-T000000.csv.gz</a> (1732KB)</li><li><a href='https://opencellid.org/ocid/downloads?token=test&type=diff&file=OCID-diff-cell-export-2026-07-28-T000000.csv.gz' target='_blank'>OCID-diff-cell-export-2026-07-28-T000000.csv.gz</a> (1364KB)</li><li><a href='https://opencellid.org/ocid/downloads?token=test&type=diff&file=OCID-diff-cell-export-2026-07-27-T000000.csv.gz' target='_blank'>OCID-diff-cell-export-2026-07-27-T000000.csv.gz</a> (1592KB)</li><li><a href='https://opencellid.org/ocid/downloads?token=test&type=diff&file=OCID-diff-cell-export-2026-07-26-T000000.csv.gz' target='_blank'>OCID-diff-cell-export-2026-07-26-T000000.csv.gz</a> (1897KB)</li><li><a href='https://opencellid.org/ocid/downloads?token=test&type=diff&file=OCID-diff-cell-export-2026-07-25-T000000.csv.gz' target='_blank'>OCID-diff-cell-export-2026-07-25-T000000.csv.gz</a> (1882KB)</li>                                            </ul>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    
+    <!-- Add FAQ Section -->
+    <div class="container">
+    <div class="row">
+        <div class="col-sm-offset-1 col-sm-10">
+            <h3 style="margin-bottom:20px; margin-top:20px;">Frequently Asked Questions</h3>
+            <div class="accordion" id="downloadsAccordion">
+                <div class="accordion-item">
+                    <h4 class="accordion-header" id="headingOne">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne">
+                            What fields are included in the CSV files?
+                        </button>
+                    </h4>
+                    <div id="collapseOne" class="collapse in" data-bs-parent="#downloadsAccordion">
+                        <div class="accordion-body">
+                            <p>Refer to our <a href="https://wiki.opencellid.org/wiki/Database_format" target="_blank">Database Format Documentation</a>.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h4 class="accordion-header" id="headingTwo">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo">
+                            Why do exports only include data from the last 18 months?
+                        </button>
+                    </h4>
+                    <div id="collapseTwo" class="collapse" data-bs-parent="#downloadsAccordion">
+                        <div class="accordion-body">
+                            <p>We limit the data to the last 18 months for several reasons:</p>
+                            <ul>
+                                <li>To avoid overwhelming our servers and bandwidth limits</li>
+                                <li>To keep file sizes manageable for downloads</li>
+                                <li>Cell tower configurations change over time, and older data may no longer be accurate</li>
+                            </ul>
+                            <p>We plan to extend this limit in the future but have no timeline for this yet.</p>
+                            <p>The <a href="https://wiki.opencellid.org/wiki/API#Getting_cell_position" target="_blank">OpenCelliD API</a> does not have this limitation and has access to all available data.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h4 class="accordion-header" id="headingThree">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree">
+                            Why does my country stats show it has data but I don't see any files?
+                        </button>
+                    </h4>
+                    <div id="collapseThree" class="collapse" data-bs-parent="#downloadsAccordion">
+                        <div class="accordion-body">
+                            <p>This is because of the 18 month limit on the data we provide. We have no recent data for this country. You can use the <a href="https://wiki.opencellid.org/wiki/API#Getting_cell_position" target="_blank">OpenCelliD API</a> to access all available data.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h4 class="accordion-header" id="headingFour">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFour">
+                            I can locate cell towers with the OpenCelliD API but not with the CSV files, why?
+                        </button>
+                    </h4>
+                    <div id="collapseFour" class="collapse" data-bs-parent="#downloadsAccordion">
+                        <div class="accordion-body">
+                            <p>This is because the CSV files only contain cells observed in the last 18 months while the API responds with older data as well.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="text/javascript">
+    $(document).ready(function() {
+        // Initialize accordion functionality
+        $('.accordion-button').click(function(e) {
+            e.preventDefault();
+            var $this = $(this);
+            var $target = $($this.attr('data-bs-target'));
+
+            // Toggle current panel
+            $target.collapse('toggle');
+
+            // Toggle button state
+            $this.toggleClass('collapsed');
+
+            // Update aria-expanded attribute
+            var isExpanded = !$this.hasClass('collapsed');
+            $this.attr('aria-expanded', isExpanded);
+        });
+    });
+</script>
+</section>
+
+
+    <script type="text/javascript" src="/js/datatables.min.js?v=1.1.7"></script>
+    <script type="text/javascript" charset="utf-8">
+        $(document).ready(function() {
+            $('#regions').DataTable({
+                pageLength: 25,
+                order: [
+                    [1, "desc"]
+                ]
+            });
+        });
+    </script>
+
+    <script type="text/javascript">
+        $('#regions').removeClass('display').addClass('table table-striped');
+    </script>
+
+    <!-- footer-3 -->
+    <footer id="contact" class="footer-3">
+        <div class="container">
+            <div class="row">
+                <div class="col-sm-12" style="text-align:center; padding: 32px 0 20px;">
+                    <a class="brand" href="/" style="display:block; margin-bottom:20px;">OpenCelliD</a>
+                    <nav style="margin-bottom:16px; font-size:15px;">
+                        <a class="white" href="/about.php">About</a>
+                        <span class="white" style="opacity:0.4; margin: 0 8px;">·</span>
+                        <a class="white" target="_blank" href="https://unwiredlabs.com/locationapi?ref=opencellid">Enterprise</a>
+                        <span class="white" style="opacity:0.4; margin: 0 8px;">·</span>
+                        <a class="white" target="_blank" href="https://community.opencellid.org/">Community</a>
+                    </nav>
+                    <p style="font-size:13px; opacity:0.6; margin:0;">Maintained by <a href="https://unwiredlabs.com/?ref=opencellid" target="_blank" class="white">Unwired Labs</a> &nbsp;·&nbsp; © 2026 OpenCelliD, © Unwired Labs</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- footer-2 -->
+    <footer class="footer-2 bg-midnight-blue">
+        <div class="container">
+            <div class="row">
+                <div class="col-sm-offset-1 col-sm-10">
+                    <div class="additional-links">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- footer-12 -->
+    <footer class="footer-12">
+        <div class="container">
+        </div>
+    </footer>
+
+</div>
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-VHY7WTBNSB"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-VHY7WTBNSB');
+</script>
+
+<script type="text/javascript" src="/js/raven-3.16.0.min.js"></script>
+<script type="text/javascript">
+    Raven.config('https://988c46c430fb46d4ab6fb73689804134@sentry.io/176846').install();
+</script>
+</body>
+</html>

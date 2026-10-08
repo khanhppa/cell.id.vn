@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cell Tracker - Login</title>
+  <script src="/auth.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .auth-container {
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(20px);
+      border-radius: 20px;
+      padding: 40px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .auth-container h1 {
+      color: #e0e0ff;
+      text-align: center;
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    .auth-container .subtitle {
+      color: #8888aa;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    .tab-bar {
+      display: flex;
+      margin-bottom: 25px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .tab-bar button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      background: transparent;
+      color: #8888aa;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.3s;
+    }
+    .tab-bar button.active {
+      background: rgba(100, 100, 255, 0.2);
+      color: #e0e0ff;
+    }
+    .tab-bar button:hover { color: #ccccee; }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-group label {
+      display: block;
+      color: #aaaacc;
+      margin-bottom: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.05);
+      color: #e0e0ff;
+      font-size: 15px;
+      outline: none;
+      transition: all 0.3s;
+    }
+    .form-group input:focus {
+      border-color: #6666ff;
+      box-shadow: 0 0 0 3px rgba(100,100,255,0.2);
+      background: rgba(255,255,255,0.08);
+    }
+    .form-group input::placeholder { color: #555577; }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #6666ff, #4444cc);
+      color: white;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(100,100,255,0.4); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .message {
+      text-align: center;
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+    .message.error { display: block; background: rgba(255,50,50,0.15); color: #ff6666; border: 1px solid rgba(255,50,50,0.3); }
+    .message.success { display: block; background: rgba(50,255,50,0.1); color: #66ff66; border: 1px solid rgba(50,255,50,0.2); }
+    .message.info { display: block; background: rgba(100,100,255,0.1); color: #8888ff; border: 1px solid rgba(100,100,255,0.2); }
+    .footer-text {
+      text-align: center;
+      color: #555577;
+      font-size: 12px;
+      margin-top: 20px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="auth-container">
+    <h1>Cell Tracker</h1>
+    <p class="subtitle">Cellular tower mapping & analysis</p>
+
+    <div class="tab-bar">
+      <button id="tabLogin" class="active" onclick="switchTab('login')">Login</button>
+      <button id="tabRegister" onclick="switchTab('register')">Register</button>
+    </div>
+
+    <!-- Login Form -->
+    <form id="loginForm" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="loginUsername" placeholder="Enter username" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="loginPassword" placeholder="Enter password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary" id="loginBtn">
+        <span id="loginBtnText">Sign In</span>
+        <span id="loginBtnSpinner" class="spinner" style="display:none"></span>
+      </button>
+      <div id="loginMessage" class="message"></div>
+    </form>
+
+    <!-- Register Form -->
+    <form id="registerForm" onsubmit="handleRegister(event)" style="display:none">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="regUsername" placeholder="Choose username" required autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="regPassword" placeholder="Choose password (min 4 chars)" required minlength="4" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label>Confirm Password</label>
+        <input type="password" id="regConfirm" placeholder="Confirm password" required autocomplete="new-password">
+      </div>
+      <button type="submit" class="btn btn-primary" id="regBtn">
+        <span id="regBtnText">Create Account</span>
+        <span id="regBtnSpinner" class="spinner" style="display:none"></span>
+      </button>
+      <div id="regMessage" class="message"></div>
+    </form>
+
+    <div class="footer-text">
+      Cell Tracker v2.0 &mdash; OpenStreetMap &copy; contributors
+    </div>
+  </div>
+
+  <script>
+    function switchTab(tab) {
+      document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
+      document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
+      document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
+      document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
+      document.getElementById('loginMessage').style.display = 'none';
+      document.getElementById('regMessage').style.display = 'none';
+    }
+
+    function showMsg(id, msg, type) {
+      const el = document.getElementById(id);
+      el.textContent = msg;
+      el.className = 'message ' + type;
+    }
+
+    function setLoading(form, loading) {
+      const btnText = form === 'login' ? 'loginBtnText' : 'regBtnText';
+      const btnSpinner = form === 'login' ? 'loginBtnSpinner' : 'regBtnSpinner';
+      const btn = form === 'login' ? 'loginBtn' : 'regBtn';
+      document.getElementById(btnText).style.display = loading ? 'none' : 'inline';
+      document.getElementById(btnSpinner).style.display = loading ? 'inline-block' : 'none';
+      document.getElementById(btn).disabled = loading;
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      setLoading('login', true);
+      document.getElementById('loginMessage').style.display = 'none';
+      try {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        await Auth.login(username, password);
+        const user = Auth.getUser();
+        if (user && user.role === 'admin') {
+          window.location.href = '/admin.html';
+        } else {
+          window.location.href = '/index.html';
+        }
+      } catch (err) {
+        showMsg('loginMessage', err.message, 'error');
+      } finally {
+        setLoading('login', false);
+      }
+    }
+
+    async function handleRegister(e) {
+      e.preventDefault();
+      const username = document.getElementById('regUsername').value.trim();
+      const password = document.getElementById('regPassword').value;
+      const confirm = document.getElementById('regConfirm').value;
+
+      if (password !== confirm) {
+        showMsg('regMessage', 'Passwords do not match', 'error');
+        return;
+      }
+
+      setLoading('register', true);
+      document.getElementById('regMessage').style.display = 'none';
+      try {
+        const data = await Auth.register(username, password);
+        showMsg('regMessage', data.message || 'Registration successful! Wait for admin activation.', 'success');
+        document.getElementById('registerForm').reset();
+      } catch (err) {
+        showMsg('regMessage', err.message, 'error');
+      } finally {
+        setLoading('register', false);
+      }
+    }
+
+    // Redirect if already logged in
+    if (Auth.isLoggedIn()) {
+      const user = Auth.getUser();
+      if (user && user.role === 'admin') {
+        window.location.href = '/admin.html';
+      } else {
+        window.location.href = '/index.html';
+      }
+    }
+  </script>
+</body>
+</html>

@@ -18,6 +18,7 @@ const clfConverter = require('./clf-converter');
 const cellId = require('./cell-id');
 const cron = require('node-cron');
 const ocidSync = require('./ocid-sync');
+const credits = require('./credits');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -46,6 +47,18 @@ function probeCellRow({ mcc, mnc, lac, cellid, sector }) {
     next();
   });
 }
+
+// RAT helpers (inferRadio / normalizeRadio) — dùng chung với ocid-sync.js.
+const { inferRadio, normalizeRadio } = require('./radio-util');
+// Geo gate — chặn toạ độ rác trước khi ghi vào bảng `cells`.
+const { isPlausibleLatLng } = require('./geo-util');
+
+// ============================================================
+// Geo gate — cài đặt trong ./geo-util.js (dùng chung với ocid-sync.js).
+// Lý do: cellid ngắn rất dễ trúng 1 row khác trong bảng nội bộ hoặc nguồn ngoài
+// trả về ô cùng tên ở nước khác → marker sai ngoài VN. Mọi nhánh ghi `cells` phải
+// đi qua isPlausibleLatLng() (mcc 452 ⇒ bắt buộc nằm trong khung VN).
+// ============================================================
 
 // Middleware
 app.use(express.json({ limit: '200mb' }));
@@ -91,7 +104,7 @@ app.post('/api/login', (req, res) => {
       if (!match) return res.status(401).json({ error: 'Invalid credentials' });
 
       const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
-      res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
+      res.json({ token, user: { id: user.id, username: user.username, role: user.role, credit_balance: Number(user.credit_balance) || 0 } });
     });
   });
 });
@@ -102,24 +115,160 @@ app.post('/api/register', (req, res) => {
 
   bcrypt.hash(password, 10, (err, hash) => {
     if (err) return res.status(500).json({ error: err.message });
-    db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, hash], function(err) {
+    db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, hash], async function(err) {
       if (err) {
         if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Username already exists' });
         return res.status(500).json({ error: err.message });
       }
-      const token = jwt.sign({ id: this.lastID, username, role: 'user' }, JWT_SECRET, { expiresIn: '24h' });
-      res.json({ token, user: { id: this.lastID, username, role: 'user' } });
+      const userId = this.lastID;
+      // Điểm thưởng đăng ký — ghi qua ledger (không set thẳng cột) để đối soát được.
+      let balance = 0;
+      try {
+        const bonus = await credits.grantSignupBonus(userId);
+        balance = Number(bonus.balance) || 0;
+      } catch (e) { console.error('signup bonus failed:', e.message); }
+      const token = jwt.sign({ id: userId, username, role: 'user' }, JWT_SECRET, { expiresIn: '24h' });
+      res.json({ token, user: { id: userId, username, role: 'user', credit_balance: balance } });
     });
   });
 });
 
 app.get('/api/me', requireAuth, (req, res) => {
-  db.get('SELECT id, username, role, created_at FROM users WHERE id = ?', [req.user.id], (err, user) => {
+  db.get('SELECT id, username, role, created_at, credit_balance FROM users WHERE id = ?', [req.user.id], (err, user) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!user) return res.status(404).json({ error: 'User not found' });
+    user.credit_balance = Number(user.credit_balance) || 0;
     res.json(user);
   });
 });
+
+// ========================
+// Credits (user)
+// ========================
+// Cấu hình công khai — trang login/credits dùng để hiển thị giá + bonus.
+// KHÔNG trả dữ liệu user nào.
+app.get('/api/credits/config', async (req, res) => {
+  try { res.json(await credits.getPublicConfig()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/credits/balance', requireAuth, async (req, res) => {
+  try {
+    const [balance, config] = await Promise.all([credits.getBalance(req.user.id), credits.getPublicConfig()]);
+    res.json({ balance, ...config });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Lịch sử giao dịch — LUÔN giới hạn theo req.user.id, không nhận user_id từ client.
+// `paged=1` → trả envelope { data, total, page, limit, totalPages } để client
+// phân trang có số trang. Không có `paged` → trả mảng thô như trước (tương thích).
+app.get('/api/credits/transactions', requireAuth, async (req, res) => {
+  try {
+    if (String(req.query.paged || '') === '1') {
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+      const [rows, total] = await Promise.all([
+        credits.listTransactions(req.user.id, { limit, offset: (page - 1) * limit }),
+        credits.countTransactions(req.user.id)
+      ]);
+      return res.json({
+        data: rows, total, page, limit,
+        totalPages: Math.max(1, Math.ceil(total / limit))
+      });
+    }
+    const rows = await credits.listTransactions(req.user.id, {
+      limit: req.query.limit, offset: req.query.offset
+    });
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ========================
+// Credits (admin)
+// ========================
+// Rate limit thô cho thao tác tiền: tối đa 60 lần / phút / admin.
+const creditAdminHits = new Map();
+function creditAdminRateLimit(req, res, next) {
+  const key = String(req.user.id);
+  const now = Date.now();
+  const hits = (creditAdminHits.get(key) || []).filter(t => now - t < 60000);
+  if (hits.length >= 60) return res.status(429).json({ error: 'Quá nhiều thao tác, thử lại sau' });
+  hits.push(now);
+  creditAdminHits.set(key, hits);
+  next();
+}
+
+app.get('/api/admin/credits/users', requireAuth, requireAdmin, async (req, res) => {
+  try { res.json(await credits.listUserCredits()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/credits/transactions', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const userId = req.query.user_id ? parseInt(req.query.user_id, 10) : null;
+    if (req.query.user_id && !Number.isFinite(userId)) return res.status(400).json({ error: 'user_id không hợp lệ' });
+    const rows = await credits.listAllTransactions({
+      userId: userId || null, type: req.query.type || null,
+      limit: req.query.limit, offset: req.query.offset
+    });
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/credits/topup', requireAuth, requireAdmin, creditAdminRateLimit, async (req, res) => {
+  try {
+    const { user_id, amount, note } = req.body || {};
+    const uid = parseInt(user_id, 10);
+    if (!Number.isFinite(uid)) return res.status(400).json({ error: 'user_id không hợp lệ' });
+    const r = await credits.topUp(uid, amount, {
+      adminId: req.user.id, adminIp: adminIp(req), note: note || null
+    });
+    if (!r.ok) return res.status(400).json({ error: creditsReason(r.reason), reason: r.reason });
+    res.json({ success: true, balance: r.balance });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// CHỈ cho phép NẠP THÊM điểm. Số dư hiện có của user là bất biến — không có API
+// nào của admin được phép giảm/ghi đè `credit_balance`.
+//
+// Cố ý KHÔNG chặn ở tầng credits.adjust(): helper đó còn dùng cho bút toán
+// `admin_adjust` hợp lệ khác (khởi tạo user, correction). Rào chặn đặt ở đúng
+// biên HTTP mà admin gọi tới.
+app.post('/api/admin/credits/adjust', requireAuth, requireAdmin, creditAdminRateLimit, async (req, res) => {
+  try {
+    const { user_id, amount, note } = req.body || {};
+    const uid = parseInt(user_id, 10);
+    if (!Number.isFinite(uid)) return res.status(400).json({ error: 'user_id không hợp lệ' });
+    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+      return res.status(400).json({
+        error: 'Chỉ được nạp thêm điểm (giá trị > 0). Không thể sửa hay giảm số dư hiện có.',
+        reason: 'topup_only'
+      });
+    }
+    const r = await credits.adjust(uid, amount, {
+      adminId: req.user.id, adminIp: adminIp(req), note
+    });
+    if (!r.ok) return res.status(400).json({ error: creditsReason(r.reason), reason: r.reason });
+    res.json({ success: true, balance: r.balance });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Đối soát ledger vs số dư (admin) — dùng để kiểm tra toàn vẹn định kỳ.
+app.get('/api/admin/credits/reconcile', requireAuth, requireAdmin, async (req, res) => {
+  try { res.json(await credits.reconcile()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+function creditsReason(reason) {
+  switch (reason) {
+    case 'invalid_amount': return 'Số điểm không hợp lệ';
+    case 'invalid_type': return 'Loại bút toán không hợp lệ';
+    case 'user_not_found': return 'Không tìm thấy user';
+    case 'insufficient': return 'Số dư không đủ để trừ';
+    case 'note_required': return 'Bắt buộc nhập lý do (note)';
+    default: return 'Thao tác thất bại';
+  }
+}
 
 // Lookup endpoint (CSV)
 app.post('/api/lookup', requireAuth, (req, res) => {
@@ -134,6 +283,40 @@ app.post('/api/lookup', requireAuth, (req, res) => {
     res.json({ found: !!row, data: row || null });
   });
 });
+
+// Gate ghi kết quả nguồn ONLINE vào bảng `cells`.
+//
+// Ba luật (chống tái nhiễm cho lỗi tra cứu trả toạ độ sai ngoài VN):
+//   1. KHÔNG bao giờ đè row source='csv' — CSV là hàng gốc tin cậy; nguồn online
+//      từng ghi đè và xoá mất row CSV gốc (INSERT OR REPLACE theo unique index).
+//   2. KHÔNG ghi khi row cùng khoá đã tồn tại với RAT khác `storeRadio` — dấu
+//      hiệu cellid ngắn trúng nhầm ô cùng tên ở RAT khác.
+//   3. Ghi thì luôn điền `user_id` (trước đây NULL 100%) và log lookup_history.
+//
+// Trả { written: bool, reason: string|null }. Không throw — caller vẫn trả kết
+// quả cho user dù không ghi được vào DB.
+function storeOnlineCell({ mcc, mnc, lac, cellid, lat, lng, range, description, source, radio, userId }) {
+  return new Promise((resolve) => {
+    db.get('SELECT id, source, radio FROM cells WHERE mcc = ? AND mnc = ? AND lac = ? AND cellid = ?',
+      [mcc, mnc, lac, cellid], (err, existing) => {
+        if (err) return resolve({ written: false, reason: 'db-error:' + err.message });
+        if (existing && existing.source === 'csv') {
+          console.warn(`store gate: giữ row csv ${mcc}-${mnc}-${lac}-${cellid}, không ghi từ ${source}`);
+          return resolve({ written: false, reason: 'csv-protected' });
+        }
+        const norm = normalizeRadio(radio);
+        if (existing && normalizeRadio(existing.radio) && norm && normalizeRadio(existing.radio) !== norm) {
+          console.warn(`store gate: bỏ ghi ${source} ${mcc}-${mnc}-${lac}-${cellid} — RAT lệch (DB=${existing.radio}, nguồn=${norm})`);
+          return resolve({ written: false, reason: 'rat-mismatch' });
+        }
+        db.run(`INSERT OR REPLACE INTO cells
+            (mcc, mnc, lac, cellid, lat, lng, range, description, source, radio, user_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [mcc, mnc, lac, cellid, lat, lng, range, description || '', source, norm, userId == null ? null : userId],
+          (e) => resolve(e ? { written: false, reason: 'insert-error:' + e.message } : { written: true, reason: null }));
+      });
+  });
+}
 
 // Settings helpers (generic key/value; admin-configurable)
 function getSetting(key, dflt) {
@@ -153,10 +336,11 @@ function setSetting(key, value) {
 }
 
 // Write lookup audit rows (fire-and-forget). items: [{ mcc, mnc, lac, cellid, sector,
-// lat, lng, range, source, found }]. mode: 'single' | 'batch'.
-function logLookups(userId, mode, batchId, items) {
+// lat, lng, range, source, found, radio }]. mode: 'single' | 'batch'.
+// fileName: tên file Excel nguồn (chỉ dùng cho mode 'batch').
+function logLookups(userId, mode, batchId, items, fileName) {
   if (!items || items.length === 0) return;
-  const ph = items.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+  const ph = items.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
   const flat = [];
   for (const it of items) {
     flat.push(
@@ -172,28 +356,69 @@ function logLookups(userId, mode, batchId, items) {
       it.source == null ? '' : String(it.source),
       it.found ? 1 : 0,
       batchId || null,
+      normalizeRadio(it.radio) || inferRadio(it.cellid, it.sector, it.radio),
     );
   }
   db.run(`INSERT INTO lookup_history
-    (user_id, mode, mcc, mnc, lac, cellid, sector, lat, lng, range, source, found, batch_id)
+    (user_id, mode, mcc, mnc, lac, cellid, sector, lat, lng, range, source, found, batch_id, radio)
     VALUES ${ph}`, flat, () => {});
+
+  // Metadata nhóm batch: cộng dồn để nhiều vòng resolve của CÙNG một lần upload
+  // gộp về đúng 1 nhóm (uploadId dùng chung giữa các vòng).
+  if (!batchId) return;
+  const found = items.reduce((n, it) => n + (it.found ? 1 : 0), 0);
+  db.run(`INSERT INTO lookup_batches (batch_id, user_id, file_name, mode, cell_count, found_count)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(batch_id) DO UPDATE SET
+            cell_count = cell_count + excluded.cell_count,
+            found_count = found_count + excluded.found_count,
+            file_name = COALESCE(excluded.file_name, file_name)`,
+    [batchId, userId, fileName == null ? null : String(fileName), mode, items.length, found], () => {});
 }
 
-// GET /api/lookup-history - current user's lookup history (paged, filter by mode)
+// GET /api/lookup-history - current user's lookup history (paged, filter by mode + date)
+// Một lần upload file = 1 dòng (nhóm theo batch_id), không lặp N dòng cell.
 app.get('/api/lookup-history', requireAuth, (req, res) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 50));
   const offset = (page - 1) * limit;
-  const mode = req.query.mode;
-  let where = 'WHERE user_id = ?';
-  const params = [req.user.id];
-  if (mode === 'single' || mode === 'batch') { where += ' AND mode = ?'; params.push(mode); }
-  db.get(`SELECT COUNT(*) AS total FROM lookup_history ${where}`, params, (err, cnt) => {
+  const mode = (req.query.mode === 'single' || req.query.mode === 'batch') ? req.query.mode : '';
+  // Lọc theo 1 ngày (giờ VN, UTC+7) — created_at lưu UTC nên cộng bù trước khi so.
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : '';
+
+  // UNION: dòng tra đơn lẻ + 1 dòng đại diện cho mỗi lần upload hàng loạt.
+  const union = `
+    SELECT h.id, 'single' AS mode, h.mcc, h.mnc, h.lac, h.cellid, h.sector, h.lat, h.lng,
+           h.range, h.source, h.found, NULL AS batch_id, 1 AS cell_count,
+           CASE WHEN h.found = 1 THEN 1 ELSE 0 END AS found_count, NULL AS file_name,
+           h.radio, h.created_at, h.created_at AS sort_at
+    FROM lookup_history h
+    WHERE h.user_id = ? AND h.mode = 'single'
+    UNION ALL
+    SELECT h.id, 'batch' AS mode, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+           NULL, NULL, 0, b.batch_id, b.cell_count, b.found_count, b.file_name,
+           h.radio, b.created_at, b.created_at AS sort_at
+    FROM lookup_batches b
+    JOIN lookup_history h ON h.id = (
+      SELECT MAX(id) FROM lookup_history WHERE batch_id = b.batch_id AND user_id = b.user_id
+    )
+    WHERE b.user_id = ?`;
+
+  // Điều kiện động: mode + ngày (VDN UTC+7).
+  const conds = [];
+  const params = [req.user.id, req.user.id];
+  if (mode) { conds.push('t.mode = ?'); params.push(mode); }
+  if (date) { conds.push("date(t.sort_at, '+7 hours') = date(?)"); params.push(date); }
+  const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+
+  db.get(`SELECT COUNT(*) AS total FROM (${union}) t ${where}`, params, (err, cnt) => {
     if (err) return res.status(500).json({ error: err.message });
-    db.all(`SELECT * FROM lookup_history ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+    db.all(`SELECT * FROM (${union}) t ${where}
+            ORDER BY t.sort_at DESC, t.id DESC LIMIT ? OFFSET ?`,
       [...params, limit, offset], (err2, rows) => {
       if (err2) return res.status(500).json({ error: err2.message });
-      res.json({ data: rows, total: cnt.total, page, limit, totalPages: Math.max(1, Math.ceil(cnt.total / limit)) });
+      const total = cnt ? cnt.total : 0;
+      res.json({ data: rows, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) });
     });
   });
 });
@@ -214,34 +439,101 @@ app.delete('/api/lookup-history', requireAuth, (req, res) => {
     res.json({ success: true, deleted: this.changes });
   });
 });
+// ========================
+// Map annotations (per user)
+// ========================
+// GET /api/annotations - all annotations of current user (geojson parsed)
+app.get('/api/annotations', requireAuth, (req, res) => {
+  db.all('SELECT * FROM annotations WHERE user_id = ? ORDER BY id ASC', [req.user.id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const out = (rows || []).map((r) => {
+      let geojson = null;
+      try { geojson = typeof r.geojson === 'string' ? JSON.parse(r.geojson) : r.geojson; } catch (e) { geojson = null; }
+      return { id: r.id, type: r.type, label: r.label, geojson, distance: r.distance || 0, created_at: r.created_at };
+    });
+    res.json(out);
+  });
+});
 
-// DELETE /api/lookup-history/batch/:batchId - delete one batch (owner only)
-app.delete('/api/lookup-history/batch/:batchId', requireAuth, (req, res) => {
-  db.run('DELETE FROM lookup_history WHERE user_id = ? AND batch_id = ?', [req.user.id, req.params.batchId], function(err) {
+// POST /api/annotations - save one annotation
+app.post('/api/annotations', requireAuth, (req, res) => {
+  const { type, geojson, label, distance } = req.body || {};
+  if (!geojson || typeof geojson !== 'object') return res.status(400).json({ error: 'geojson object required' });
+  const dist = Number.isFinite(parseFloat(distance)) ? parseFloat(distance) : 0;
+  db.run(
+    'INSERT INTO annotations (user_id, type, label, geojson, distance) VALUES (?, ?, ?, ?, ?)',
+    [req.user.id, String(type || 'shape'), String(label || type || 'shape'), JSON.stringify(geojson), dist],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, id: this.lastID });
+    }
+  );
+});
+
+// DELETE /api/annotations/:id - delete one annotation (owner only)
+app.delete('/api/annotations/:id', requireAuth, (req, res) => {
+  db.run('DELETE FROM annotations WHERE user_id = ? AND id = ?', [req.user.id, req.params.id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ success: true, deleted: this.changes });
   });
 });
 
+
+
+// DELETE /api/lookup-history/batch/:batchId - delete one batch (owner only)
+app.delete('/api/lookup-history/batch/:batchId', requireAuth, (req, res) => {
+  db.run('DELETE FROM lookup_history WHERE user_id = ? AND batch_id = ?', [req.user.id, req.params.batchId], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    db.run('DELETE FROM lookup_batches WHERE user_id = ? AND batch_id = ?', [req.user.id, req.params.batchId], () => {});
+    res.json({ success: true, deleted: this.changes });
+  });
+});
+
 // POST /api/lookup-history/delete - delete selected ids (owner only)
+// id của dòng hàng loạt = row đại diện → xoá cả nhóm (mọi row cùng batch_id).
 app.post('/api/lookup-history/delete', requireAuth, (req, res) => {
   const { ids } = req.body || {};
   if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array required' });
   const nums = ids.map((n) => parseInt(n, 10)).filter((n) => Number.isFinite(n));
   if (nums.length === 0) return res.status(400).json({ error: 'no valid ids' });
   const ph = nums.map(() => '?').join(', ');
-  db.run(`DELETE FROM lookup_history WHERE user_id = ? AND id IN (${ph})`, [req.user.id, ...nums], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true, deleted: this.changes });
-  });
+  db.all(`SELECT DISTINCT batch_id FROM lookup_history
+          WHERE user_id = ? AND id IN (${ph}) AND batch_id IS NOT NULL AND batch_id <> ''`,
+    [req.user.id, ...nums], (err, brows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      const batchIds = (brows || []).map((b) => b.batch_id);
+      const bph = batchIds.map(() => '?').join(', ');
+      const batchWhere = batchIds.length ? ` OR batch_id IN (${bph})` : '';
+      db.run(`DELETE FROM lookup_history WHERE user_id = ? AND (id IN (${ph})${batchWhere})`,
+        [req.user.id, ...nums, ...batchIds], function(delErr) {
+          if (delErr) return res.status(500).json({ error: delErr.message });
+          if (batchIds.length) {
+            db.run(`DELETE FROM lookup_batches WHERE user_id = ? AND batch_id IN (${bph})`,
+              [req.user.id, ...batchIds], () => {});
+          }
+          res.json({ success: true, deleted: this.changes });
+        });
+    });
 });
 
 // DELETE /api/lookup-history/:id - delete a single entry (owner only)
 app.delete('/api/lookup-history/:id', requireAuth, (req, res) => {
-  db.run('DELETE FROM lookup_history WHERE user_id = ? AND id = ?', [req.user.id, req.params.id], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true, deleted: this.changes });
-  });
+  db.get('SELECT mode, batch_id FROM lookup_history WHERE user_id = ? AND id = ?',
+    [req.user.id, req.params.id], (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (row && row.mode === 'batch' && row.batch_id) {
+        db.run('DELETE FROM lookup_history WHERE user_id = ? AND batch_id = ?', [req.user.id, row.batch_id], function(delErr) {
+          if (delErr) return res.status(500).json({ error: delErr.message });
+          db.run('DELETE FROM lookup_batches WHERE user_id = ? AND batch_id = ?', [req.user.id, row.batch_id], () => {});
+          res.json({ success: true, deleted: this.changes });
+        });
+        return;
+      }
+      db.run('DELETE FROM lookup_history WHERE user_id = ? AND id = ?', [req.user.id, req.params.id], function(delErr) {
+        if (delErr) return res.status(500).json({ error: delErr.message });
+        res.json({ success: true, deleted: this.changes });
+      });
+    });
 });
 
 // ========================
@@ -252,22 +544,50 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+// IP của admin gọi request — ghi vào ledger để truy vết thao tác tiền.
+function adminIp(req) {
+  const fwd = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return fwd || req.socket?.remoteAddress || '';
+}
+
+/**
+ * Cấp điểm cho user vừa tạo.
+ *
+ * User mới CHỈ nhận điểm thưởng đăng ký (`credit_signup_bonus`). Không nhận điểm
+ * khởi tạo tuỳ ý nữa: số dư chỉ được tăng qua nút "Nạp điểm", và mọi thay đổi
+ * đều có bút toán riêng trong ledger. Nhờ vậy không tồn tại đường nào ghi đè
+ * số dư ngay lúc tạo tài khoản.
+ * @returns {Promise<number>} số dư sau khi cấp bonus
+ */
+async function applyUserInitialCredit(userId, req) {
+  try {
+    await credits.grantSignupBonus(userId, { adminId: req.user ? req.user.id : null });
+    return await credits.getBalance(userId);
+  } catch (e) {
+    console.error('initial credit failed:', e.message);
+    return credits.getBalance(userId).catch(() => 0);
+  }
+}
+
 app.get('/api/users', requireAuth, requireAdmin, (req, res) => {
-  db.all('SELECT id, username, role, status, created_at FROM users ORDER BY created_at DESC', (err, users) => {
+  db.all('SELECT id, username, role, status, created_at, credit_balance FROM users ORDER BY created_at DESC', (err, users) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(users);
+    res.json((users || []).map(u => ({ ...u, credit_balance: Number(u.credit_balance) || 0 })));
   });
 });
 
 app.post('/api/users', requireAuth, requireAdmin, (req, res) => {
+  // Không nhận `credit` từ client: điểm của user mới chỉ đến từ bonus đăng ký.
   const { username, password, role, status } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
   bcrypt.hash(password, 10, (err, hash) => {
     if (err) return res.status(500).json({ error: err.message });
     db.run('INSERT INTO users (username, password, role, status) VALUES (?, ?, ?, ?)',
-      [username, hash, role || 'user', status || 'active'], function(err) {
+      [username, hash, role || 'user', status || 'active'], async function(err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true, id: this.lastID });
+      const userId = this.lastID;
+      const balance = await applyUserInitialCredit(userId, req);
+      res.json({ success: true, id: userId, credit_balance: balance });
     });
   });
 });
@@ -310,6 +630,21 @@ app.delete('/api/users/:id', requireAuth, requireAdmin, (req, res) => {
 // ========================
 // Admin: Cell ID Database
 // ========================
+// GET /api/cells — cell do user hiện tại tải lên (Cells đã tải trong "Dữ liệu của tôi").
+// Trả mảng phẳng (không phân trang) để khớp `loadMyCells()` ở public/app.js.
+app.get('/api/cells', requireAuth, (req, res) => {
+  const limit = Math.min(2000, Math.max(1, parseInt(req.query.limit) || 200));
+  db.all(
+    `SELECT id, mcc, mnc, lac, cellid, lat, lng, range, radio, description, source, created_at
+     FROM cells WHERE user_id = ? ORDER BY id DESC LIMIT ?`,
+    [req.user.id, limit],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    }
+  );
+});
+
 app.get('/api/cells/stats', (req, res) => {
   db.get('SELECT COUNT(*) as count FROM cells', [], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -348,7 +683,7 @@ app.get('/api/cells/search', (req, res) => {
 
 // GET /api/cells/all — tất cả cell có tọa độ (dùng cho layer bản đồ, giới hạn 20000 cell để tránh treo browser)
 app.get('/api/cells/all', (req, res) => {
-  const sql = 'SELECT mcc, mnc, lac, cellid, lat, lng AS lon, range, description FROM cells WHERE lat IS NOT NULL AND lng IS NOT NULL ORDER BY id DESC LIMIT 20000';
+  const sql = 'SELECT mcc, mnc, lac, cellid, lat, lng AS lon, range, radio, description FROM cells WHERE lat IS NOT NULL AND lng IS NOT NULL ORDER BY id DESC LIMIT 20000';
   db.all(sql, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ data: rows, total: rows.length });
@@ -371,26 +706,263 @@ app.post('/api/admin/cells/clear', requireAuth, (req, res) => {
   });
 });
 
+// ============================================================================
+// Admin: quản lý trực tiếp bảng `cells` (tra cứu, sửa, xóa) + lịch sử audit.
+// Mọi thao tác GHI đều vào `cells_audit` để dựng lại được trạng thái cũ.
+// ============================================================================
+const CELL_EDITABLE = ['mcc', 'mnc', 'lac', 'cellid', 'lat', 'lng', 'range', 'radio', 'description', 'source', 'address', 'city'];
+
+// Ghi 1 bản ghi audit (fire-and-forget, không chặn response).
+function writeCellAudit(req, cellId, action, oldRow, newRow, note) {
+  db.run(`INSERT INTO cells_audit (cell_id, action, old_json, new_json, user_id, username, ip, note)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [cellId, action,
+      oldRow ? JSON.stringify(oldRow) : null,
+      newRow ? JSON.stringify(newRow) : null,
+      req.user ? req.user.id : null,
+      req.user ? req.user.username : null,
+      req.ip || null,
+      note || null], () => {});
+}
+
+// GET /api/admin/cells/list — phân trang + lọc toàn diện
+app.get('/api/admin/cells/list', requireAuth, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 50));
+  const offset = (page - 1) * limit;
+  const { q, mcc, mnc, lac, cellid, source, radio, user_id, from_date, to_date } = req.query;
+
+  let where = 'WHERE 1=1';
+  const params = [];
+  if (q) {
+    where += ' AND (cellid LIKE ? OR mcc LIKE ? OR mnc LIKE ? OR lac LIKE ? OR description LIKE ? OR address LIKE ? OR city LIKE ?)';
+    const like = '%' + q + '%';
+    params.push(like, like, like, like, like, like, like);
+  }
+  if (mcc) { where += ' AND mcc = ?'; params.push(mcc); }
+  if (mnc) { where += ' AND mnc = ?'; params.push(mnc); }
+  if (lac) { where += ' AND lac = ?'; params.push(lac); }
+  if (cellid) { where += ' AND cellid = ?'; params.push(cellid); }
+  if (source) { where += ' AND source = ?'; params.push(source); }
+  if (radio) { where += ' AND radio = ?'; params.push(radio); }
+  if (user_id) { where += ' AND user_id = ?'; params.push(parseInt(user_id, 10)); }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(from_date || '')) { where += ' AND date(created_at) >= date(?)'; params.push(from_date); }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(to_date || '')) { where += ' AND date(created_at) <= date(?)'; params.push(to_date); }
+
+  db.get(`SELECT COUNT(*) AS total FROM cells ${where}`, params, (err, cnt) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const total = cnt.total;
+    db.all(`SELECT * FROM cells ${where} ORDER BY id DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset], (err2, rows) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json({ data: rows, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) });
+    });
+  });
+});
+
+// GET /api/admin/cells/meta — giá trị distinct cho dropdown filter
+app.get('/api/admin/cells/meta', requireAuth, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  db.all(`SELECT source, COUNT(*) AS n FROM cells GROUP BY source ORDER BY n DESC`, [], (err, sources) => {
+    if (err) return res.status(500).json({ error: err.message });
+    db.all(`SELECT radio, COUNT(*) AS n FROM cells GROUP BY radio ORDER BY n DESC`, [], (err2, radios) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      db.all(`SELECT u.id, u.username, COUNT(c.id) AS n FROM users u LEFT JOIN cells c ON c.user_id = u.id GROUP BY u.id, u.username ORDER BY n DESC`, [], (err3, users) => {
+        if (err3) return res.status(500).json({ error: err3.message });
+        res.json({ sources: sources || [], radios: radios || [], users: users || [] });
+      });
+    });
+  });
+});
+
+// GET /api/admin/cells/audit — lịch sử sửa/xóa toàn cục
+app.get('/api/admin/cells/audit', requireAuth, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 50));
+  const offset = (page - 1) * limit;
+  const { cell_id, action, username, from_date, to_date } = req.query;
+  let where = 'WHERE 1=1';
+  const params = [];
+  if (cell_id) { where += ' AND cell_id = ?'; params.push(parseInt(cell_id, 10)); }
+  if (action) { where += ' AND action = ?'; params.push(action); }
+  if (username) { where += ' AND username LIKE ?'; params.push('%' + username + '%'); }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(from_date || '')) { where += ' AND date(created_at) >= date(?)'; params.push(from_date); }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(to_date || '')) { where += ' AND date(created_at) <= date(?)'; params.push(to_date); }
+  db.get(`SELECT COUNT(*) AS total FROM cells_audit ${where}`, params, (err, cnt) => {
+    if (err) return res.status(500).json({ error: err.message });
+    db.all(`SELECT * FROM cells_audit ${where} ORDER BY id DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset], (err2, rows) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json({ data: rows, total: cnt.total, page, limit, totalPages: Math.max(1, Math.ceil(cnt.total / limit)) });
+    });
+  });
+});
+
+// GET /api/admin/cells/:id — chi tiết 1 row + lịch sử audit của nó
+app.get('/api/admin/cells/:id', requireAuth, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'id không hợp lệ' });
+  db.get('SELECT * FROM cells WHERE id = ?', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Không tìm thấy cell' });
+    db.all('SELECT * FROM cells_audit WHERE cell_id = ? ORDER BY id DESC LIMIT 50', [id], (err2, audit) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json({ data: row, audit: audit || [] });
+    });
+  });
+});
+
+// PUT /api/admin/cells/:id — sửa toàn bộ trường, validate trước khi ghi
+app.put('/api/admin/cells/:id', requireAuth, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'id không hợp lệ' });
+  const body = req.body || {};
+
+  // Chỉ nhận các trường cho phép sửa; bỏ qua field lạ để tránh mass-assignment.
+  const patch = {};
+  for (const k of CELL_EDITABLE) if (Object.prototype.hasOwnProperty.call(body, k)) patch[k] = body[k];
+
+  db.get('SELECT * FROM cells WHERE id = ?', [id], (err, oldRow) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!oldRow) return res.status(404).json({ error: 'Không tìm thấy cell' });
+
+    // ---- Validate ----
+    const warnings = [];
+    const next = { ...oldRow, ...patch };
+
+    for (const k of ['mcc', 'mnc', 'lac', 'cellid']) {
+      if (patch[k] !== undefined) {
+        const v = String(patch[k] == null ? '' : patch[k]).trim();
+        if (!v) return res.status(400).json({ error: `Trường ${k} không được để trống` });
+        patch[k] = v; next[k] = v;
+      }
+    }
+    if (patch.lat !== undefined || patch.lng !== undefined) {
+      const lat = Number(next.lat), lng = Number(next.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return res.status(400).json({ error: 'lat/lng phải là số hữu hạn' });
+      }
+      if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+        return res.status(400).json({ error: `Toạ độ ngoài phạm vi trái đất (${lat}, ${lng})` });
+      }
+      if (next.mcc === '452' && !isPlausibleLatLng(lat, lng, '452')) {
+        return res.status(400).json({ error: `Toạ độ (${lat}, ${lng}) nằm ngoài khung Việt Nam cho mcc 452` });
+      }
+      if (oldRow.source === 'csv') warnings.push('Row này có source=csv (CSDL gốc) — hãy chắc chắn toạ độ mới đúng.');
+      patch.lat = lat; patch.lng = lng;
+    }
+    if (patch.radio !== undefined) {
+      const r = normalizeRadio(patch.radio);
+      if (patch.radio && !r) {
+        return res.status(400).json({ error: `Radio không hợp lệ: ${patch.radio}. Cho phép: GSM, UMTS, LTE, NR.` });
+      }
+      patch.radio = r || '';
+    }
+    if (patch.range !== undefined) {
+      const rg = patch.range === '' || patch.range == null ? 0 : Number(patch.range);
+      if (!Number.isFinite(rg) || rg < 0) return res.status(400).json({ error: 'range phải là số >= 0' });
+      patch.range = rg;
+    }
+    applyCellUpdate(req, res, id, oldRow, patch, next, warnings, body.note);
+  });
+});
+
+// Thực thi UPDATE sau khi đã validate. Nếu đổi khoá (mcc/mnc/lac/cellid), kiểm
+// tra khoá mới có bị row khác chiếm không (unique index) trước khi ghi.
+function applyCellUpdate(req, res, id, oldRow, patch, next, warnings, note) {
+  const keyChanged = ['mcc', 'mnc', 'lac', 'cellid'].some(k => patch[k] !== undefined && String(patch[k]) !== String(oldRow[k]));
+
+  const doUpdate = () => {
+    const sets = [];
+    const vals = [];
+    for (const k of CELL_EDITABLE) {
+      if (patch[k] !== undefined) { sets.push(`${k} = ?`); vals.push(patch[k]); }
+    }
+    if (sets.length === 0) return res.status(400).json({ error: 'Không có trường nào để cập nhật' });
+    vals.push(id);
+    db.run(`UPDATE cells SET ${sets.join(', ')} WHERE id = ?`, vals, function (e) {
+      if (e) return res.status(500).json({ error: e.message });
+      const changes = this.changes;
+      db.get('SELECT * FROM cells WHERE id = ?', [id], (e2, newRow) => {
+        writeCellAudit(req, id, 'update', oldRow, newRow, note || null);
+        res.json({ success: true, changes, data: newRow, warnings });
+      });
+    });
+  };
+
+  if (!keyChanged) return doUpdate();
+  db.get('SELECT id, mcc, mnc, lac, cellid, lat, lng, source FROM cells WHERE mcc = ? AND mnc = ? AND lac = ? AND cellid = ? AND id <> ?',
+    [next.mcc, next.mnc, next.lac, next.cellid, id], (e, conflict) => {
+      if (e) return res.status(500).json({ error: e.message });
+      if (conflict) return res.status(409).json({
+        error: `Khoá ${next.mcc}-${next.mnc}-${next.lac}-${next.cellid} đã bị row id=${conflict.id} chiếm`,
+        conflict,
+      });
+      doUpdate();
+    });
+}
+
+// DELETE /api/admin/cells/:id — xóa 1 row
+app.delete('/api/admin/cells/:id', requireAuth, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'id không hợp lệ' });
+  db.get('SELECT * FROM cells WHERE id = ?', [id], (err, oldRow) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!oldRow) return res.status(404).json({ error: 'Không tìm thấy cell' });
+    db.run('DELETE FROM cells WHERE id = ?', [id], function (e2) {
+      if (e2) return res.status(500).json({ error: e2.message });
+      writeCellAudit(req, id, 'delete', oldRow, null, (req.body && req.body.note) || null);
+      res.json({ success: true, deleted: this.changes, data: oldRow });
+    });
+  });
+});
+
+// POST /api/admin/cells/bulk-delete — xóa nhiều row, 1 bản ghi audit mỗi row
+app.post('/api/admin/cells/bulk-delete', requireAuth, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids.map(n => parseInt(n, 10)).filter(Number.isFinite) : [];
+  if (ids.length === 0) return res.status(400).json({ error: 'ids array required' });
+  if (ids.length > 1000) return res.status(400).json({ error: 'Tối đa 1000 id mỗi lần' });
+  const ph = ids.map(() => '?').join(',');
+  db.all(`SELECT * FROM cells WHERE id IN (${ph})`, ids, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    db.run(`DELETE FROM cells WHERE id IN (${ph})`, ids, function (e2) {
+      if (e2) return res.status(500).json({ error: e2.message });
+      const note = (req.body && req.body.note) || null;
+      for (const r of rows) writeCellAudit(req, r.id, 'bulk-delete', r, null, note);
+      res.json({ success: true, deleted: this.changes, requested: ids.length });
+    });
+  });
+});
+
 // Cell resolve online — local first (always #1), then online sources by priority ASC
-app.get('/api/cells/resolve', optionalAuth, (req, res) => {
+// Trừ điểm: mỗi request tra cứu RA KẾT QUẢ (local hoặc online) = `credit_cost_per_lookup`
+// điểm. Miss (404) không trừ. Yêu cầu đăng nhập để quy được điểm về user.
+app.get('/api/cells/resolve', requireAuth, (req, res) => {
   const { mcc, mnc, lac, cellid, sector } = req.query;
   if (!mcc || !mnc || !lac || !cellid) return res.status(400).json({ error: 'mcc, mnc, lac, cellid required' });
   const userId = req.user ? req.user.id : null;
-  const logOne = (found, source, lat, lng, range) => logLookups(userId, 'single', null,
-    [{ mcc, mnc, lac, cellid, sector, lat, lng, range, source, found }]);
+  // ref chống trùng theo lần tra: cùng (user, cell, giây) không trừ 2 lần khi retry.
+  const chargeRef = `single:${userId}:${mcc}-${mnc}-${lac}-${cellid}`;
+  const logOne = (found, source, lat, lng, range, radio) => logLookups(userId, 'single', null,
+    [{ mcc, mnc, lac, cellid, sector, lat, lng, range, source, found, radio }]);
   const lookupLocal = () => probeCellRow({ mcc, mnc, lac, cellid, sector });
   lookupLocal().then(async (row) => {
     if (row && row.lat) {
-      logOne(true, 'local', row.lat, row.lng, row.range);
-      return res.json({ source: 'local', data: { ...row, lon: row.lng } });
+      logOne(true, 'local', row.lat, row.lng, row.range, row.radio);
+      const charge = await credits.chargeLookup(userId, 1, chargeRef, 'Tra cứu 1 cell (CSDL nội bộ)');
+      if (!charge.ok) return res.status(402).json({ error: 'Không đủ điểm', balance: charge.balance, required: await credits.getCost(), reason: charge.reason });
+      return res.json({ source: 'local', credit: { balance: charge.balance, charged: charge.skipped ? 0 : 1 }, data: { ...row, lon: row.lng, radio: normalizeRadio(row.radio) || inferRadio(cellid, sector, row.radio) } });
     }
 
-    // Build candidate cellid list (raw first, then ECI form for OpenCellID)
-    const parsed = cellId.parseCellId(cellid);
-    const candidates = [String(cellid)];
-    if (parsed && parsed.isShort && String(parsed.eci) !== String(cellid)) {
-      candidates.push(String(parsed.eci));
-    }
+    // Build candidate cellid list — ECI form first, then raw. The local row (if
+    // any) supplies the RAT so the raw short id is not mistaken for GSM.
+    const candidates = cellId.cellIdCandidates(cellid, sector);
 
     // Online fallback — iterate enabled sources sorted by priority
     const onlineSources = await getEnabledOnlineSources();
@@ -404,17 +976,34 @@ app.get('/api/cells/resolve', optionalAuth, (req, res) => {
             try { data = await resolveOpenCellID({ mcc, mnc, lac, cellid: candidateId }, apiKey); break; }
             catch (e) { /* try next candidate */ }
           }
+        } else if (src.type === 'opencellid_web') {
+          data = await resolveOpenCellIDWeb({ mcc, mnc, lac, cellid, radio: row ? row.radio : '' }, sector);
         } else if (src.type === 't0stbrot') {
-          data = await resolveT0stbrot({ mcc, mnc, lac, cellid });
+          data = await resolveT0stbrot({ mcc, mnc, lac, cellid, sector });
         } else if (src.type === 'combain') {
-          data = await resolveCombain({ mcc, mnc, lac, cellid });
+          data = await resolveCombain({ mcc, mnc, lac, cellid, sector });
         }
         if (data && data.lat != null) {
+          if (!isPlausibleLatLng(data.lat, data.lon, mcc)) {
+            console.warn(`geo gate: bỏ toạ độ không hợp lệ từ ${src.type} (${mcc}-${mnc}-${lac}-${cellid} → ${data.lat},${data.lon})`);
+            continue;
+          }
           const storeCellid = data.cellid || cellid;
-          db.run('INSERT OR REPLACE INTO cells (mcc, mnc, lac, cellid, lat, lng, range, description, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [mcc, mnc, lac, storeCellid, data.lat, data.lon, data.range, data.description || '', src.type], () => {});
-          logOne(true, src.type, data.lat, data.lon, data.range);
-          return res.json({ source: src.type, data });
+          const storeRadio = normalizeRadio(data.radio) || inferRadio(cellid, sector, row ? row.radio : '');
+          const store = await storeOnlineCell({
+            mcc, mnc, lac, cellid: storeCellid,
+            lat: data.lat, lng: data.lon, range: data.range, description: data.description,
+            source: src.type, radio: storeRadio, userId,
+          });
+          if (!store.written && store.reason && store.reason !== 'csv-protected') {
+            console.warn(`store gate: không ghi ${src.type} ${mcc}-${mnc}-${lac}-${cellid} (${store.reason})`);
+          }
+          data.radio = storeRadio;
+          logOne(true, src.type, data.lat, data.lon, data.range, storeRadio);
+          const charge = await credits.chargeLookup(userId, 1, chargeRef,
+            `Tra cứu 1 cell (${ONLINE_SOURCE_DEFAULTS[src.type]?.name || src.type})`);
+          if (!charge.ok) return res.status(402).json({ error: 'Không đủ điểm', balance: charge.balance, required: await credits.getCost(), reason: charge.reason });
+          return res.json({ source: src.type, credit: { balance: charge.balance, charged: charge.skipped ? 0 : 1 }, data });
         }
       } catch (e) { /* fall through to next source */ }
     }
@@ -426,16 +1015,34 @@ app.get('/api/cells/resolve', optionalAuth, (req, res) => {
 
 // Batch resolve for call logs — local first, then online sources by priority
 app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
-  const { cells } = req.body;
+  const { cells, uploadId, fileName } = req.body;
   if (!Array.isArray(cells) || cells.length === 0) return res.status(400).json({ error: 'cells array required' });
 
-  const batchId = require('crypto').randomUUID();
+  // uploadId do client sinh 1 lần cho cả file → mọi vòng resolve của cùng 1 lần
+  // upload gộp về chung 1 nhóm trong lịch sử.
+  const batchId = (typeof uploadId === 'string' && /^[A-Za-z0-9_-]{6,64}$/.test(uploadId))
+    ? uploadId : require('crypto').randomUUID();
   const userId = req.user ? req.user.id : null;
   const onlineSources = await getEnabledOnlineSources();
   const results = [];
   const MAX_ONLINE = parseInt(await getSetting('max_online_resolve', '50'), 10);
   const maxOnline = Number.isFinite(MAX_ONLINE) && MAX_ONLINE > 0 ? MAX_ONLINE : 0;
   let onlineCount = 0;
+  let webCalls = 0;   // số cell đã tra qua nguồn opencellid_web trong lần chạy này
+
+  // Pre-check điểm: nếu không đủ cho ngân sách online của lô này thì chặn NGAY,
+  // tránh đốt quota các nguồn online rồi mới phát hiện user hết điểm.
+  const creditOn = await credits.isEnabled();
+  const creditCost = await credits.getCost();
+  if (creditOn && creditCost > 0) {
+    const bal = await credits.getBalance(userId);
+    if (bal !== null && bal < creditCost) {
+      return res.status(402).json({
+        error: 'Không đủ điểm', balance: bal, required: creditCost,
+        reason: 'insufficient'
+      });
+    }
+  }
 
   // Pre-fetch keys needed for the enabled source types
   const enabledTypes = new Set(onlineSources.map(s => s.type));
@@ -456,20 +1063,20 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
     for (const a of aliases) { if (memo.has(a)) { reused = memo.get(a); break; } }
     if (reused !== null) {
       results.push({ key, ...reused });
-      historyItems.push({ ...c, lat: reused.lat, lng: reused.lon, range: reused.range, source: reused.source, found: !!reused.lat });
+      historyItems.push({ ...c, lat: reused.lat, lng: reused.lon, range: reused.range, source: reused.source, found: !!reused.lat, radio: reused.radio || inferRadio(c.cellid, c.sector, c.radio) });
       continue;
     }
 
     const row = await probeCellRow({ mcc: c.mcc, mnc: c.mnc, lac: c.lac, cellid: c.cellid, sector: c.sector });
     if (row && row.lat) {
-      const r = { source: 'local', lat: row.lat, lon: row.lng, range: row.range, description: row.description };
+      const r = { source: 'local', lat: row.lat, lon: row.lng, range: row.range, radio: normalizeRadio(row.radio), description: row.description };
       for (const a of aliases) memo.set(a, r);
       memo.set(canon, r);
       results.push({ key, ...r });
-      historyItems.push({ ...c, lat: row.lat, lng: row.lng, range: row.range, source: 'local', found: true });
+      historyItems.push({ ...c, lat: row.lat, lng: row.lng, range: row.range, source: 'local', found: true, radio: normalizeRadio(row.radio) || inferRadio(c.cellid, c.sector, c.radio) });
     } else {
       results.push({ key, source: null, lat: null, lon: null, range: null, pending: true });
-      historyItems.push({ ...c, lat: null, lng: null, range: null, source: null, found: false });
+      historyItems.push({ ...c, lat: null, lng: null, range: null, source: null, found: false, radio: inferRadio(c.cellid, c.sector, c.radio) });
     }
   }
 
@@ -486,20 +1093,17 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
     for (const a of aliases) { if (memo.has(a)) { reused = memo.get(a); break; } }
     if (reused !== null) {
       results[i] = { key: r.key, ...reused };
-      historyItems[i] = { ...c, lat: reused.lat, lng: reused.lon, range: reused.range, source: reused.source, found: !!reused.lat };
+      historyItems[i] = { ...c, lat: reused.lat, lng: reused.lon, range: reused.range, source: reused.source, found: !!reused.lat, radio: reused.radio || inferRadio(c.cellid, c.sector, c.radio) };
       continue;
     }
 
     if (onlineCount >= maxOnline) { hasMore = true; continue; }
 
-    const parsedB = cellId.parseCellId(c.cellid);
-    const candidatesB = [String(c.cellid)];
-    if (parsedB && parsedB.isShort && String(parsedB.eci) !== String(c.cellid)) {
-      candidatesB.push(String(parsedB.eci));
-    }
+    const candidatesB = cellId.cellIdCandidates(c.cellid, c.sector);
 
     let saved = null;
     let savedType = null;
+    let wrongGeoType = null;
     for (const src of onlineSources) {
       if (saved) break;
       try {
@@ -510,15 +1114,34 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
             try { data = await resolveOpenCellID({ ...c, cellid: lookupId }, ocidKey); break; }
             catch (e) { /* try next candidate */ }
           }
+        } else if (src.type === 'opencellid_web') {
+          if (webCalls >= OCID_WEB_MAX_PER_BATCH) continue;
+          if (webCalls > 0) await sleep(OCID_WEB_THROTTLE_MS);
+          webCalls++;
+          data = await resolveOpenCellIDWeb({ mcc: c.mcc, mnc: c.mnc, lac: c.lac, cellid: c.cellid, radio: c.radio }, c.sector);
         } else if (src.type === 't0stbrot') {
-          data = await resolveT0stbrot({ mcc: c.mcc, mnc: c.mnc, lac: c.lac, cellid: c.cellid });
+          data = await resolveT0stbrot({ mcc: c.mcc, mnc: c.mnc, lac: c.lac, cellid: c.cellid, sector: c.sector });
         } else if (src.type === 'combain') {
-          data = await resolveCombain({ mcc: c.mcc, mnc: c.mnc, lac: c.lac, cellid: c.cellid });
+          data = await resolveCombain({ mcc: c.mcc, mnc: c.mnc, lac: c.lac, cellid: c.cellid, sector: c.sector });
+        }
+        if (data && data.lat != null) {
+          // Geo gate: nguồn trả về toạ độ ngoài khung nước của MCC → coi như miss và
+          // thử nguồn kế tiếp, KHÔNG ghi toạ độ rác vào bảng nội bộ.
+          if (!isPlausibleLatLng(data.lat, data.lon, c.mcc)) {
+            wrongGeoType = src.type;
+            console.warn(`geo gate: bỏ toạ độ không hợp lệ từ ${src.type} (${c.mcc}-${c.mnc}-${c.lac}-${c.cellid} → ${data.lat},${data.lon})`);
+            data = null;
+          }
         }
         if (data && data.lat != null) {
           const storeCellid = data.cellid || c.cellid;
-          db.run('INSERT OR REPLACE INTO cells (mcc, mnc, lac, cellid, lat, lng, range, description, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [c.mcc, c.mnc, c.lac, storeCellid, data.lat, data.lon, data.range, data.description || '', src.type], () => {});
+          const storeRadio = normalizeRadio(data.radio) || inferRadio(c.cellid, c.sector, c.radio);
+          await storeOnlineCell({
+            mcc: c.mcc, mnc: c.mnc, lac: c.lac, cellid: storeCellid,
+            lat: data.lat, lng: data.lon, range: data.range, description: data.description,
+            source: src.type, radio: storeRadio, userId,
+          });
+          data.radio = storeRadio;
           saved = data;
           savedType = src.type;
         }
@@ -527,24 +1150,44 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
 
     if (saved) {
       onlineCount++;
-      const r2 = { source: savedType, lat: saved.lat, lon: saved.lon, range: saved.range, description: saved.description };
+      const r2 = { source: savedType, lat: saved.lat, lon: saved.lon, range: saved.range, radio: normalizeRadio(saved.radio), description: saved.description };
       for (const a of aliases) memo.set(a, r2);
       memo.set(canon, r2);
       results[i] = { key: r.key, ...r2 };
-      historyItems[i] = { ...c, lat: saved.lat, lng: saved.lon, range: saved.range, source: savedType, found: true };
+      historyItems[i] = { ...c, lat: saved.lat, lng: saved.lon, range: saved.range, source: savedType, found: true, radio: normalizeRadio(saved.radio) || inferRadio(c.cellid, c.sector, c.radio) };
     } else {
+      // Chỉ cache "miss" khi thật sự đã hỏi hết nguồn. Nếu vượt ngân sách online thì
+      // để nguyên pending cho vòng resolve kế tiếp.
+      if (onlineCount >= maxOnline) { hasMore = true; continue; }
       const miss = { source: null, lat: null, lon: null, range: null };
       for (const a of aliases) memo.set(a, miss);
       memo.set(canon, miss);
-      results[i] = { key: r.key, source: null, lat: null, lon: null, range: null };
-      historyItems[i] = { ...c, lat: null, lng: null, range: null, source: null, found: false };
+      results[i] = { key: r.key, source: null, lat: null, lon: null, range: null, rejected: wrongGeoType ? 'geo-out-of-bounds' : undefined };
+      historyItems[i] = { ...c, lat: null, lng: null, range: null, source: null, found: false, radio: inferRadio(c.cellid, c.sector, c.radio) };
     }
   }
 
   for (const r of results) delete r.pending;
 
-  logLookups(userId, 'batch', batchId, historyItems);
-  res.json({ results, onlineLookups: onlineCount, batchId, hasMore, pending: hasMore });
+  logLookups(userId, 'batch', batchId, historyItems, fileName);
+
+  // Trừ điểm theo SỐ LẦN TRA RA KẾT QUẢ (không tính miss), 1 bút toán cho cả lô.
+  // `ref = batchId` → retry cùng uploadId không bị trừ 2 lần.
+  const foundCount = historyItems.filter(h => h.found).length;
+  let creditInfo = null;
+  if (creditOn && creditCost > 0 && foundCount > 0) {
+    try {
+      const charge = await credits.chargeLookup(userId, foundCount, batchId,
+        `Tra cứu lô ${foundCount} cell (${fileName || 'upload'})`);
+      creditInfo = { balance: charge.balance, charged: charge.ok ? foundCount : 0, cost: creditCost, insufficient: !charge.ok };
+    } catch (e) {
+      console.error('batch charge failed:', e.message);
+    }
+  } else if (creditOn && creditCost > 0) {
+    creditInfo = { balance: await credits.getBalance(userId), charged: 0, cost: creditCost };
+  }
+
+  res.json({ results, onlineLookups: onlineCount, batchId, hasMore, pending: hasMore, credit: creditInfo });
 });
 
 // Canonical lookup key: collapse short-cellid / ECI aliases that point to the same
@@ -588,17 +1231,26 @@ async function getOpenCellIDKey() {
 // Online lookup sources that the admin can toggle on/off. Each maps to a
 // data_sources row (by type); a source runs only while its row is enabled.
 // OpenCellID additionally needs a key; t0stbrot needs none.
-const ONLINE_SOURCE_TYPES = ['opencellid', 't0stbrot', 'combain'];
-const ONLINE_SOURCE_DEFAULTS = { opencellid: { name: 'OpenCellID.org', priority: 10 }, t0stbrot: { name: 't0stbrot.net', priority: 20 }, combain: { name: 'Combain.com', priority: 30 } };
+// opencellid_web dùng endpoint web nội bộ (không key) → seed ở trạng thái TẮT.
+const ONLINE_SOURCE_TYPES = ['opencellid', 'opencellid_web', 't0stbrot', 'combain'];
+const ONLINE_SOURCE_DEFAULTS = {
+  opencellid: { name: 'OpenCellID.org', priority: 10 },
+  opencellid_web: { name: 'OpenCellID.org (web)', priority: 15 },
+  t0stbrot: { name: 't0stbrot.net', priority: 20 },
+  combain: { name: 'Combain.com', priority: 30 }
+};
+// Nguồn seed sẵn nhưng mặc định tắt (admin phải tự bật) do rate limit chặt.
+const ONLINE_SOURCE_DEFAULT_DISABLED = ['opencellid_web'];
 
 // Seed the built-in online sources once, so admins see them in the UI.
 function seedOnlineSources() {
   for (const type of ONLINE_SOURCE_TYPES) {
     const def = ONLINE_SOURCE_DEFAULTS[type];
+    const enabled = ONLINE_SOURCE_DEFAULT_DISABLED.includes(type) ? 0 : 1;
     db.get('SELECT id FROM data_sources WHERE type = ? LIMIT 1', [type], (err, row) => {
       if (err || row) return;
-      db.run('INSERT INTO data_sources (name, type, base_url, api_key, enabled, priority) VALUES (?, ?, ?, ?, 1, ?)',
-        [def.name, type, '', '', def.priority], () => {});
+      db.run('INSERT INTO data_sources (name, type, base_url, api_key, enabled, priority) VALUES (?, ?, ?, ?, ?, ?)',
+        [def.name, type, '', '', enabled, def.priority], () => {});
     });
   }
   // Backfill priority for existing rows still at default 100
@@ -635,21 +1287,14 @@ async function resolveOpenCellID({ mcc, mnc, lac, cellid }, apiKey) {
   const resp = await axios.get(url, { timeout: 15000 });
   const d = resp.data;
   if (!d || !d.lat) throw new Error('Cell not found in OpenCellID');
-  return { mcc, mnc, lac, cellid, lat: d.lat, lon: d.lon, range: d.range || 1000, description: d.address || `OpenCellID ${mcc}-${mnc}` };
+  return { mcc, mnc, lac, cellid, lat: d.lat, lon: d.lon, range: d.range || 1000, radio: normalizeRadio(d.radio), description: d.address || `OpenCellID ${mcc}-${mnc}` };
 }
 
 // t0stbrot.net — free LTE cell lookup (3GPP ECI -> lat/lon). No API key.
 // Docs: https://docs.t0stbrot.net/cells/info — GET /api/public/cells/info/lte?mcc&mnc&cid
 // The endpoint indexes by ECI (Cell ID), so try the ECI form first, then raw.
-async function resolveT0stbrot({ mcc, mnc, lac, cellid }) {
-  const parsed = cellId.parseCellId(cellid);
-  const cids = [];
-  if (parsed) {
-    cids.push(String(parsed.eci));                 // short -> ECI, long -> itself
-    if (String(parsed.eci) !== String(cellid)) cids.push(String(cellid)); // raw fallback
-  } else {
-    cids.push(String(cellid));
-  }
+async function resolveT0stbrot({ mcc, mnc, lac, cellid, sector }) {
+  const cids = cellId.cellIdCandidates(cellid, sector);
   let lastErr = null;
   for (const cid of cids) {
     try {
@@ -662,6 +1307,7 @@ async function resolveT0stbrot({ mcc, mnc, lac, cellid }) {
           mcc, mnc, lac, cellid: cid,
           lat: parseFloat(d.tower.lat), lon: parseFloat(d.tower.lon),
           range: 1000,
+          radio: 'LTE',
           description: `t0stbrot LTE ${mcc}-${mnc}${cell ? ' c' + cell : ''}`
         };
       }
@@ -689,16 +1335,16 @@ async function getCombainKey() {
 // Docs: https://portal.combain.com/api/ — POST https://apiv2.combain.com?key=KEY
 // Body: { radioType, cellTowers: [{ mobileCountryCode, mobileNetworkCode, locationAreaCode, cellId }] }
 // Response: { location: { lat, lng }, ... }. Errors: 400 invalid key, 403 out of credits, 404 not found.
-async function resolveCombain({ mcc, mnc, lac, cellid }, apiKey) {
+async function resolveCombain({ mcc, mnc, lac, cellid, sector }, apiKey) {
   const key = apiKey || await getCombainKey();
   if (!key) throw new Error('Combain API key chưa cấu hình');
 
-  // Auto-detect radio type from the cell id: a parseable LTE shape (eNB/ECI)
-  // maps to 'lte', otherwise fall back to 'gsm'. Send the ECI form so Combain
-  // receives the full LTE cell identity.
-  const parsed = cellId.parseCellId(cellid);
-  const radioType = parsed ? 'lte' : 'gsm';
-  const sendCellId = parsed ? parsed.eci : parseInt(cellid, 10);
+  // RAT lấy từ sector (nếu có) — KHÔNG suy từ độ dài cell id, vì id ngắn vừa có
+  // thể là GSM Cell ID vừa có thể là LTE eNB ID. Không xác định được thì để Combain
+  // tự dò ('gsm' chỉ là gợi ý cuối cùng).
+  const radioHint = (sector !== undefined && sector !== null && String(sector).trim() !== '') ? 'LTE' : '';
+  const radioType = (radioHint || inferRadio(cellid, sector)) === 'LTE' ? 'lte' : 'gsm';
+  const sendCellId = parseInt(cellId.cellIdCandidates(cellid, sector)[0], 10);
 
   const body = {
     radioType,
@@ -727,8 +1373,71 @@ async function resolveCombain({ mcc, mnc, lac, cellid }, apiKey) {
     mcc, mnc, lac, cellid,
     lat: parseFloat(loc.lat), lon: parseFloat(loc.lng),
     range: 1000,
+    radio: radioType === 'lte' ? 'LTE' : 'GSM',
     description: `Combain ${radioType} ${mcc}-${mnc}`
   };
+}
+
+// ---- OpenCellID.org via web map endpoints (không cần API key) ----
+// Map viewer /js/map.js gọi /ajax/searchCell.php + /ajax/getCells.php — endpoint
+// nội bộ của frontend, KHÔNG chính thức, có thể đổi bất cứ lúc nào. Fail-soft:
+// lỗi thì ném ra để chuỗi nguồn chuyển sang nguồn kế tiếp.
+const OCID_WEB_BASE = 'https://opencellid.org';
+const OCID_WEB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+// Mã radio của form web: '' = Any, 1 GSM, 2 CDMA, 3 UMTS, 4 LTE, 5 NR, 10 NB-IoT.
+const OCID_WEB_RADIO = { GSM: '1', CDMA: '2', UMTS: '3', LTE: '4', NR: '5', NBIOT: '10' };
+// Rate limit tính theo IP (không theo key) → cooldown toàn cục, không retry storm.
+const OCID_WEB_COOLDOWN_MS = 90000;
+// Giới hạn số cell tra qua nguồn web cho mỗi lần resolve-batch (memo/budget riêng).
+const OCID_WEB_MAX_PER_BATCH = 20;
+const OCID_WEB_THROTTLE_MS = 1200;
+let ocidWebBlockedUntil = 0;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function resolveOpenCellIDWeb({ mcc, mnc, lac, cellid, radio }, sectorHint) {
+  if (Date.now() < ocidWebBlockedUntil) throw new Error('OpenCellID web: tạm nghỉ do rate limit');
+
+  const radioLabel = normalizeRadio(radio) || inferRadio(cellid, sectorHint, radio);
+  const radioCode = OCID_WEB_RADIO[radioLabel] || '';
+
+  // ECI trước, raw sau — endpoint LTE index theo ECI; raw (eNB ID thiếu sector)
+  // gửi trước sẽ trúng cell khác hoặc miss.
+  const ids = cellId.cellIdCandidates(cellid, sectorHint);
+
+  let lastErr = null;
+  for (const id of ids) {
+    const qs = new URLSearchParams({ mcc: String(mcc), mnc: String(mnc), lac: String(lac), cell_id: id, radio: radioCode }).toString();
+    const resp = await axios.get(`${OCID_WEB_BASE}/ajax/searchCell.php?${qs}`, {
+      timeout: 15000,
+      headers: {
+        'User-Agent': OCID_WEB_UA,
+        'Referer': OCID_WEB_BASE + '/',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      validateStatus: () => true
+    });
+    const d = resp.data;
+    if (resp.status === 429 || d === 'Too many requests' || (d && d.message === 'Too many requests')) {
+      ocidWebBlockedUntil = Date.now() + OCID_WEB_COOLDOWN_MS;
+      throw new Error('OpenCellID web: quá nhiều request, tạm nghỉ 90s');
+    }
+    if (resp.status !== 200) { lastErr = new Error('OpenCellID web HTTP ' + resp.status); continue; }
+    if (!d || d === false || d.lat == null || d.lon == null || !isFinite(Number(d.lat)) || !isFinite(Number(d.lon))) {
+      lastErr = new Error('Cell không có trong OpenCellID web'); continue;
+    }
+    const lat = parseFloat(d.lat);
+    const lon = parseFloat(d.lon);
+    if (!isPlausibleLatLng(lat, lon, mcc)) { lastErr = new Error('OpenCellID web: toạ độ ngoài khung nước của MCC'); continue; }
+    return {
+      mcc, mnc, lac, cellid: id,
+      lat, lon,
+      range: parseInt(d.range, 10) || 1000,
+      radio: radioLabel,
+      description: `OpenCellID web ${mcc}-${mnc}`
+    };
+  }
+  throw lastErr || new Error('Cell không có trong OpenCellID web');
 }
 
 // Batch fetch from OpenCellID (uses configured token)
@@ -743,11 +1452,12 @@ app.post('/api/cells/fetch-batch', requireAuth, async (req, res) => {
         const url = `https://opencellid.org/cell/get?key=${key}&mcc=${c.mcc}&mnc=${c.mnc}&lac=${c.lac}&cellid=${c.cellid}&format=json`;
         const resp = await axios.get(url, { timeout: 15000 });
         const d = resp.data;
-        if (d && d.lat) {
-          db.run('UPDATE cells SET lat = ?, lng = ?, range = ?, source = ? WHERE mcc = ? AND mnc = ? AND lac = ? AND cellid = ?',
-            [d.lat, d.lon, d.range || 1000, 'opencellid', c.mcc, c.mnc, c.lac, c.cellid], () => {});
-          db.run('INSERT OR IGNORE INTO cells (mcc, mnc, lac, cellid, lat, lng, range, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [c.mcc, c.mnc, c.lac, c.cellid, d.lat, d.lon, d.range || 1000, 'opencellid'], () => {});
+        if (d && d.lat && isPlausibleLatLng(parseFloat(d.lat), parseFloat(d.lon), c.mcc)) {
+          const r = normalizeRadio(d.radio) || inferRadio(c.cellid, c.sector, c.radio);
+          db.run('UPDATE cells SET lat = ?, lng = ?, range = ?, source = ?, radio = ? WHERE mcc = ? AND mnc = ? AND lac = ? AND cellid = ?',
+            [d.lat, d.lon, d.range || 1000, 'opencellid', r, c.mcc, c.mnc, c.lac, c.cellid], () => {});
+          db.run('INSERT OR IGNORE INTO cells (mcc, mnc, lac, cellid, lat, lng, range, source, radio) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [c.mcc, c.mnc, c.lac, c.cellid, d.lat, d.lon, d.range || 1000, 'opencellid', r], () => {});
           found++;
         } else {
           notFound++;
@@ -799,13 +1509,14 @@ app.post('/api/upload/cells/chunk', requireAuth, requireAdmin, (req, res) => {
     const lat = parseFloat(row.lat);
     const lon = parseFloat(row.lon !== undefined ? row.lon : row.lng);
     const range = parseInt(row.range) || 1000;
+    const radio = normalizeRadio(row.radio || row.Radio || row.RADIO || row.act || row.ACT) || inferRadio(cellid, row.sector || row.SECTOR, row.radio || row.act);
 
     if (mcc === '' || mnc === '' || lac === '' || cellid === '' || isNaN(lat) || isNaN(lon)) {
       session.errors++;
       errorsDetail.push({ row: idx + 1, error: 'Missing/invalid fields' });
       return;
     }
-    valid.push([mcc, mnc, lac, cellid, lat, lon, range, 'csv']);
+    valid.push([mcc, mnc, lac, cellid, lat, lon, range, 'csv', radio]);
   });
 
   if (valid.length === 0) {
@@ -822,10 +1533,10 @@ app.post('/api/upload/cells/chunk', requireAuth, requireAdmin, (req, res) => {
     if (slice.length === 0) {
       return res.json({ totalInserted: session.inserted, totalSkipped: session.skipped, totalErrors: session.errors, errorsDetail: errorsDetail.slice(-20) });
     }
-    const placeholders = slice.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+    const placeholders = slice.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
     const flat = [];
     slice.forEach(v => flat.push(...v));
-    db.run(`INSERT OR IGNORE INTO cells (mcc, mnc, lac, cellid, lat, lng, range, source) VALUES ${placeholders}`, flat, function(err) {
+    db.run(`INSERT OR IGNORE INTO cells (mcc, mnc, lac, cellid, lat, lng, range, source, radio) VALUES ${placeholders}`, flat, function(err) {
       if (err) {
         session.errors += slice.length;
         errorsDetail.push({ row: i - slice.length, error: err.message });
@@ -955,7 +1666,7 @@ function attachCellCoords(rows) {
     // Load all cells for the LACs involved (bounded set) in one indexed query.
     const lacList = [...lacs];
     const ph = lacList.map(() => '?').join(', ');
-    db.all(`SELECT mcc, mnc, lac, cellid, lat, lng, range FROM cells WHERE lac IN (${ph}) AND lat IS NOT NULL`, lacList, (err, cellRows) => {
+    db.all(`SELECT mcc, mnc, lac, cellid, lat, lng, range, radio FROM cells WHERE lac IN (${ph}) AND lat IS NOT NULL`, lacList, (err, cellRows) => {
       if (err) { rows.forEach((r) => { r.lat = null; r.lon = null; r.cell_range = null; }); return resolve(rows); }
       // Index by normalized mcc|lac|cellid, ignoring MNC padding differences.
       const idx = new Map();
@@ -968,7 +1679,7 @@ function attachCellCoords(rows) {
         const idKeys = cellId.cellIdLookupKeys(r.cellid, r.sector);
         for (const id of idKeys) {
           const c = idx.get(`${r.mcc}|${String(r.lac)}|${id}`);
-          if (c && c.lat != null) { r.lat = c.lat; r.lon = c.lng; r.cell_range = c.range; break; }
+          if (c && c.lat != null) { r.lat = c.lat; r.lon = c.lng; r.cell_range = c.range; r.radio = c.radio || ''; break; }
         }
       }
       resolve(rows);
@@ -997,10 +1708,10 @@ app.post('/api/upload/cells', requireAuth, upload.single('file'), (req, res) => 
   const flushBatch = (batch, cb) => {
     if (batch.length === 0) return cb();
     // INSERT OR IGNORE on unique (mcc,mnc,lac,cellid): changes = actually inserted, ignored = duplicate (skipped)
-    const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+    const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
     const flat = [];
-    for (const r of batch) flat.push(r.mcc, r.mnc, r.lac, r.cellid, r.lat, r.lng, r.range, r.address, r.city, r.source);
-    db.run(`INSERT OR IGNORE INTO cells (mcc, mnc, lac, cellid, lat, lng, range, address, city, source) VALUES ${placeholders}`, flat, function (err) {
+    for (const r of batch) flat.push(r.mcc, r.mnc, r.lac, r.cellid, r.lat, r.lng, r.range, r.address, r.city, r.source, r.radio);
+    db.run(`INSERT OR IGNORE INTO cells (mcc, mnc, lac, cellid, lat, lng, range, address, city, source, radio) VALUES ${placeholders}`, flat, function (err) {
       if (err) { failed += batch.length; errors.push('Batch error: ' + err.message); }
       else { inserted += this.changes; skipped += batch.length - this.changes; }
       cb();
@@ -1029,7 +1740,7 @@ app.post('/api/upload/cells', requireAuth, upload.single('file'), (req, res) => 
         const cellid = String(row.cellid || row.cell_id || row.CELLID || row.CELL_ID || row.cell || row.CELL || '').trim();
         const lat = parseFloat(row.lat || row.latitude || row.LAT || row.LATITUDE);
         const lng = parseFloat(row.lng || row.longitude || row.LNG || row.LONGITUDE || row.lon || row.LON);
-        if (!mcc || !mnc || !lac || !cellid || isNaN(lat) || isNaN(lng)) {
+        if (!mcc || !mnc || !lac || !cellid || isNaN(lat) || isNaN(lng) || !isPlausibleLatLng(lat, lng, mcc)) {
           failed++; errors.push(`Row ${total}: Missing/invalid fields`);
           return;
         }
@@ -1038,7 +1749,8 @@ app.post('/api/upload/cells', requireAuth, upload.single('file'), (req, res) => 
           range: parseInt(row.range || row.RANGE) || 0,
           address: row.address || row.Address || row.address_en || '',
           city: row.city || row.City || '',
-          source: row.source || row.Source || 'csv'
+          source: row.source || row.Source || 'csv',
+          radio: normalizeRadio(row.radio || row.Radio || row.RADIO || row.act || row.ACT) || inferRadio(cellid, row.sector || row.SECTOR, row.radio || row.act)
         });
         if (csvRows.length >= 500) {
           parser.pause();
@@ -1116,7 +1828,7 @@ app.post('/api/upload/cells', requireAuth, upload.single('file'), (req, res) => 
         const cellid = String(row.cellid || row.cell_id || row.CELLID || row.CELL_ID || row.cell || row.CELL || '').trim();
         const lat = parseFloat(row.lat || row.latitude || row.LAT || row.LATITUDE);
         const lng = parseFloat(row.lng || row.longitude || row.LNG || row.LONGITUDE || row.lon || row.LON);
-        if (!mcc || !mnc || !lac || !cellid || isNaN(lat) || isNaN(lng)) {
+        if (!mcc || !mnc || !lac || !cellid || isNaN(lat) || isNaN(lng) || !isPlausibleLatLng(lat, lng, mcc)) {
           failed++; errors.push(`Row ${total}: Missing/invalid fields`);
           return null;
         }
@@ -1125,7 +1837,8 @@ app.post('/api/upload/cells', requireAuth, upload.single('file'), (req, res) => 
           range: parseInt(row.range || row.RANGE) || 0,
           address: row.address || row.Address || row.address_en || '',
           city: row.city || row.City || '',
-          source: row.source || row.Source || 'csv'
+          source: row.source || row.Source || 'csv',
+          radio: normalizeRadio(row.radio || row.Radio || row.RADIO || row.act || row.ACT) || inferRadio(cellid, row.sector || row.SECTOR, row.radio || row.act)
         };
       }).filter(Boolean);
       const flushAll = (idx = 0) => {
@@ -1314,22 +2027,25 @@ app.post('/api/upload/vinaphone', requireAuth, vinaphoneUpload.single('file'), (
 // User management (admin)
 app.get('/api/admin/users', requireAuth, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-  db.all('SELECT id, username, role, created_at FROM users ORDER BY created_at DESC', (err, users) => {
+  db.all('SELECT id, username, role, created_at, credit_balance FROM users ORDER BY created_at DESC', (err, users) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(users);
+    res.json((users || []).map(u => ({ ...u, credit_balance: Number(u.credit_balance) || 0 })));
   });
 });
 
 app.post('/api/admin/users', requireAuth, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  // Không nhận `credit`: điểm user mới chỉ đến từ bonus đăng ký.
   const { username, password, role } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
   bcrypt.hash(password, 10, (err, hash) => {
     if (err) return res.status(500).json({ error: err.message });
     db.run('INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
-      [username, hash, role || 'user'], function(err) {
+      [username, hash, role || 'user'], async function(err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true, id: this.lastID });
+      const userId = this.lastID;
+      const balance = await applyUserInitialCredit(userId, req);
+      res.json({ success: true, id: userId, credit_balance: balance });
     });
   });
 });
@@ -1397,13 +2113,21 @@ app.get('/api/admin/logs', requireAuth, (req, res) => {
 // ========================
 // SETTINGS (admin)
 // ========================
-const SETTING_KEYS = ['max_online_resolve', 'lookup_history_retention_days'];
+const SETTING_KEYS = ['max_online_resolve', 'lookup_history_retention_days',
+  'credit_enabled', 'credit_cost_per_lookup', 'credit_signup_bonus', 'credit_allow_negative'];
+
+// Toggle nhị phân + kiểu số cho từng setting.
+const BOOL_SETTING_KEYS = new Set(['credit_enabled', 'credit_allow_negative']);
+const SETTING_DEFAULTS = {
+  max_online_resolve: '50', lookup_history_retention_days: '90',
+  credit_enabled: '0', credit_cost_per_lookup: '1', credit_signup_bonus: '5', credit_allow_negative: '0'
+};
 
 // GET /api/settings
 app.get('/api/settings', requireAuth, requireAdmin, async (req, res) => {
   try {
     const out = {};
-    for (const k of SETTING_KEYS) out[k] = await getSetting(k, k === 'max_online_resolve' ? '50' : '90');
+    for (const k of SETTING_KEYS) out[k] = await getSetting(k, SETTING_DEFAULTS[k]);
     res.json(out);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1415,15 +2139,37 @@ app.put('/api/settings', requireAuth, requireAdmin, async (req, res) => {
   try {
     const body = req.body || {};
     const patch = body.settings && typeof body.settings === 'object' ? body.settings : body;
+
+    // Bước 1: validate TOÀN BỘ trước khi ghi. Trước đây ghi ngay trong vòng lặp
+    // nên 1 key lỗi ở giữa làm các key trước đó đã ghi (nửa vời) mà response lại
+    // là 400 → UI báo lỗi và hiển thị sai trạng thái thật trong DB.
+    const updates = [];
     for (const k of SETTING_KEYS) {
-      if (patch[k] !== undefined) {
-        const v = String(patch[k]).trim();
-        if (v === '' || !Number.isFinite(Number(v)) || Number(v) < 0) {
-          return res.status(400).json({ error: `Giá trị không hợp lệ cho ${k}` });
-        }
-        await setSetting(k, v);
+      if (patch[k] === undefined) continue;
+      let v = String(patch[k]).trim();
+      if (BOOL_SETTING_KEYS.has(k)) {
+        // Chấp nhận 1/0, true/false, on/off → chuẩn hoá về '1'/'0'.
+        const lower = v.toLowerCase();
+        if (['1', 'true', 'on', 'yes'].includes(lower)) v = '1';
+        else if (['0', 'false', 'off', 'no', ''].includes(lower)) v = '0';
+        else return res.status(400).json({ error: `Giá trị không hợp lệ cho ${k}` });
+        updates.push([k, v]);
+        continue;
       }
+      // Ô trống = không thay đổi (form luôn gửi mọi field, ô bỏ trống không phải
+      // là ý định "đặt về 0" — nếu coi là lỗi thì cả form không lưu được).
+      if (v === '') continue;
+      if (!Number.isFinite(Number(v)) || Number(v) < 0) {
+        return res.status(400).json({ error: `Giá trị không hợp lệ cho ${k}` });
+      }
+      // Chặn giá trị vô lý đẩy số dư/giá lên vô cực.
+      if (Number(v) > 1e7) return res.status(400).json({ error: `Giá trị quá lớn cho ${k}` });
+      updates.push([k, v]);
     }
+
+    // Bước 2: mọi giá trị đã hợp lệ → ghi hết.
+    for (const [k, v] of updates) await setSetting(k, v);
+
     const out = {};
     for (const k of SETTING_KEYS) out[k] = await getSetting(k, null);
     res.json({ success: true, settings: out });
@@ -1704,7 +2450,7 @@ function buildOgHtml(tracker, baseUrl) {
   <meta property="og:image" content="${escapeHtml(ogImage)}">
   <meta property="og:url" content="${escapeHtml(ogUrl)}">
   <meta property="og:type" content="${type === 'url' ? 'article' : 'website'}">
-  <meta property="og:site_name" content="cell-tracker">
+  <meta property="og:site_name" content="Cell.id.vn">
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${escapeHtml(ogTitle)}">

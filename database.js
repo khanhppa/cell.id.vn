@@ -43,9 +43,68 @@ db.serialize(() => {
     source TEXT,
     found INTEGER DEFAULT 0,
     batch_id TEXT,
+    radio TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   )`);
+  // RAT (GSM/CDMA/UMTS/LTE/NR/NB-IoT) cho từng lần tra — dùng để tô màu + chữ cái
+  // giữa marker trên bản đồ. Nguồn: CSV/CLF upload, OpenCellID API, hoặc suy luận.
+  db.run(`ALTER TABLE lookup_history ADD COLUMN radio TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column')) console.error('lookup_history.radio column:', err.message);
+  });
+  // Một lần upload file tra cứu = 1 nhóm batch. Giữ metadata (tên file, số cell)
+  // để lịch sử hiển thị 1 dòng cho mỗi lần upload thay vì lặp N dòng.
+  db.run(`CREATE TABLE IF NOT EXISTS lookup_batches (
+    batch_id TEXT PRIMARY KEY,
+    user_id INTEGER,
+    file_name TEXT,
+    mode TEXT DEFAULT 'batch',
+    cell_count INTEGER DEFAULT 0,
+    found_count INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  // ==========================================================================
+  // Credit system — mỗi lần tra cứu THÀNH CÔNG trừ `credit_cost_per_lookup`.
+  // Số dư nằm ở users.credit_balance (cache); `credit_transactions` là ledger
+  // append-only, luôn thoả: SUM(amount) == users.credit_balance (đối soát được).
+  // KHÔNG bao giờ UPDATE/DELETE row trong credit_transactions — sai thì ghi
+  // bút toán đảo (type='correction') để giữ nguyên vết.
+  // ==========================================================================
+  db.run(`ALTER TABLE users ADD COLUMN credit_balance REAL NOT NULL DEFAULT 0`, (err) => {
+    if (err && !err.message.includes('duplicate column')) console.error('users.credit_balance column:', err.message);
+  });
+
+  db.run(`CREATE TABLE IF NOT EXISTS credit_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    amount REAL NOT NULL,
+    balance_after REAL NOT NULL,
+    type TEXT NOT NULL,
+    ref TEXT,
+    note TEXT,
+    admin_id INTEGER,
+    admin_ip TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`);
+  // Chống ghi trùng bút toán khi client retry (cùng user + type + ref chỉ 1 row).
+  // Partial index: các bút toán không có ref vẫn được ghi nhiều lần.
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_tx_idem
+    ON credit_transactions(user_id, type, ref) WHERE ref IS NOT NULL`);
+
+  // User-drawn map annotations (polygon / rectangle / marker / distance polyline).
+  db.run(`CREATE TABLE IF NOT EXISTS annotations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    type TEXT,
+    label TEXT,
+    geojson TEXT,
+    distance REAL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`);
+
+
 
   db.run(`CREATE TABLE IF NOT EXISTS cells (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,6 +122,11 @@ db.serialize(() => {
     user_id INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+  // RAT của cell (GSM/CDMA/UMTS/LTE/NR/NB-IoT). Có trong OpenCellID CSV (`radio`) và
+  // trong response API OpenCellID; trước đây bị bỏ khi lưu vào `cells`.
+  db.run(`ALTER TABLE cells ADD COLUMN radio TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column')) console.error('cells.radio column:', err.message);
+  });
 
   db.run(`CREATE TABLE IF NOT EXISTS data_sources (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -227,10 +291,34 @@ db.serialize(() => {
   db.run(`CREATE INDEX IF NOT EXISTS idx_ip_tracker_logs_tracker ON ip_tracker_logs(tracker_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_lookup_history_user ON lookup_history(user_id, created_at DESC)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_lookup_history_batch ON lookup_history(batch_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_lookup_batches_user ON lookup_batches(user_id, created_at DESC)`);
+  // Backfill metadata cho các batch đã ghi trước khi có bảng lookup_batches
+  // (idempotent nhờ INSERT OR IGNORE — chạy lại mỗi lần khởi động vẫn an toàn).
+  db.run(`INSERT OR IGNORE INTO lookup_batches
+      (batch_id, user_id, file_name, mode, cell_count, found_count, created_at)
+    SELECT batch_id, user_id, NULL, 'batch', COUNT(*), SUM(found), MIN(created_at)
+    FROM lookup_history
+    WHERE mode = 'batch' AND batch_id IS NOT NULL AND batch_id <> ''
+    GROUP BY batch_id, user_id`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_annotations_user ON annotations(user_id, created_at DESC)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_credit_tx_user ON credit_transactions(user_id, created_at DESC)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_credit_tx_type ON credit_transactions(type, created_at DESC)`);
+
+
 
   // Seed default settings (only when missing — never overwrite admin changes).
   db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('max_online_resolve', '50')`);
   db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('lookup_history_retention_days', '90')`);
+
+  // Credit system settings. `credit_enabled` mặc định TẮT (0) để không khoá
+  // toàn bộ user hiện có (ai cũng 0 điểm) ngay khi deploy — admin bật sau khi
+  // đã nạp điểm. `credit_signup_bonus` = điểm tặng khi tạo tài khoản.
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('credit_enabled', '0')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('credit_cost_per_lookup', '1')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('credit_signup_bonus', '5')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('credit_allow_negative', '0')`);
+  // Mọi user tạo trước khi có cột credit_balance đều bắt đầu từ 0 (không hồi tố bonus).
+  db.run(`UPDATE users SET credit_balance = 0 WHERE credit_balance IS NULL`);
 
   // Automatic OpenCellID sync jobs (VN / MCC 452 by default, daily at 03:00).
   db.run(`CREATE TABLE IF NOT EXISTS sync_jobs (
@@ -246,6 +334,27 @@ db.serialize(() => {
     last_count INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  // ==========================================================================
+  // cells_audit — lịch sử SỬA/XÓA row trong bảng `cells` từ trang admin.
+  // Append-only: KHÔNG bao giờ UPDATE/DELETE row trong bảng này, để luôn dựng
+  // lại được trạng thái cũ của một cell (old_json → new_json).
+  // ==========================================================================
+  db.run(`CREATE TABLE IF NOT EXISTS cells_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cell_id INTEGER,
+    action TEXT NOT NULL,
+    old_json TEXT,
+    new_json TEXT,
+    user_id INTEGER,
+    username TEXT,
+    ip TEXT,
+    note TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_cells_audit_cell ON cells_audit(cell_id, created_at DESC)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_cells_audit_user ON cells_audit(user_id, created_at DESC)`);
 
   // Backfill MCC on existing OpenCellID sources, then seed a default VN sync job.
   db.run(`UPDATE data_sources SET mcc = '452' WHERE type = 'opencellid' AND (mcc IS NULL OR mcc = '')`);

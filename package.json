@@ -1,10 +1,11 @@
 {
   "name": "cell-tracker",
   "version": "1.0.0",
-  "description": "Cell ID Call Log and SMS Location Tracker",
+  "description": "Cell.id.vn — Cell ID Call Log and SMS Location Tracker",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js"
   },
   "dependencies": {
     "adm-zip": "^0.6.0",

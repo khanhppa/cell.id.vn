@@ -1,4 +1,4 @@
-/* Cell Tracker Admin Panel */
+/* Cell.id.vn Admin Panel */
 // CSV upload: RAW file streamed to server (supports .csv/.gz/.zip/.xlsx).
 // Nguồn Online: manage OpenCellID/custom data sources + fetch.
 
@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     Auth.initNavbar();
     window.loadTheme();
     loadDashboard();
-    loadUsers();
     initBulkZone();
   });
 });
@@ -26,8 +25,9 @@ function switchSection(name) {
   document.querySelector(`.sidebar-item[data-section="${name}"]`).classList.add('active');
 
   if (name === 'dashboard') loadDashboard();
-  if (name === 'users') loadUsers();
+  if (name === 'users') { loadCreditUsers(); loadCreditTx(); }
   if (name === 'settings') loadSettings();
+  if (name === 'cells') { cdbLoadMeta(); cdbSearch(); cdbLoadAudit(1); }
 }
 
 // ========================
@@ -39,24 +39,59 @@ function loadSettings() {
     const rt = document.getElementById('setRetention');
     if (mo) mo.value = s.max_online_resolve != null ? s.max_online_resolve : '';
     if (rt) rt.value = s.lookup_history_retention_days != null ? s.lookup_history_retention_days : '';
+    const ce = document.getElementById('setCreditEnabled');
+    const cc = document.getElementById('setCreditCost');
+    const cb = document.getElementById('setCreditSignupBonus');
+    const cn = document.getElementById('setCreditAllowNegative');
+    if (ce) ce.checked = String(s.credit_enabled) === '1';
+    if (cc) cc.value = s.credit_cost_per_lookup != null ? s.credit_cost_per_lookup : '';
+    if (cb) cb.value = s.credit_signup_bonus != null ? s.credit_signup_bonus : '';
+    if (cn) cn.checked = String(s.credit_allow_negative) === '1';
   }).catch(e => showToast('Không tải được cấu hình: ' + e.message, 'error'));
 }
 
 function saveSettings() {
   const maxOnline = document.getElementById('setMaxOnline').value.trim();
   const retention = document.getElementById('setRetention').value.trim();
+  const creditEnabled = document.getElementById('setCreditEnabled');
+  const creditCost = document.getElementById('setCreditCost').value.trim();
+  const creditBonus = document.getElementById('setCreditSignupBonus').value.trim();
+  const creditNeg = document.getElementById('setCreditAllowNegative');
+
+  // Ô số bỏ trống = giữ nguyên giá trị cũ, KHÔNG gửi (server coi chuỗi rỗng là
+  // không đổi). Gửi chuỗi rỗng trước đây làm server trả 400 → cả form không lưu
+  // và checkbox credit_enabled trông như "không lưu được".
+  const settings = {
+    max_online_resolve: maxOnline,
+    lookup_history_retention_days: retention,
+    credit_enabled: creditEnabled && creditEnabled.checked ? '1' : '0',
+    credit_allow_negative: creditNeg && creditNeg.checked ? '1' : '0'
+  };
+  if (creditCost !== '') settings.credit_cost_per_lookup = creditCost;
+  if (creditBonus !== '') settings.credit_signup_bonus = creditBonus;
+  Object.keys(settings).forEach(k => { if (settings[k] === '') delete settings[k]; });
+
   Auth.fetch('/api/settings', {
     method: 'PUT',
-    body: JSON.stringify({ settings: { max_online_resolve: maxOnline, lookup_history_retention_days: retention } })
+    // BẮT BUỘC: thiếu Content-Type thì express.json() không parse body →
+    // server nhận req.body = {} → ghi 0 key nhưng vẫn trả 200 → form "không
+    // lưu được" (toggle tự bật lại về giá trị cũ sau khi reload).
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ settings })
   }).then(async r => {
-    const d = await r.json();
+    const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || 'Lỗi lưu cấu hình');
-    showToast('Đã lưu cấu hình', '');
     if (d.settings) {
       document.getElementById('setMaxOnline').value = d.settings.max_online_resolve ?? '';
       document.getElementById('setRetention').value = d.settings.lookup_history_retention_days ?? '';
+      if (creditEnabled) creditEnabled.checked = String(d.settings.credit_enabled) === '1';
+      document.getElementById('setCreditCost').value = d.settings.credit_cost_per_lookup ?? '';
+      document.getElementById('setCreditSignupBonus').value = d.settings.credit_signup_bonus ?? '';
+      if (creditNeg) creditNeg.checked = String(d.settings.credit_allow_negative) === '1';
     }
-  }).catch(e => showToast(e.message, 'error'));
+    const on = String(d.settings && d.settings.credit_enabled) === '1';
+    showToast('Đã lưu cấu hình — tính điểm tra cứu: ' + (on ? 'BẬT' : 'TẮT'), 'success');
+  }).catch(e => { showToast(e.message, 'error'); loadSettings(); });
 }
 
 function loadDashboard() {
@@ -449,26 +484,6 @@ async function clearAllCells() {
 // ========================
 // Users management
 // ========================
-async function loadUsers() {
-  const body = document.getElementById('userTableBody');
-  body.innerHTML = '<tr><td colspan="6" class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
-  try {
-    const res = await Auth.fetch('/api/users');
-    const users = await res.json();
-    body.innerHTML = users.map(u => `<tr>
-      <td>${u.id}</td><td>${esc(u.username)}</td><td><span class="badge ${u.role === 'admin' ? 'badge-admin' : 'badge-user'}">${u.role}</span></td>
-      <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-pending'}">${esc(u.status || 'active')}</span></td>
-      <td>${u.created_at}</td>
-      <td>
-        <button class="btn btn-sm" onclick="editUser(${u.id}, '${escAttr(u.username)}', '${u.role}', '${u.status || 'active'}')"><i class="fas fa-pen"></i></button>
-        ${u.role !== 'admin' ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id})"><i class="fas fa-trash"></i></button>` : ''}
-      </td>
-    </tr>`).join('');
-  } catch (e) {
-    body.innerHTML = `<tr><td colspan="6" class="muted-text">Error: ${esc(e.message)}</td></tr>`;
-  }
-}
-
 function showAddUserModal() {
   document.getElementById('userModalTitle').textContent = 'Add User';
   document.getElementById('userFormUsername').value = '';
@@ -517,7 +532,7 @@ async function saveUser() {
   showToast(data.success ? 'User saved' : data.error, data.success ? 'success' : 'error');
   if (data.success) {
     document.getElementById('addUserModal').classList.remove('show');
-    loadUsers();
+    loadCreditUsers();
   }
 }
 
@@ -526,7 +541,7 @@ async function deleteUser(id) {
   const res = await Auth.fetch('/api/users/' + id, { method: 'DELETE' });
   const data = await res.json();
   showToast(data.success ? 'User deleted' : data.error, data.success ? 'success' : 'error');
-  loadUsers();
+  loadCreditUsers();
 }
 
 // ========================
@@ -534,7 +549,7 @@ async function deleteUser(id) {
 // ========================
 async function loadSources() {
   const body = document.getElementById('sourceTableBody');
-  body.innerHTML = '<tr><td colspan="6" class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+  body.innerHTML = '<tr><td colspan="7" class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
   const res = await Auth.fetch('/api/sources');
   const sources = await res.json();
   sources.sort((a, b) => (a.priority - b.priority) || (a.id - b.id));
@@ -549,7 +564,7 @@ async function loadSources() {
     <td><span class="badge ${s.enabled ? 'badge-active' : 'badge-pending'}">${s.enabled ? 'Enabled' : 'Disabled'}</span></td>
     <td>
       <button class="btn btn-sm ${s.enabled ? '' : 'btn-success'}" onclick="toggleSource(${s.id}, ${s.enabled ? 0 : 1})" title="${s.enabled ? 'Tắt' : 'Bật'}"><i class="fas ${s.enabled ? 'fa-toggle-on' : 'fa-toggle-off'}"></i> ${s.enabled ? 'Tắt' : 'Bật'}</button>
-      <button class="btn btn-sm" onclick='editSource(${escAttr(JSON.stringify(s))})'><i class="fas fa-pen"></i></button>
+      <button class="btn btn-sm" onclick="editSourceByIndex(${i})"><i class="fas fa-pen"></i></button>
       <button class="btn btn-danger btn-sm" onclick="deleteSource(${s.id})"><i class="fas fa-trash"></i></button>
     </td>
   </tr>`).join('');
@@ -589,6 +604,12 @@ function onSourceTypeChange() {
     keyInput.disabled = true;
     keyInput.placeholder = 'Không cần API key';
     hint.innerHTML = 't0stbrot.net tra cứu LTE miễn phí, không cần API key. Chỉ hỗ trợ công nghệ LTE (ECI).';
+  } else if (type === 'opencellid_web') {
+    keyInput.value = '';
+    keyInput.disabled = true;
+    keyInput.placeholder = 'Không cần API key';
+    hint.innerHTML = 'Tra cứu qua giao diện web opencellid.org (endpoint nội bộ, không chính thức). '
+      + 'Không cần API key nhưng giới hạn khoảng 5 request/phút mỗi IP — chỉ nên bật khi các nguồn khác thất bại.';
   } else if (type === 'combain') {
     keyInput.disabled = false;
     keyInput.placeholder = 'Combain API key';
@@ -609,6 +630,13 @@ window.editSource = function(s) {
   document.getElementById('srcEnabled').value = s.enabled ? '1' : '0';
   document.getElementById('srcName').dataset.editId = s.id;
   onSourceTypeChange();
+};
+
+// Lookup by list index — tránh nhúng JSON vào attribute onclick (JSON bị
+// escAttr escape thành &quot; → SyntaxError, nút Sửa không chạy).
+window.editSourceByIndex = function(index) {
+  const s = (window.__sources || [])[index];
+  if (s) window.editSource(s);
 };
 
 async function saveSource() {
@@ -695,7 +723,7 @@ async function loadSyncJobs() {
       <td>
         <button class="btn btn-sm btn-success" onclick="runSyncJobNow(${j.id})" ${running ? 'disabled' : ''}><i class="fas fa-play"></i> Chạy ngay</button>
         <button class="btn btn-sm" onclick="toggleSyncJob(${j.id}, ${j.enabled ? 0 : 1})" title="${j.enabled ? 'Tắt' : 'Bật'}"><i class="fas ${j.enabled ? 'fa-toggle-on' : 'fa-toggle-off'}"></i></button>
-        <button class="btn btn-sm" onclick='editSyncJob(${escAttr(JSON.stringify(j))})'><i class="fas fa-pen"></i></button>
+        <button class="btn btn-sm" onclick="editSyncJobById(${j.id})"><i class="fas fa-pen"></i></button>
         <button class="btn btn-danger btn-sm" onclick="deleteSyncJob(${j.id})"><i class="fas fa-trash"></i></button>
       </td>
     </tr>`;
@@ -732,6 +760,12 @@ window.editSyncJob = function(j) {
   document.getElementById('syncMcc').value = j.mcc_list || '452';
   document.getElementById('syncEnabled').value = j.enabled ? '1' : '0';
   document.getElementById('syncSource').dataset.editId = j.id;
+};
+
+// Lookup by job id — cùng lý do như editSourceByIndex (không nhúng JSON vào HTML).
+window.editSyncJobById = function(id) {
+  const j = (window.__syncJobs || []).find(x => String(x.id) === String(id));
+  if (j) window.editSyncJob(j);
 };
 
 async function saveSyncJob() {
@@ -838,3 +872,516 @@ function esc(str) {
 function escAttr(str) {
   return esc(str).replace(/'/g, _AP);
 }
+
+// ========================
+// Credits (admin)
+// ========================
+const CREDIT_TYPE_LABELS = {
+  lookup: 'Tra cứu', signup_bonus: 'Thưởng đăng ký', admin_topup: 'Admin nạp',
+  admin_adjust: 'Admin chỉnh', correction: 'Điều chỉnh', payment: 'Thanh toán', refund: 'Hoàn điểm'
+};
+let _creditUsers = [];
+
+async function loadCreditUsers() {
+  const body = document.getElementById('userTableBody');
+  if (!body) return;
+  body.innerHTML = '<tr><td colspan="8" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải...</td></tr>';
+  try {
+    const res = await Auth.fetch('/api/admin/credits/users');
+    const users = await res.json();
+    if (!res.ok) throw new Error(users.error || 'Không tải được dữ liệu điểm');
+    _creditUsers = users;
+    renderUsersTable();
+  } catch (e) {
+    body.innerHTML = `<tr><td colspan="8" class="muted-text">Error: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderUsersTable() {
+  const body = document.getElementById('userTableBody');
+  if (!body) return;
+  const q = (document.getElementById('creditUserFilter')?.value || '').trim().toLowerCase();
+  const list = q ? _creditUsers.filter(u => String(u.username).toLowerCase().includes(q)) : _creditUsers;
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="8" class="muted-text">Không có user nào</td></tr>';
+    return;
+  }
+  body.innerHTML = list.map(u => {
+    const bal = Number(u.balance) || 0;
+    const used = Number(u.used) || 0;
+    const fmt = n => Number.isInteger(n) ? n : n.toFixed(2);
+    const status = u.status || 'active';
+    return `<tr>
+      <td>${u.id}</td>
+      <td>${esc(u.username)}</td>
+      <td><span class="badge ${u.role === 'admin' ? 'badge-admin' : 'badge-user'}">${esc(u.role)}</span></td>
+      <td><span class="badge ${status === 'active' ? 'badge-active' : 'badge-pending'}">${esc(status)}</span></td>
+      <td style="text-align:right"><b style="color:${bal > 0 ? '#45c07d' : '#ff6b6b'}">${fmt(bal)}</b></td>
+      <td style="text-align:right">${fmt(used)}</td>
+      <td style="white-space:nowrap">${esc(u.created_at || '')}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn-sm btn-success" title="Nạp điểm" onclick="openCreditModal(${u.id}, '${escAttr(u.username)}')"><i class="fas fa-plus"></i> Nạp điểm</button>
+        <button class="btn btn-sm" title="Sửa user" onclick="editUser(${u.id}, '${escAttr(u.username)}', '${escAttr(u.role)}', '${escAttr(status)}')"><i class="fas fa-pen"></i></button>
+        ${u.role !== 'admin' ? `<button class="btn btn-danger btn-sm" title="Xoá user" onclick="deleteUser(${u.id})"><i class="fas fa-trash"></i></button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadCreditTx() {
+  const body = document.getElementById('creditTxBody');
+  if (!body) return;
+  body.innerHTML = '<tr><td colspan="6" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải...</td></tr>';
+  try {
+    const type = document.getElementById('creditTxType')?.value || '';
+    const uid = (document.getElementById('creditTxUser')?.value || '').trim();
+    const params = new URLSearchParams({ limit: '100' });
+    if (type) params.set('type', type);
+    if (uid && Number.isFinite(Number(uid))) params.set('user_id', uid);
+    const res = await Auth.fetch('/api/admin/credits/transactions?' + params.toString());
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || 'Không tải được lịch sử');
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="6" class="muted-text">Chưa có giao dịch</td></tr>';
+      return;
+    }
+    body.innerHTML = rows.map(t => {
+      const v = Number(t.amount) || 0;
+      const after = Number(t.balance_after) || 0;
+      const fmt = n => Number.isInteger(n) ? n : n.toFixed(2);
+      return `<tr>
+        <td style="white-space:nowrap">${esc(t.created_at || '')}</td>
+        <td>${esc(t.username || ('#' + t.user_id))}</td>
+        <td>${esc(CREDIT_TYPE_LABELS[t.type] || t.type)}</td>
+        <td style="text-align:right;font-weight:700;color:${v > 0 ? '#45c07d' : '#ff6b6b'}">${v > 0 ? '+' : ''}${fmt(v)}</td>
+        <td style="text-align:right">${fmt(after)}</td>
+        <td class="muted-text">${esc(t.note || '')}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    body.innerHTML = `<tr><td colspan="6" class="muted-text">Error: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+// Chỉ còn 1 chế độ: NẠP THÊM. Số dư hiện có của user không sửa được từ admin panel.
+window.openCreditModal = function(userId, username) {
+  document.getElementById('creditUserId').value = userId;
+  document.getElementById('creditUserName').value = '#' + userId + ' — ' + username;
+  const amt = document.getElementById('creditAmount');
+  amt.value = '';
+  amt.min = '0.01';
+  document.getElementById('creditAmountHint').textContent =
+    'Số điểm cộng thêm vào số dư hiện tại (phải > 0). Số dư cũ không bị thay đổi.';
+  document.getElementById('creditNote').value = '';
+  document.getElementById('creditModal').classList.add('show');
+};
+
+window.submitCreditModal = async function() {
+  const userId = document.getElementById('creditUserId').value;
+  const amount = document.getElementById('creditAmount').value.trim();
+  const note = document.getElementById('creditNote').value.trim();
+  if (amount === '' || !Number.isFinite(Number(amount))) { showToast('Số điểm không hợp lệ', 'error'); return; }
+  if (Number(amount) <= 0) { showToast('Số điểm nạp phải lớn hơn 0', 'error'); return; }
+
+  const btn = document.getElementById('creditSubmitBtn');
+  btn.disabled = true;
+  try {
+    const res = await Auth.fetch('/api/admin/credits/topup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: Number(userId), amount: Number(amount), note })
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'Thao tác thất bại');
+    showToast(`Đã nạp. Số dư mới: ${d.balance}`, 'success');
+    document.getElementById('creditModal').classList.remove('show');
+    loadCreditUsers();
+    loadCreditTx();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+  btn.disabled = false;
+};
+
+window.runReconcile = async function() {
+  const el = document.getElementById('reconcileResult');
+  const btn = document.getElementById('btnReconcile');
+  btn.disabled = true;
+  el.style.color = '';
+  el.textContent = 'Đang kiểm tra...';
+  try {
+    const res = await Auth.fetch('/api/admin/credits/reconcile');
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'Lỗi đối soát');
+    if (d.ok) {
+      el.style.color = '#45c07d';
+      el.textContent = 'Khớp: số dư = tổng bút toán cho mọi user.';
+    } else {
+      el.style.color = '#ff6b6b';
+      el.textContent = `Lệch ${d.mismatched.length} user: ` +
+        d.mismatched.map(m => `#${m.id} ${m.username} (dư ${m.balance} / ledger ${m.ledger})`).join(', ');
+    }
+  } catch (e) {
+    el.style.color = '#ff6b6b';
+    el.textContent = e.message;
+  }
+  btn.disabled = false;
+};
+
+// ========================
+// CSDL Cells (admin CRUD)
+// ========================
+let cdbPage_ = 1;
+let cdbTotalPages_ = 1;
+let cdbAuditPage_ = 1;
+let cdbAuditTotalPages_ = 1;
+let cdbSelected = new Set();
+let cdbLastRows = [];
+let cdbMetaLoaded = false;
+
+// Thông điệp dùng chung khi /api/admin/cells/* trả 404 — gần như luôn là server
+// đang chạy được khởi động TRƯỚC khi các route này được thêm vào server.js.
+function cdb404Hint() {
+  return 'API /api/admin/cells chưa có trên server đang chạy — cần restart server (npm run dev / node server.js)';
+}
+
+function cdbFilterQuery(extra) {
+  const p = new URLSearchParams();
+  const put = (k, el) => { const v = document.getElementById(el); if (v && v.value.trim()) p.set(k, v.value.trim()); };
+  put('q', 'cdbQ'); put('mcc', 'cdbMcc'); put('mnc', 'cdbMnc');
+  put('lac', 'cdbLac'); put('cellid', 'cdbCellid');
+  put('source', 'cdbSource'); put('radio', 'cdbRadio'); put('user_id', 'cdbUser');
+  put('from_date', 'cdbFrom'); put('to_date', 'cdbTo');
+  if (extra) Object.keys(extra).forEach(k => p.set(k, extra[k]));
+  return p;
+}
+
+function cdbSearch() { cdbPage_ = 1; cdbSelected.clear(); cdbLoad(); }
+
+function cdbResetFilters() {
+  ['cdbQ','cdbMcc','cdbMnc','cdbLac','cdbCellid','cdbFrom','cdbTo'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  ['cdbSource','cdbRadio','cdbUser'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  cdbSearch();
+}
+
+function cdbPage(delta) {
+  const next = cdbPage_ + delta;
+  if (next < 1 || next > cdbTotalPages_) return;
+  cdbPage_ = next;
+  cdbLoad();
+}
+
+async function cdbLoadMeta() {
+  if (cdbMetaLoaded) return;
+  try {
+    const res = await Auth.fetch('/api/admin/cells/meta');
+    const d = await res.json().catch(() => ({}));
+    // 404 = server đang chạy chưa nạp route /api/admin/cells/* (server cũ chưa
+    // restart). Báo rõ thay vì để dropdown rỗng im lặng.
+    if (res.status === 404) {
+      showToast(cdb404Hint(), 'error');
+      return;
+    }
+    if (!res.ok) throw new Error(d.error || 'Lỗi tải metadata');
+    const fill = (id, items, labelFn) => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      items.forEach(it => {
+        const o = document.createElement('option');
+        o.value = it.v; o.textContent = labelFn(it);
+        sel.appendChild(o);
+      });
+    };
+    fill('cdbSource', d.sources || [], s => `${s.source == null ? '(null)' : s.source} (${s.n})`);
+    fill('cdbRadio', d.radios || [], r => `${r.radio || '(trống)'} (${r.n})`);
+    fill('cdbUser', (d.users || []).filter(u => u.n > 0), u => `${u.username} (${u.n})`);
+    cdbMetaLoaded = true;
+  } catch (e) {
+    // Dropdown rỗng vẫn dùng được — 404 đã được xử lý riêng phía trên.
+  }
+}
+
+function cdbSourceBadge(source) {
+  const s = source == null ? '' : String(source);
+  if (s === 'csv') return '<span class="nav-badge" style="background:rgba(70,200,120,0.2);color:#45c07d">csv</span>';
+  if (s === '') return '<span class="muted-text">—</span>';
+  const cls = s.indexOf('open') === 0 ? 'background:rgba(100,150,255,0.2);color:#6699ff'
+    : s === 'combain' ? 'background:rgba(255,180,70,0.2);color:#e6a700'
+    : 'background:rgba(180,180,180,0.2);color:#999';
+  return `<span class="nav-badge" style="${cls}">${esc(s)}</span>`;
+}
+
+async function cdbLoad() {
+  const body = document.getElementById('cdbBody');
+  body.innerHTML = '<tr><td colspan="14" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải...</td></tr>';
+  try {
+    const p = cdbFilterQuery({ page: String(cdbPage_), limit: '50' });
+    const res = await Auth.fetch('/api/admin/cells/list?' + p.toString());
+    const d = await res.json().catch(() => ({}));
+    if (res.status === 404) throw new Error(cdb404Hint());
+    if (!res.ok) throw new Error(d.error || 'Lỗi tải danh sách');
+    cdbTotalPages_ = d.totalPages || 1;
+    cdbLastRows = d.data || [];
+    document.getElementById('cdbTotal').textContent = `(${d.total} row)`;
+    document.getElementById('cdbPageInfo').textContent = `Trang ${d.page}/${d.totalPages}`;
+    if (cdbLastRows.length === 0) {
+      body.innerHTML = '<tr><td colspan="14" class="loading">Không có row nào khớp bộ lọc.</td></tr>';
+    } else {
+      body.innerHTML = cdbLastRows.map(r => `
+        <tr>
+          <td><input type="checkbox" data-cdbrow="${r.id}" ${cdbSelected.has(r.id) ? 'checked' : ''} onclick="cdbToggleRow(${r.id}, this.checked)"></td>
+          <td>${r.id}</td><td>${esc(r.mcc)}</td><td>${esc(r.mnc)}</td><td>${esc(r.lac)}</td><td>${esc(r.cellid)}</td>
+          <td>${r.lat == null ? '' : r.lat}</td><td>${r.lng == null ? '' : r.lng}</td>
+          <td>${r.range == null ? '' : r.range}</td>
+          <td>${esc(r.radio) || '<span class="muted-text">—</span>'}</td>
+          <td>${cdbSourceBadge(r.source)}</td>
+          <td>${r.user_id == null ? '<span class="muted-text">—</span>' : r.user_id}</td>
+          <td class="muted-text" style="font-size:11px">${esc(r.created_at)}</td>
+          <td>
+            <button class="btn btn-primary btn-sm" onclick="cdbOpenEdit(${r.id})"><i class="fas fa-pen"></i></button>
+            <button class="btn btn-danger btn-sm" onclick="cdbDeleteOne(${r.id})"><i class="fas fa-trash"></i></button>
+          </td>
+        </tr>`).join('');
+    }
+    cdbSyncSelectionUI();
+  } catch (e) {
+    body.innerHTML = `<tr><td colspan="14" class="loading" style="color:#ff6b6b">${esc(e.message)}</td></tr>`;
+  }
+}
+
+// ---- Chọn nhiều ----
+function cdbToggleRow(id, checked) {
+  if (checked) cdbSelected.add(id); else cdbSelected.delete(id);
+  cdbSyncSelectionUI();
+}
+
+function cdbToggleAll(el) {
+  const on = el.checked;
+  cdbLastRows.forEach(r => { if (on) cdbSelected.add(r.id); else cdbSelected.delete(r.id); });
+  document.querySelectorAll('#cdbBody input[data-cdbrow]').forEach(cb => { cb.checked = on; });
+  cdbSyncSelectionUI();
+}
+
+function cdbSyncSelectionUI() {
+  const n = cdbSelected.size;
+  document.getElementById('cdbSelCount').textContent = String(n);
+  document.getElementById('cdbBulkDeleteBtn').disabled = n === 0;
+  const all = document.getElementById('cdbSelAll');
+  if (all) all.checked = cdbLastRows.length > 0 && cdbLastRows.every(r => cdbSelected.has(r.id));
+  const warn = document.getElementById('cdbWarn');
+  if (!warn) return;
+  const csvCount = cdbLastRows.filter(r => cdbSelected.has(r.id) && r.source === 'csv').length;
+  warn.textContent = csvCount > 0 ? `⚠ Trong ${n} row đã chọn có ${csvCount} row source=csv (CSDL gốc) — xác nhận trước khi xóa.` : '';
+}
+
+// ---- Xóa ----
+async function cdbDeleteOne(id) {
+  const row = cdbLastRows.find(r => r.id === id);
+  const label = row ? `${row.mcc}-${row.mnc}-${row.lac}-${row.cellid} (id=${id}, nguồn ${row.source || '—'})` : `id=${id}`;
+  if (!confirm(`Xóa cell ${label}?\nHành động này ghi vào cells_audit và không thể hoàn tác từ UI.`)) return;
+  try {
+    const res = await Auth.fetch('/api/admin/cells/' + id, { method: 'DELETE', body: JSON.stringify({}) });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'Lỗi xóa');
+    showToast('Đã xóa cell id=' + id, 'success');
+    cdbSelected.delete(id);
+    cdbLoad(); cdbLoadAudit(cdbAuditPage_);
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function cdbBulkDelete() {
+  const ids = Array.from(cdbSelected);
+  if (ids.length === 0) return;
+  if (!confirm(`Xóa ${ids.length} row đã chọn?\nHành động này ghi vào cells_audit và không thể hoàn tác từ UI.`)) return;
+  try {
+    const res = await Auth.fetch('/api/admin/cells/bulk-delete', {
+      method: 'POST', body: JSON.stringify({ ids })
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'Lỗi xóa');
+    showToast(`Đã xóa ${d.deleted}/${d.requested} row`, 'success');
+    cdbSelected.clear();
+    cdbLoad(); cdbLoadAudit(cdbAuditPage_);
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+// ---- Modal sửa ----
+const CDB_EDIT_FIELDS = [
+  ['cdbEditMcc', 'mcc'], ['cdbEditMnc', 'mnc'], ['cdbEditLac', 'lac'], ['cdbEditCellid', 'cellid'],
+  ['cdbEditLat', 'lat'], ['cdbEditLng', 'lng'], ['cdbEditRange', 'range'], ['cdbEditRadio', 'radio'],
+  ['cdbEditSource', 'source'], ['cdbEditDescription', 'description'],
+  ['cdbEditAddress', 'address'], ['cdbEditCity', 'city'],
+];
+
+async function cdbOpenEdit(id) {
+  try {
+    const res = await Auth.fetch('/api/admin/cells/' + id);
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'Lỗi tải cell');
+    const r = d.data;
+    document.getElementById('cdbEditRowId').value = r.id;
+    document.getElementById('cdbEditId').textContent = '# ' + r.id;
+    CDB_EDIT_FIELDS.forEach(([el, k]) => {
+      const node = document.getElementById(el);
+      if (!node) return;
+      node.value = r[k] == null ? '' : r[k];
+    });
+    const warn = document.getElementById('cdbEditWarn');
+    if (r.source === 'csv') {
+      warn.style.display = '';
+      warn.textContent = '⚠ Row này có source=csv (CSDL gốc). Sửa cẩn thận — thay đổi được ghi vào cells_audit.';
+    } else {
+      warn.style.display = 'none';
+      warn.textContent = '';
+    }
+    document.getElementById('cdbEditModal').classList.add('show');
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function cdbCloseEdit() {
+  document.getElementById('cdbEditModal').classList.remove('show');
+}
+
+// Validate phía client — mirror luật server (khung VN khi mcc=452, RAT hợp lệ).
+function cdbValidateEdit(payload) {
+  for (const k of ['mcc', 'mnc', 'lac', 'cellid']) {
+    if (!String(payload[k] == null ? '' : payload[k]).trim()) return `Trường ${k} không được để trống`;
+  }
+  const lat = Number(payload.lat), lng = Number(payload.lng);
+  if (!isFinite(lat) || !isFinite(lng)) return 'Lat/Lng phải là số';
+  if (Math.abs(lat) > 90) return 'Lat phải trong [-90, 90]';
+  if (Math.abs(lng) > 180) return 'Lng phải trong [-180, 180]';
+  if (String(payload.mcc).trim() === '452' && (lat < 8 || lat > 23.8 || lng < 102 || lng > 110.5)) {
+    return `Toạ độ (${lat}, ${lng}) nằm ngoài khung Việt Nam (mcc 452: lat 8–23.8, lng 102–110.5)`;
+  }
+  const allowed = ['', 'GSM', 'UMTS', 'LTE', 'NR', 'NB-IOT', 'CDMA'];
+  if (payload.radio && allowed.indexOf(String(payload.radio).toUpperCase()) === -1) {
+    return `RAT không hợp lệ: ${payload.radio}`;
+  }
+  if (payload.range !== '' && (!isFinite(Number(payload.range)) || Number(payload.range) < 0)) {
+    return 'Range phải là số >= 0';
+  }
+  return null;
+}
+
+async function cdbSaveEdit() {
+  const id = parseInt(document.getElementById('cdbEditRowId').value, 10);
+  if (!Number.isFinite(id)) return;
+  const payload = {};
+  CDB_EDIT_FIELDS.forEach(([el, k]) => {
+    const node = document.getElementById(el);
+    if (node) payload[k] = node.value.trim();
+  });
+  payload.note = document.getElementById('cdbEditNote').value.trim();
+
+  const err = cdbValidateEdit(payload);
+  if (err) { showToast(err, 'error'); return; }
+
+  const btn = document.getElementById('cdbEditSaveBtn');
+  btn.disabled = true;
+  try {
+    const res = await Auth.fetch('/api/admin/cells/' + id, {
+      method: 'PUT', body: JSON.stringify(payload)
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'Lỗi lưu');
+    showToast('Đã lưu cell id=' + id, 'success');
+    if (d.warnings && d.warnings.length) showToast(d.warnings.join(' '), 'error');
+    cdbCloseEdit();
+    cdbLoad(); cdbLoadAudit(cdbAuditPage_);
+  } catch (e) { showToast(e.message, 'error'); }
+  btn.disabled = false;
+}
+
+// ---- Lịch sử audit ----
+function cdbAuditPage(delta) {
+  const next = cdbAuditPage_ + delta;
+  if (next < 1 || next > cdbAuditTotalPages_) return;
+  cdbAuditPage_ = next;
+  cdbLoadAudit();
+}
+
+async function cdbLoadAudit(page) {
+  if (page) cdbAuditPage_ = page;
+  const body = document.getElementById('cdbAuditBody');
+  body.innerHTML = '<tr><td colspan="8" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải...</td></tr>';
+  try {
+    const p = new URLSearchParams({ page: String(cdbAuditPage_), limit: '50' });
+    const cid = document.getElementById('cdbAuditCellId').value.trim();
+    const act = document.getElementById('cdbAuditAction').value;
+    const usr = document.getElementById('cdbAuditUser').value.trim();
+    if (cid) p.set('cell_id', cid);
+    if (act) p.set('action', act);
+    if (usr) p.set('username', usr);
+    const res = await Auth.fetch('/api/admin/cells/audit?' + p.toString());
+    const d = await res.json().catch(() => ({}));
+    if (res.status === 404) throw new Error(cdb404Hint());
+    if (!res.ok) throw new Error(d.error || 'Lỗi tải lịch sử');
+    cdbAuditTotalPages_ = d.totalPages || 1;
+    document.getElementById('cdbAuditPageInfo').textContent = `Trang ${d.page}/${d.totalPages} (${d.total})`;
+    const rows = d.data || [];
+    if (rows.length === 0) {
+      body.innerHTML = '<tr><td colspan="8" class="loading">Chưa có bản ghi nào.</td></tr>';
+      return;
+    }
+    body.innerHTML = rows.map(a => {
+      const oldV = a.old_json ? JSON.parse(a.old_json) : null;
+      const newV = a.new_json ? JSON.parse(a.new_json) : null;
+      let diff = '';
+      if (newV) {
+        const keys = Object.keys(newV).filter(k => !oldV || String(oldV[k]) !== String(newV[k]));
+        diff = keys.slice(0, 4).map(k => `${k}: ${oldV ? oldV[k] : '—'} → ${newV[k]}`).join('; ');
+        if (keys.length > 4) diff += ` …(+${keys.length - 4})`;
+      } else if (oldV) {
+        diff = `${oldV.mcc}-${oldV.mnc}-${oldV.lac}-${oldV.cellid} @ ${oldV.lat},${oldV.lng}`;
+      }
+      return `<tr>
+        <td>${a.id}</td><td>${a.cell_id == null ? '—' : a.cell_id}</td>
+        <td>${esc(a.action)}</td><td>${esc(a.username) || '—'}</td><td class="muted-text">${esc(a.ip) || '—'}</td>
+        <td class="muted-text" style="font-size:11px">${esc(a.note) || '—'}</td>
+        <td class="muted-text" style="font-size:11px" title="${escAttr(diff)}">${esc(diff) || '—'}</td>
+        <td class="muted-text" style="font-size:11px">${esc(a.created_at)}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    body.innerHTML = `<tr><td colspan="8" class="loading" style="color:#ff6b6b">${esc(e.message)}</td></tr>`;
+  }
+}
+
+// ========================
+// Global exports
+// ========================
+// admin.html gọi các hàm này từ attribute onclick/onchange nên chúng PHẢI nằm
+// trên window. Khai báo `function` trong classic script vốn đã thành thuộc tính
+// window, nhưng xuất tường minh để không vỡ nếu script được bọc trong IIFE /
+// module / bundler.
+Object.assign(window, {
+  // Navigation
+  switchSection,
+  // Settings
+  loadSettings, saveSettings,
+  // Cells sub-pages + CLF converter
+  showSourcePage, showBulkPage, goBackToCells, showClfPage,
+  setClfDirection, handleClfFile, convertClf, convertClfDefault, resetClfForm,
+  // Bulk upload / clear
+  handleBulkFile, clearAllCells,
+  // Users
+  showAddUserModal, saveUser, deleteUser,
+  // Data sources
+  loadSources, moveSource, resetSourceForm, onSourceTypeChange,
+  saveSource, deleteSource, toggleSource,
+  // Sync jobs
+  loadSyncJobs, resetSyncForm, saveSyncJob,
+  runSyncJobNow, toggleSyncJob, deleteSyncJob,
+  // Utilities
+  showResult, setProgress, showToast,
+  // CSDL Cells (admin CRUD)
+  cdbSearch, cdbResetFilters, cdbPage,
+  cdbToggleRow, cdbToggleAll, cdbBulkDelete,
+  cdbOpenEdit, cdbCloseEdit, cdbSaveEdit, cdbAuditPage
+});
+

@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Điểm tra cứu — Cell Tracker</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #f4f6fb; --bg-card: #ffffff; --border-color: #e2e6ef;
+    --text-primary: #1c2333; --text-secondary: #5a6478; --text-faint: #98a1b5;
+    --accent: #4f7cff; --ok: #1f9e5a; --danger: #e04444;
+    --bg-hover: rgba(0,0,0,0.05);
+  }
+  [data-theme="dark"] {
+    --bg-page: #14171f; --bg-card: #1c2029; --border-color: #2b3140;
+    --text-primary: #e7ebf3; --text-secondary: #a4adc0; --text-faint: #6d7689;
+    --accent: #6b93ff; --ok: #45c07d; --danger: #ff6b6b;
+    --bg-hover: rgba(255,255,255,0.07);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg-page); color: var(--text-primary); font-size: 14px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 64px 18px 60px; }
+  h1 { font-size: 20px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+  h1 i { color: var(--ok); }
+  .sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 20px; }
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border-color);
+    border-radius: 12px; padding: 18px; margin-bottom: 18px;
+  }
+  .balance-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .balance-num { font-size: 40px; font-weight: 800; color: var(--ok); line-height: 1; }
+  .balance-num.zero { color: var(--danger); }
+  .balance-meta { color: var(--text-secondary); font-size: 12.5px; line-height: 1.7; }
+  .badge-off {
+    display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px;
+    background: rgba(255,170,60,0.16); color: #c98a1e; border: 1px solid rgba(255,170,60,0.4);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--border-color); }
+  th { color: var(--text-secondary); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .3px; }
+  tbody tr:hover { background: var(--bg-hover); }
+  td.amt { font-weight: 700; white-space: nowrap; }
+  td.amt.pos { color: var(--ok); }
+  td.amt.neg { color: var(--danger); }
+  .muted { color: var(--text-faint); }
+  .type-chip {
+    display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px;
+    background: var(--bg-hover); color: var(--text-secondary); white-space: nowrap;
+  }
+  .btn {
+    border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);
+    border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; font-family: inherit;
+  }
+  .btn:hover { background: var(--bg-hover); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .error { color: var(--danger); font-size: 13px; }
+  .pager {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-color);
+  }
+  .pager[hidden] { display: none; }
+  .pager-btn {
+    border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);
+    border-radius: 7px; min-width: 32px; height: 32px; padding: 0 9px; font-size: 13px;
+    cursor: pointer; font-family: inherit; line-height: 1;
+  }
+  .pager-btn:hover:not(:disabled) { background: var(--bg-hover); }
+  .pager-btn:disabled { opacity: .45; cursor: default; }
+  .pager-btn.active {
+    background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700;
+  }
+  .pager-btn.active:hover { background: var(--accent); }
+  .pager-info { color: var(--text-secondary); font-size: 12.5px; margin-left: auto; white-space: nowrap; }
+  .pager-gap { color: var(--text-faint); padding: 0 2px; }
+  #loading { color: var(--text-faint); padding: 20px 0; }
+  @media (max-width: 560px) {
+    .balance-num { font-size: 32px; }
+    th:nth-child(5), td:nth-child(5) { display: none; }
+    .pager-info { margin-left: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<nav class="navbar"></nav>
+<div class="container">
+  <h1><i class="fas fa-gem"></i> Điểm tra cứu</h1>
+  <div class="sub">Mỗi lần tra cứu <b>có kết quả</b> (dữ liệu nội bộ hoặc nguồn online) trừ điểm. Tra không ra kết quả không trừ.</div>
+
+  <div class="card">
+    <div class="balance-row">
+      <div>
+        <div class="balance-num" id="balNum">—</div>
+        <div class="muted" style="font-size:12px">điểm còn lại</div>
+      </div>
+      <div class="balance-meta" id="balMeta"></div>
+      <div style="margin-left:auto">
+        <button class="btn" id="refreshBtn" onclick="loadAll()"><i class="fas fa-rotate"></i> Làm mới</button>
+      </div>
+    </div>
+    <div id="cfgNote" class="error" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <b style="font-size:14px">Lịch sử giao dịch</b>
+      <span class="muted" id="txCount" style="font-size:12px"></span>
+    </div>
+    <div id="loading">Đang tải…</div>
+    <div style="overflow-x:auto">
+      <table id="txTable" hidden>
+        <thead>
+          <tr><th>Thời gian</th><th>Loại</th><th>Điểm</th><th>Số dư sau</th><th>Ghi chú</th></tr>
+        </thead>
+        <tbody id="txBody"></tbody>
+      </table>
+    </div>
+    <div id="txEmpty" class="muted" hidden style="font-size:13px">Chưa có giao dịch nào.</div>
+    <div class="pager" id="txPager" hidden>
+      <button class="pager-btn" id="txPrev" onclick="gotoPage(pg-1)" title="Trang trước"><i class="fas fa-chevron-left"></i></button>
+      <span id="txNums" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"></span>
+      <button class="pager-btn" id="txNext" onclick="gotoPage(pg+1)" title="Trang sau"><i class="fas fa-chevron-right"></i></button>
+      <span class="pager-info" id="txPagerInfo"></span>
+    </div>
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script>
+const TYPE_LABELS = {
+  lookup: 'Tra cứu', signup_bonus: 'Thưởng đăng ký', admin_topup: 'Admin nạp',
+  admin_adjust: 'Admin chỉnh', correction: 'Điều chỉnh', payment: 'Thanh toán', refund: 'Hoàn điểm'
+};
+const PAGE = 50;
+let cfg = null;
+// Phân trang có số trang (server trả envelope khi paged=1).
+// Tên `pg` chứ KHÔNG dùng `page`: `page` là alias scroll deprecated của window,
+// để tránh trùng tên với biến toàn cục trong scope script.
+let pg = 1, totalPages = 1, total = 0;
+const WINDOW = 2;   // số trang hiện mỗi bên trang hiện tại (1 … 4 [5] 6 … 20)
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function fmtDate(s) {
+  if (!s) return '—';
+  // SQLite CURRENT_TIMESTAMP là UTC → hiển thị theo giờ máy.
+  const d = new Date(s.replace(' ', 'T') + 'Z');
+  if (isNaN(d)) return s;
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function fmtAmt(n) {
+  const v = Number(n) || 0;
+  const s = Number.isInteger(v) ? v : v.toFixed(2);
+  return (v > 0 ? '+' : '') + s;
+}
+
+async function loadConfig() {
+  try {
+    const r = await fetch('/api/credits/config');
+    cfg = await r.json();
+  } catch (e) { cfg = null; }
+  const meta = document.getElementById('balMeta');
+  const note = document.getElementById('cfgNote');
+  note.innerHTML = '';
+  if (!cfg) { meta.textContent = ''; return; }
+  meta.innerHTML = `Giá mỗi lần tra: <b>${cfg.cost}</b> điểm<br>Tặng khi đăng ký: <b>${cfg.signup_bonus}</b> điểm`;
+  if (!cfg.enabled) {
+    note.innerHTML = '<span class="badge-off">Hệ thống điểm đang tắt</span> — tra cứu hiện không bị trừ điểm.';
+  }
+}
+
+async function loadBalance() {
+  const r = await Auth.fetch('/api/credits/balance');
+  if (!r.ok) throw new Error('Không tải được số dư');
+  const d = await r.json();
+  const el = document.getElementById('balNum');
+  el.textContent = Number.isInteger(d.balance) ? d.balance : Number(d.balance).toFixed(2);
+  el.classList.toggle('zero', Number(d.balance) <= 0);
+  Auth.setCreditBalance(d.balance);
+}
+
+function renderRows(rows) {
+  const body = document.getElementById('txBody');
+  body.innerHTML = rows.map(t => {
+    const v = Number(t.amount) || 0;
+    const cls = v > 0 ? 'pos' : (v < 0 ? 'neg' : '');
+    const after = Number(t.balance_after);
+    return `<tr>
+      <td class="muted" style="white-space:nowrap">${fmtDate(t.created_at)}</td>
+      <td><span class="type-chip">${TYPE_LABELS[t.type] || t.type}</span></td>
+      <td class="amt ${cls}">${fmtAmt(v)}</td>
+      <td>${Number.isInteger(after) ? after : after.toFixed(2)}</td>
+      <td class="muted">${t.note ? escapeHtml(t.note) : ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Dãy số trang rút gọn: 1 … (page-WINDOW … page+WINDOW) … totalPages
+function pageNumbers(cur, last) {
+  const out = [];
+  for (let i = 1; i <= last; i++) {
+    if (i === 1 || i === last || Math.abs(i - cur) <= WINDOW) out.push(i);
+    else if (out[out.length - 1] !== '…') out.push('…');
+  }
+  return out;
+}
+
+function renderPager() {
+  const pager = document.getElementById('txPager');
+  if (!pager) return;
+  pager.hidden = total === 0;
+  if (total === 0) return;
+
+  document.getElementById('txPrev').disabled = pg <= 1;
+  document.getElementById('txNext').disabled = pg >= totalPages;
+
+  document.getElementById('txNums').innerHTML = totalPages <= 1 ? '' : pageNumbers(pg, totalPages).map(n =>
+    n === '…'
+      ? '<span class="pager-gap">…</span>'
+      : `<button class="pager-btn${n === pg ? ' active' : ''}" onclick="gotoPage(${n})"${n === pg ? ' aria-current="page"' : ''}>${n}</button>`
+  ).join('');
+
+  const from = Math.min((pg - 1) * PAGE + 1, total);
+  const to = Math.min(pg * PAGE, total);
+  document.getElementById('txPagerInfo').textContent =
+    `Trang ${pg}/${totalPages} · ${from}–${to} trong ${total} giao dịch`;
+}
+
+async function gotoPage(p) {
+  if (!Number.isFinite(p) || p < 1 || p > totalPages || p === pg) return;
+  const loading = document.getElementById('loading');
+  loading.hidden = false;
+  loading.textContent = 'Đang tải…';
+  loading.classList.remove('error');
+  // Cuộn về đầu bảng để không lạc chỗ khi đổi trang.
+  document.getElementById('txTable').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  try {
+    pg = p;
+    await loadTx();
+    loading.hidden = true;
+  } catch (e) {
+    loading.hidden = false;
+    loading.textContent = e.message || 'Lỗi tải dữ liệu';
+    loading.classList.add('error');
+  }
+}
+
+async function loadTx() {
+  const r = await Auth.fetch(`/api/credits/transactions?paged=1&page=${pg}&limit=${PAGE}`);
+  if (!r.ok) throw new Error('Không tải được lịch sử');
+  const d = await r.json();
+  const rows = Array.isArray(d) ? d : (d.data || []);
+  total = Array.isArray(d) ? rows.length : (d.total || 0);
+  totalPages = Array.isArray(d) ? 1 : (d.totalPages || 1);
+  pg = Array.isArray(d) ? 1 : (d.page || 1);
+
+  renderRows(rows);
+  document.getElementById('txCount').textContent = `(${total})`;
+
+  const table = document.getElementById('txTable');
+  const empty = document.getElementById('txEmpty');
+  if (total === 0) { table.hidden = true; empty.hidden = false; }
+  else { table.hidden = false; empty.hidden = true; }
+
+  renderPager();
+}
+
+async function loadAll() {
+  const loading = document.getElementById('loading');
+  loading.hidden = false;
+  loading.textContent = 'Đang tải…';
+  loading.classList.remove('error');
+  try {
+    await loadConfig();
+    await loadBalance();
+    pg = 1;
+    await loadTx();
+    loading.hidden = true;
+  } catch (e) {
+    loading.hidden = false;
+    loading.textContent = e.message || 'Lỗi tải dữ liệu';
+    loading.classList.add('error');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof Auth !== 'undefined' && Auth.initNavbar) Auth.initNavbar();
+  window.loadTheme();
+  if (typeof Auth === 'undefined' || !Auth.isLoggedIn()) {
+    location.href = 'login.html';
+    return;
+  }
+  loadAll();
+});
+</script>
+</body>
+</html>

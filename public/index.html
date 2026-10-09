@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title data-i18n="app.title">Cell Tracker</title>
+  <title data-i18n="app.title">Cell.id.vn</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
@@ -14,8 +14,6 @@
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@0.79.0/dist/L.Control.Locate.min.js" charset="utf-8"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/gokertanrisever/leaflet-ruler@master/src/leaflet-ruler.css" />
-  <script src="https://cdn.jsdelivr.net/gh/gokertanrisever/leaflet-ruler@master/src/leaflet-ruler.js"></script>
   <script src="/auth.js"></script>
   <style>
     :root {
@@ -218,41 +216,59 @@
     .leaflet-top.leaflet-right {
       margin-top: 56px;
     }
-    .leaflet-draw.leaflet-control,
-    .leaflet-control-zoom,
-    .leaflet-control-locate,
-    .leaflet-ruler.leaflet-control {
-      margin-top: 4px;
-    }
-
-    /* Đo khoảng cách — đồng bộ nút với locate / các control còn lại (glyph FA) */
-    .leaflet-ruler.leaflet-control a {
-      width: 34px;
-      height: 34px;
-      line-height: 34px;
-      background: var(--bg-surface);
+    /* Đo khoảng cách — nút nằm trong toolbar của leaflet-draw (đồng bộ bộ vẽ) */
+    .leaflet-draw-toolbar a.leaflet-draw-measure {
+      background-color: var(--bg-surface);
+      background-image: none !important;
       color: var(--text-secondary);
       border: 1px solid var(--border-color);
       border-radius: 4px;
-      font-size: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background-image: none !important;
-      text-indent: 0 !important;
       font-family: 'Font Awesome 6 Free' !important;
-      font-weight: 900 !important;
+      font-weight: 900;
     }
-    .leaflet-ruler.leaflet-control a:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
+    /* Hover/focus/active: nền ĐỤC như các nút leaflet-draw khác (không trong suốt) */
+    .leaflet-draw-toolbar a.leaflet-draw-measure:hover,
+    .leaflet-draw-toolbar a.leaflet-draw-measure:focus {
+      background-color: #f4f4f4;
+      background-image: none !important;
+      color: #222;
       border-color: var(--border-hover);
     }
-    .leaflet-ruler.leaflet-control a.active {
+    .leaflet-draw-toolbar a.leaflet-draw-measure.active {
+      background-color: #e4e4ee;
+      background-image: none !important;
       color: var(--bg-btn-primary);
       border-color: var(--border-focus);
     }
-    .leaflet-ruler.leaflet-control a::before { content: "\f545"; line-height: 34px; }
+    [data-theme="dark"] .leaflet-draw-toolbar a.leaflet-draw-measure:hover,
+    [data-theme="dark"] .leaflet-draw-toolbar a.leaflet-draw-measure:focus {
+      background-color: #f4f4f4; color: #222;
+    }
+    .leaflet-draw-toolbar a.leaflet-draw-measure::before {
+      content: "\f545"; /* fa-ruler */
+    }
+    /* Đường đo + đỉnh + nhãn khoảng cách */
+    .measure-tip {
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 3px 7px;
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: var(--shadow);
+      white-space: nowrap;
+    }
+    .measure-tip::before { display: none; }
+    .measure-vertex {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #facc15;
+      border: 2px solid #fff;
+      box-sizing: border-box;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+
 
     /* Ensure draw toolbar items are visible — increase z-index on leaflet controls */
     .leaflet-control-container .leaflet-top.leaflet-right {
@@ -279,7 +295,10 @@
 
     .legend-panel {
       position: fixed; bottom: 116px; right: 12px;
-      width: 200px;
+      min-width: 210px;
+      max-width: 260px;
+      max-height: 70vh;
+      overflow-y: auto;
       background: var(--bg-surface);
       backdrop-filter: blur(12px);
       border: 1px solid var(--border-color);
@@ -291,6 +310,19 @@
     .legend-panel.show { display: block; }
     .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; color: var(--text-secondary); }
     .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+    /* Sub-section thu gọn trong legend (vd: Công nghệ mạng) */
+    .legend-sub { border-top: 1px solid var(--border-color); margin-top: 8px; padding-top: 6px; }
+    .legend-sub-toggle {
+      display: flex; align-items: center; gap: 6px; width: 100%;
+      background: none; border: none; cursor: pointer; padding: 4px 0;
+      color: var(--text-primary); font-size: 12px; font-weight: 600; text-align: left;
+    }
+    .legend-sub-toggle:hover { color: var(--bg-btn-primary); }
+    .legend-sub-toggle i { font-size: 10px; transition: transform 0.2s; }
+    .legend-sub.open .legend-sub-toggle i { transform: rotate(90deg); }
+    .legend-sub-body { display: none; padding-top: 2px; }
+    .legend-sub.open .legend-sub-body { display: block; }
+    .legend-hint { font-size: 10px; color: var(--text-faint); padding: 2px 0 4px; line-height: 1.4; }
 
     /* Toast */
     .toast {
@@ -339,7 +371,25 @@
     .hist-toolbar {
       display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px;
     }
-    .hist-toolbar select { flex: 1; min-width: 120px; }
+    .hist-toolbar select {
+      flex: 1; min-width: 120px;
+      padding: 7px 10px; border: 1px solid var(--border-color); border-radius: 6px;
+      background: var(--bg-surface2); color: var(--text-primary); font-size: 13px;
+      outline: none; transition: border-color 0.2s;
+    }
+    .hist-toolbar select:focus { border-color: var(--border-focus); }
+    /* Ô lọc theo ngày: nằm cùng dòng với select (không co giãn) */
+    .hist-toolbar input[type="date"] {
+      flex: 0 0 auto; width: auto; min-width: 132px;
+      padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 6px;
+      background: var(--bg-surface2); color: var(--text-primary); font-size: 12px;
+      outline: none; transition: border-color 0.2s;
+    }
+    .hist-toolbar input[type="date"]:focus { border-color: var(--border-focus); }
+    .hist-toolbar input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.65; }
+    [data-theme="dark"] .hist-toolbar input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); }
+    .hist-date-clear { flex: 0 0 auto; padding: 5px 8px; }
+    .hidden { display: none !important; }
     .hist-list {
       font-size: 12px; flex: 1; min-height: 0; overflow-y: auto;
       display: flex; flex-direction: column; gap: 6px; padding-right: 2px;
@@ -351,21 +401,74 @@
     .hist-selectall { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 11px; cursor: pointer; user-select: none; }
     .hist-count { color: var(--text-faint); font-size: 11px; }
     .hist-card {
-      border: 1px solid var(--border-color); border-radius: 8px;
-      padding: 8px 10px; background: var(--bg-surface2);
+      border: 1px solid var(--border-color); border-left: 3px solid transparent;
+      border-radius: 8px;
+      padding: 7px 9px; background: var(--bg-surface2);
       transition: border-color 0.2s, background 0.2s;
-      display: flex; gap: 8px; align-items: flex-start;
+      display: flex; gap: 8px; align-items: center;
     }
+    /* Mode thể hiện bằng nền row + viền trái (thay cho badge) */
+    .hist-card--single { background: rgba(68,68,204,0.10); border-left-color: #6666ee; }
+    .hist-card--batch { background: rgba(255,136,0,0.09); border-left-color: #ee9922; }
     .hist-card:hover { border-color: var(--border-hover); background: var(--bg-hover); }
-    .hist-card.selected { border-color: var(--border-focus); background: rgba(100,100,255,0.08); }
-    .hist-card-check { padding-top: 2px; }
+    .hist-card--single:hover { border-left-color: #6666ee; }
+    .hist-card--batch:hover { border-left-color: #ee9922; }
+    .hist-card.selected { border-color: var(--border-focus); border-left-color: var(--border-focus); background: rgba(100,100,255,0.14); }
+    .hist-card-check { padding-top: 0; display: flex; align-items: center; flex-shrink: 0; }
     .hist-card-main { flex: 1; min-width: 0; cursor: pointer; }
-    .hist-card-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-    .hist-cell { font-family: ui-monospace, monospace; font-weight: 600; color: var(--text-primary); }
-    .hist-meta { font-size: 10px; color: var(--text-faint); display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+    .hist-card-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .hist-cell {
+      font-family: ui-monospace, monospace; font-weight: 600; color: var(--text-primary);
+      font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    /* Thời gian + info phụ: ẩn mặc định, chỉ hiện khi hover card */
+    .hist-meta {
+      display: none; font-size: 10px; color: var(--text-faint);
+      gap: 10px; flex-wrap: wrap; margin-top: 4px;
+      border-top: 1px dashed var(--border-color); padding-top: 4px;
+    }
+    .hist-card:hover .hist-meta { display: flex; }
     .hist-meta i { margin-right: 3px; }
+    .hist-meta span { white-space: nowrap; }
+    .hist-meta span.miss { color: #ee9922; }
+    .hist-expand-btn {
+      background: none; border: 1px solid var(--border-color); color: var(--text-secondary);
+      cursor: pointer; font-size: 10px; width: 22px; height: 22px; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s; flex-shrink: 0;
+    }
+    .hist-expand-btn:hover { border-color: var(--border-hover); color: var(--text-primary); background: var(--bg-hover); }
+    .hist-row { display: flex; flex-direction: column; }
+    .hist-batch-panel { display: none; }
+    .hist-batch-panel.open { display: block; padding: 4px 0 2px 14px; }
+    .hist-batch-summary {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      font-size: 11px; color: var(--text-muted); cursor: pointer;
+      padding: 4px 6px; border-radius: 4px; transition: background 0.2s;
+    }
+    .hist-batch-summary:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .hist-batch-stat.ok { color: #33bb66; }
+    .hist-batch-stat.miss { color: #ee9922; }
+    .hist-batch-empty { font-size: 11px; color: var(--text-faint); padding: 4px 6px; }
+    .hist-child {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; padding: 4px 6px; margin-left: 6px;
+      border-left: 2px solid var(--border-color); border-radius: 0 4px 4px 0;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .hist-child:hover { background: var(--bg-hover); border-left-color: var(--border-hover); }
+    .hist-child.active { background: rgba(100,100,255,0.08); border-left-color: var(--border-focus); }
+    .hist-child.miss { cursor: default; opacity: 0.6; }
+    .hist-child .hist-cell { font-size: 11px; font-weight: 500; }
+    .hist-child i.ok { color: #33bb66; flex-shrink: 0; }
+    .hist-child i.miss { color: #ee9922; flex-shrink: 0; }
+    .hist-child-coords { font-family: ui-monospace, monospace; color: var(--text-faint); margin-left: auto; white-space: nowrap; }
     .hist-coords { font-family: ui-monospace, monospace; color: #33bb66; font-size: 11px; margin-top: 3px; }
     .hist-coords.miss { color: var(--text-faint); font-family: inherit; }
+    /* Nguồn dữ liệu: chỉ icon, tên nguồn nằm trong tooltip */
+    .hist-src-i { font-size: 10px; flex-shrink: 0; }
+    .hist-src-i.local { color: #3366ff; }
+    .hist-src-i.online { color: #22aa44; }
     .hist-source {
       display: inline-block; padding: 1px 6px; border-radius: 10px;
       font-size: 10px; background: var(--bg-surface2); border: 1px solid var(--border-color);
@@ -373,12 +476,29 @@
     }
     .hist-source.local { color: #3366ff; border-color: rgba(51,102,255,0.4); }
     .hist-source.online { color: #22aa44; border-color: rgba(34,170,68,0.4); }
+    /* RAT badge (2G/3G/4G/5G/NB...): màu nền đặt inline theo RADIO_STYLE */
+    .hist-radio-badge {
+      display: inline-block; padding: 1px 6px; border-radius: 10px;
+      font-size: 10px; font-weight: 600; color: #fff; letter-spacing: 0.2px;
+    }
+    /* Marker giữa circle: pin tô màu RAT + nhãn ngắn ở đầu pin */
+    .cell-marker-wrap { background: none; border: none; }
+    .cell-marker { position: relative; width: 26px; height: 34px; text-align: center; line-height: 1; }
+    .cell-marker i {
+      font-size: 30px; color: var(--mc, #22aa44);
+      -webkit-text-stroke: 1px #fff; paint-order: stroke;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+    }
+    .cell-marker-txt {
+      position: absolute; top: 6px; left: 0; width: 100%;
+      font-size: 8px; font-weight: 700; color: #fff; letter-spacing: -0.3px;
+      text-shadow: 0 0 2px rgba(0,0,0,0.55);
+    }
     .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
-    .badge-single { background: rgba(68,68,204,0.15); color: #6666ee; }
-    .badge-batch { background: rgba(255,136,0,0.15); color: #ee9922; }
     .hist-del {
       background: none; border: none; color: var(--text-faint); cursor: pointer;
       font-size: 12px; padding: 2px 4px; border-radius: 4px; transition: all 0.2s;
+      flex-shrink: 0;
     }
     .hist-del:hover { color: #ee6666; background: rgba(204,51,51,0.1); }
     .hist-empty { text-align: center; color: var(--text-faint); padding: 20px 0; }
@@ -665,15 +785,23 @@
       <div class="tab-content" id="tab-lookuphistory">
         <div class="form-group">
           <label data-i18n="hist.title">Lịch sử tra cứu</label>
+          <div class="hist-toolbar">
+            <select id="histModeFilter" onchange="loadLookupHistory(1)">
+              <option value="" data-i18n="hist.allModes">Tất cả</option>
+              <option value="single" data-i18n="hist.modeSingle">Đơn lẻ</option>
+              <option value="batch" data-i18n="hist.modeBatch">Hàng loạt</option>
+            </select>
+            <input type="date" id="histDate" onchange="onHistDateChange()"
+                   data-i18n-title="hist.filterDate" title="Lọc theo ngày">
+            <button type="button" class="btn btn-sm hist-date-clear hidden" id="histDateClear"
+                    onclick="clearHistDate()" data-i18n-title="hist.clearDate" title="Bỏ lọc ngày">
+              <i class="fas fa-xmark"></i>
+            </button>
+          </div>
         </div>
         <div class="hist-toolbar">
-          <select id="histModeFilter" onchange="loadLookupHistory(1)">
-            <option value="" data-i18n="hist.allModes">Tất cả</option>
-            <option value="single" data-i18n="hist.modeSingle">Đơn lẻ</option>
-            <option value="batch" data-i18n="hist.modeBatch">Hàng loạt</option>
-          </select>
-          <button class="btn btn-sm btn-danger" onclick="deleteSelectedLookup()"><i class="fas fa-trash"></i> <span data-i18n="hist.deleteSelected">Xóa đã chọn</span></button>
-          <button class="btn btn-sm btn-danger" onclick="deleteAllLookup()"><i class="fas fa-trash-alt"></i> <span data-i18n="hist.deleteAll">Xóa tất cả</span></button>
+          <button class="btn btn-danger" onclick="deleteSelectedLookup()"><i class="fas fa-trash"></i> <span data-i18n="hist.deleteSelected">Xóa đã chọn</span></button>
+          <button class="btn btn-danger" onclick="deleteAllLookup()"><i class="fas fa-trash-alt"></i> <span data-i18n="hist.deleteAll">Xóa tất cả</span></button>
         </div>
         <div class="hist-toolbar-row">
           <label class="hist-selectall"><input type="checkbox" id="histSelectAll" onchange="histToggleAll(this.checked)"> <span data-i18n="hist.selectAll">Chọn tất cả</span></label>
@@ -699,13 +827,32 @@
 
   <!-- Legend Panel -->
   <div class="legend-panel" id="legendPanel">
-    <div class="legend-item"><span class="legend-dot" style="background:#4444cc;border-radius:0;width:16px;height:4px"></span> <span data-i18n="legend.towerRange">Trạm (có bán kính)</span></div>
-    <div class="legend-item"><span class="legend-dot" style="background:#8888ff;border-radius:0;width:8px;height:8px"></span> <span data-i18n="legend.towerNoRange">Trạm (ko bán kính)</span></div>
+    <div class="legend-item"><span class="legend-dot" style="background:#3d7ce0;border-radius:0;width:16px;height:4px"></span> <span data-i18n="legend.towerRange">Trạm (có bán kính)</span></div>
+    <div class="legend-item"><span class="legend-dot" style="background:#3d7ce0;width:10px;height:10px"></span> <span data-i18n="legend.towerNoRange">Trạm (ko bán kính)</span></div>
+    <div class="legend-hint" data-i18n="legend.towerHint">Màu trạm = công nghệ mạng (RAT). Bấm vào trạm để xem chi tiết.</div>
     <div class="legend-item"><span class="legend-dot" style="background:blue"></span> <span data-i18n="legend.callIn">Gọi Đến</span></div>
     <div class="legend-item"><span class="legend-dot" style="background:red"></span> <span data-i18n="legend.callOut">Gọi Đi</span></div>
     <div class="legend-item"><span class="legend-dot" style="background:green"></span> <span data-i18n="legend.smsIn">Tin Nhắn Đến</span></div>
     <div class="legend-item"><span class="legend-dot" style="background:orange"></span> <span data-i18n="legend.smsOut">Tin Nhắn Đi</span></div>
     <div class="legend-item"><span class="legend-dot" style="background:#6666ff;width:14px;height:3px;border-radius:2px"></span> <span data-i18n="legend.annotations">Chú Thích Bản Đồ</span></div>
+
+    <!-- Sub-section: công nghệ mạng (RAT) -->
+    <div class="legend-sub" id="legendRadioSub">
+      <button type="button" class="legend-sub-toggle" onclick="toggleLegendRadio()">
+        <i class="fas fa-chevron-right"></i> <span data-i18n="legend.radio">Công nghệ mạng</span>
+      </button>
+      <div class="legend-sub-body" id="legendRadioBody">
+        <div class="legend-item"><span class="legend-dot" style="background:#e8a33d"></span> 2G — GSM</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#8e6fd8"></span> CDMA</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#2fa8c9"></span> 3G — UMTS</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#3d7ce0"></span> 4G — LTE</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#d64545"></span> 5G — NR</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#3fae7a"></span> NB-IoT</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#b05fc4"></span> EVDO</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#7a8a99"></span> iDEN</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#8892a0"></span> <span data-i18n="legend.radioUnknown">Không xác định</span></div>
+      </div>
+    </div>
   </div>
 
   <!-- Toast -->

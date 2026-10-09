@@ -13,6 +13,8 @@ const axios = require('axios');
 const csv = require('csv-parser');
 const zlib = require('zlib');
 const db = require('./database');
+const { normalizeRadio, inferRadio } = require('./radio-util');
+const { isPlausibleLatLng } = require('./geo-util');
 
 const OCID_DOWNLOAD_URL = 'https://opencellid.org/ocid/downloads';
 const DOWNLOAD_TIMEOUT_MS = 120000; // 120s — the VN dump is a few hundred KB
@@ -78,11 +80,19 @@ function importOcidStream(gzStream) {
       if (writing || pending.length === 0) return maybeDone();
       writing = true;
       const slice = pending.splice(0, SUB_BATCH);
-      const placeholders = slice.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+      // Mỗi nhánh UNION ALL tự lọc row bằng correlated NOT EXISTS: bỏ row mà DB
+      // đã có cùng khoá nhưng RAT khác (dấu hiệu cellid ngắn trúng nhầm ô khác RAT).
+      const placeholders = slice.map(() =>
+        `SELECT ? AS mcc, ? AS mnc, ? AS lac, ? AS cellid, ? AS lat, ? AS lng, ? AS range, ? AS source, ? AS radio
+         WHERE NOT EXISTS (
+           SELECT 1 FROM cells e WHERE e.mcc = ? AND e.mnc = ? AND e.lac = ? AND e.cellid = ?
+             AND e.radio IS NOT NULL AND e.radio <> '' AND e.radio <> ?
+         )`).join(' UNION ALL ');
       const flat = [];
-      slice.forEach((v) => flat.push(...v));
+      slice.forEach((v) => flat.push(...v, v[0], v[1], v[2], v[3], v[8]));
       db.run(
-        `INSERT OR IGNORE INTO cells (mcc, mnc, lac, cellid, lat, lng, range, source) VALUES ${placeholders}`,
+        `INSERT OR IGNORE INTO cells (mcc, mnc, lac, cellid, lat, lng, range, source, radio)
+         ${placeholders}`,
         flat,
         function (err) {
           if (err) stats.errors += slice.length;
@@ -110,8 +120,8 @@ function importOcidStream(gzStream) {
         const lat = parseFloat(row.lat || row.latitude);
         const lon = parseFloat(row.lon || row.lng || row.longitude);
         const range = parseInt(row.range, 10) || 1000;
-        if (!mcc || !mnc || !lac || !cellid || isNaN(lat) || isNaN(lon)) { stats.errors++; return; }
-        pending.push([mcc, mnc, lac, cellid, lat, lon, range, 'opencellid']);
+        if (!mcc || !mnc || !lac || !cellid || isNaN(lat) || isNaN(lon) || !isPlausibleLatLng(lat, lon, mcc)) { stats.errors++; return; }
+        pending.push([mcc, mnc, lac, cellid, lat, lon, range, 'opencellid', normalizeRadio(row.radio) || inferRadio(cellid, null, row.radio)]);
         if (pending.length >= SUB_BATCH) flush();
       })
       .on('end', () => { ended = true; flush(); })

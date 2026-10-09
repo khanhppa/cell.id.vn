@@ -110,4 +110,21 @@ function cellIdLookupKeys(cellid, sectorHint) {
   return [...out];
 }
 
-module.exports = { enbToEci, eciToEnb, classifyCellId, parseCellId, mncVariants, cellIdLookupKeys, ECI_MAX, SHORT_THRESHOLD };
+// Thứ tự ưu tiên khi tra cellid trên nguồn ngoài: dạng ECI (long) TRƯỚC, raw sau.
+// Lý do: nguồn LTE index theo ECI; raw của log LTE chỉ là eNB ID (thiếu sector) nên
+// nếu gửi raw trước sẽ trúng cell khác hoặc miss. Id vượt 2^28 chắc chắn không phải
+// LTE ⇒ giữ nguyên, không dựng ECI.
+function cellIdCandidates(cellid, sectorHint) {
+  const raw = String(cellid == null ? '' : cellid).trim();
+  if (!raw) return [];
+  const out = [];
+  const n = parseInt(raw, 10);
+  if (Number.isFinite(n) && n >= 0 && n <= ECI_MAX) {
+    const parsed = parseCellId(raw, sectorHint);
+    if (parsed && parsed.eci != null && String(parsed.eci) !== raw) out.push(String(parsed.eci));
+  }
+  if (!out.includes(raw)) out.push(raw);
+  return out;
+}
+
+module.exports = { enbToEci, eciToEnb, classifyCellId, parseCellId, mncVariants, cellIdLookupKeys, cellIdCandidates, ECI_MAX, SHORT_THRESHOLD };

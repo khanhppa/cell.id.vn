@@ -256,6 +256,23 @@
     .sub-head h3 { margin: 0; }
     .sub-head .filter-bar { margin: 0; }
     .page-actions { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-color); }
+    /* Toggle switch cho setting dạng bật/tắt */
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+    .toggle-row .toggle-text { font-size: 14px; color: var(--text-primary); text-transform: none; letter-spacing: 0; margin: 0; font-weight: 400; }
+    .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; flex: 0 0 auto; }
+    .toggle-switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+    .toggle-switch .toggle-track {
+      position: absolute; inset: 0; background: var(--bg-surface2); border: 1px solid var(--border-color);
+      border-radius: 999px; transition: background 0.2s, border-color 0.2s; pointer-events: none;
+    }
+    .toggle-switch .toggle-track::after {
+      content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+      border-radius: 50%; background: var(--text-muted); transition: transform 0.2s, background 0.2s;
+    }
+    .toggle-switch input:checked + .toggle-track { background: var(--border-focus); border-color: var(--border-focus); }
+    .toggle-switch input:checked + .toggle-track::after { transform: translateX(20px); background: #fff; }
+    .toggle-switch input:focus-visible + .toggle-track { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+    .toggle-switch input:disabled + .toggle-track { opacity: 0.5; }
     .checklist { max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; margin-top: 8px; }
     .checklist label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 13px; color: var(--text-secondary); cursor: pointer; }
     .checklist label:hover { background: var(--bg-hover); border-radius: 6px; }
@@ -312,6 +329,28 @@
             <input type="number" id="setRetention" min="1" placeholder="90">
             <div class="hint">Lịch sử tra cứu cũ hơn số ngày này sẽ tự động bị xóa (job chạy 03:30 mỗi ngày).</div>
           </div>
+          <div class="form-group">
+            <label>Chế độ tính điểm tra cứu (credit_enabled / credit_cost_per_lookup / credit_signup_bonus)</label>
+            <label class="toggle-row" style="margin-bottom:12px">
+              <span class="toggle-text">Bật tính điểm khi tra cứu</span>
+              <span class="toggle-switch">
+                <input type="checkbox" id="setCreditEnabled">
+                <span class="toggle-track"></span>
+              </span>
+            </label>
+            <input type="number" id="setCreditCost" min="0" step="0.01" placeholder="1" style="margin-bottom:8px">
+            <div class="hint" style="margin-bottom:8px">Số điểm trừ cho mỗi lượt tra cứu.</div>
+            <label style="display:block;font-weight:400">Điểm thưởng đăng ký (credit_signup_bonus)</label>
+            <input type="number" id="setCreditSignupBonus" min="0" step="0.01" placeholder="0">
+            <div class="hint" style="margin-bottom:12px">Số điểm tặng cho user mới khi tạo tài khoản. Đây là nguồn điểm duy nhất lúc tạo — muốn thêm thì dùng nút "Nạp điểm".</div>
+            <label class="toggle-row">
+              <span class="toggle-text">Cho phép số dư âm</span>
+              <span class="toggle-switch">
+                <input type="checkbox" id="setCreditAllowNegative">
+                <span class="toggle-track"></span>
+              </span>
+            </label>
+          </div>
           <div class="page-actions">
             <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> Lưu cấu hình</button>
           </div>
@@ -330,6 +369,73 @@
           </div>
           <p class="muted-text" style="font-size:12px">Tải cell từ nguồn OpenCellID / t0stbrot / Combain hoặc upload file CSV/GZ/ZIP vào cơ sở dữ liệu. Chuyển đổi qua lại định dạng CLF V4.1 cho G-MoN Pro.</p>
         </div>
+
+        <!-- CSDL Cells (admin CRUD) -->
+        <div class="card">
+          <h4><i class="fas fa-table"></i> CSDL Cells <span id="cdbTotal" class="muted-text" style="font-size:12px"></span></h4>
+          <div class="filter-bar" style="align-items:center">
+            <input type="text" id="cdbQ" placeholder="cellid / mcc / mnc / lac" style="max-width:180px">
+            <input type="text" id="cdbMcc" placeholder="MCC" style="max-width:80px">
+            <input type="text" id="cdbMnc" placeholder="MNC" style="max-width:80px">
+            <input type="text" id="cdbLac" placeholder="LAC" style="max-width:80px">
+            <input type="text" id="cdbCellid" placeholder="Cell ID" style="max-width:110px">
+          </div>
+          <div class="filter-bar" style="align-items:center">
+            <select id="cdbSource"><option value="">Mọi nguồn</option></select>
+            <select id="cdbRadio"><option value="">Mọi RAT</option></select>
+            <select id="cdbUser"><option value="">Mọi user</option></select>
+            <input type="date" id="cdbFrom" style="max-width:150px">
+            <input type="date" id="cdbTo" style="max-width:150px">
+            <button class="btn btn-primary btn-sm" onclick="cdbSearch()"><i class="fas fa-search"></i> Tìm</button>
+            <button class="btn btn-sm" onclick="cdbResetFilters()"><i class="fas fa-redo"></i> Xoá lọc</button>
+          </div>
+          <div class="filter-bar" style="align-items:center">
+            <span class="muted-text" style="font-size:12px">Đã chọn: <b id="cdbSelCount">0</b></span>
+            <button class="btn btn-danger btn-sm" id="cdbBulkDeleteBtn" onclick="cdbBulkDelete()" disabled><i class="fas fa-trash"></i> Xoá đã chọn</button>
+            <span id="cdbWarn" class="muted-text" style="font-size:12px;color:#e6a700"></span>
+          </div>
+          <div class="table-wrap" style="overflow:auto;max-height:50vh">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:34px"><input type="checkbox" id="cdbSelAll" onclick="cdbToggleAll(this)"></th>
+                  <th>ID</th><th>MCC</th><th>MNC</th><th>LAC</th><th>Cell ID</th>
+                  <th>Lat</th><th>Lng</th><th>Range</th><th>RAT</th>
+                  <th>Nguồn</th><th>User</th><th>Created</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="cdbBody"><tr><td colspan="14" class="loading">Chưa tải</td></tr></tbody>
+            </table>
+          </div>
+          <div class="filter-bar" style="margin-top:12px;justify-content:center;align-items:center">
+            <button class="btn btn-sm" onclick="cdbPage(-1)"><i class="fas fa-chevron-left"></i> Trước</button>
+            <span class="muted-text" id="cdbPageInfo" style="font-size:12px">Trang 1</span>
+            <button class="btn btn-sm" onclick="cdbPage(1)">Sau <i class="fas fa-chevron-right"></i></button>
+          </div>
+        </div>
+
+        <!-- Lịch sử sửa/xoá cells_audit -->
+        <div class="card">
+          <h4>Lịch sử sửa / xóa (cells_audit)</h4>
+          <div class="filter-bar">
+            <input type="text" id="cdbAuditCellId" placeholder="Cell ID" style="max-width:120px">
+            <select id="cdbAuditAction"><option value="">Mọi hành động</option><option value="update">update</option><option value="delete">delete</option><option value="bulk-delete">bulk-delete</option></select>
+            <input type="text" id="cdbAuditUser" placeholder="username" style="max-width:140px">
+            <button class="btn btn-primary btn-sm" onclick="cdbLoadAudit(1)"><i class="fas fa-search"></i> Lọc</button>
+          </div>
+          <div class="table-wrap" style="overflow:auto;max-height:40vh">
+            <table>
+              <thead><tr><th>ID</th><th>Cell</th><th>Hành động</th><th>User</th><th>IP</th><th>Note</th><th>Thay đổi</th><th>Thời gian</th></tr></thead>
+              <tbody id="cdbAuditBody"><tr><td colspan="8" class="loading">Chưa tải</td></tr></tbody>
+            </table>
+          </div>
+          <div class="filter-bar" style="margin-top:12px;justify-content:center;align-items:center">
+            <button class="btn btn-sm" onclick="cdbAuditPage(-1)"><i class="fas fa-chevron-left"></i> Trước</button>
+            <span class="muted-text" id="cdbAuditPageInfo" style="font-size:12px">Trang 1</span>
+            <button class="btn btn-sm" onclick="cdbAuditPage(1)">Sau <i class="fas fa-chevron-right"></i></button>
+          </div>
+        </div>
+
       </div>
 
       <!-- Cell ID Database - Sub-page: Nguồn Online -->
@@ -517,17 +623,65 @@
         </div>
       </div>
 
-      <!-- User Management -->
+      <!-- User Management + Điểm tra cứu (gộp) -->
       <div id="section-users" class="section">
-        <h3>User Management</h3>
+        <h3>Quản lý User &amp; Điểm</h3>
+
         <div class="card">
-          <div class="filter-bar">
+          <h4>Danh sách User</h4>
+          <div class="filter-bar" style="align-items:center">
             <button class="btn btn-primary btn-sm" onclick="showAddUserModal()"><i class="fas fa-plus"></i> Add User</button>
+            <input type="text" id="creditUserFilter" placeholder="Lọc theo username..." oninput="renderUsersTable()">
+            <button class="btn btn-sm" onclick="loadCreditUsers()"><i class="fas fa-redo"></i> Làm mới</button>
+            <button class="btn btn-sm" id="btnReconcile" onclick="runReconcile()"><i class="fas fa-balance-scale"></i> Đối soát</button>
+            <span id="reconcileResult" class="muted-text" style="font-size:12px"></span>
           </div>
-          <table>
-            <thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
-            <tbody id="userTableBody"><tr><td colspan="6" class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr></tbody>
-          </table>
+          <div class="search-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th><th>Username</th><th>Vai trò</th><th>Trạng thái</th>
+                  <th style="text-align:right">Số dư</th>
+                  <th style="text-align:right">Đã dùng</th>
+                  <th>Ngày tạo</th>
+                  <th style="text-align:right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="userTableBody">
+                <tr><td colspan="8" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="filter-bar" style="align-items:center">
+            <b style="font-size:13px">Lịch sử giao dịch</b>
+            <select id="creditTxType" onchange="loadCreditTx()">
+              <option value="">Tất cả loại</option>
+              <option value="lookup">Tra cứu</option>
+              <option value="signup_bonus">Thưởng đăng ký</option>
+              <option value="admin_topup">Admin nạp</option>
+              <option value="admin_adjust">Khởi tạo user</option>
+            </select>
+            <input type="number" id="creditTxUser" placeholder="User ID" style="width:110px" oninput="loadCreditTx()">
+            <button class="btn btn-sm" onclick="loadCreditTx()"><i class="fas fa-redo"></i> Làm mới</button>
+          </div>
+          <div class="search-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Thời gian</th><th>User</th><th>Loại</th>
+                  <th style="text-align:right">Điểm</th>
+                  <th style="text-align:right">Số dư sau</th>
+                  <th>Ghi chú</th>
+                </tr>
+              </thead>
+              <tbody id="creditTxBody">
+                <tr><td colspan="6" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -547,6 +701,65 @@
       <div class="btn-row">
         <button class="btn" onclick="document.getElementById('addUserModal').classList.remove('show')">Cancel</button>
         <button class="btn btn-primary" onclick="saveUser()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Credit (Nạp điểm) Modal -->
+  <div class="modal-overlay" id="creditModal">
+    <div class="modal">
+      <h3>Nạp điểm</h3>
+      <input type="hidden" id="creditUserId">
+      <div class="form-group">
+        <label>User</label>
+        <input type="text" id="creditUserName" readonly>
+      </div>
+      <div class="form-group">
+        <label>Số điểm nạp</label>
+        <input type="number" id="creditAmount" min="0.01" step="0.01" placeholder="10">
+        <div class="hint" id="creditAmountHint"></div>
+      </div>
+      <div class="form-group">
+        <label>Ghi chú (tuỳ chọn)</label>
+        <input type="text" id="creditNote" placeholder="Lý do nạp điểm">
+      </div>
+      <div class="btn-row">
+        <button class="btn" onclick="document.getElementById('creditModal').classList.remove('show')">Cancel</button>
+        <button class="btn btn-success" id="creditSubmitBtn" onclick="submitCreditModal()">Nạp điểm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CDB Edit Modal -->
+  <div class="modal-overlay" id="cdbEditModal">
+    <div class="modal" style="max-width:720px">
+      <h3>Sửa cell <span id="cdbEditId"></span></h3>
+      <div id="cdbEditWarn" class="hint" style="display:none;color:#e6a700"></div>
+      <input type="hidden" id="cdbEditRowId">
+      <div class="online-row">
+        <div class="form-group"><label>MCC *</label><input type="text" id="cdbEditMcc"></div>
+        <div class="form-group"><label>MNC *</label><input type="text" id="cdbEditMnc"></div>
+        <div class="form-group"><label>LAC *</label><input type="text" id="cdbEditLac"></div>
+        <div class="form-group"><label>Cell ID *</label><input type="text" id="cdbEditCellid"></div>
+      </div>
+      <div class="online-row">
+        <div class="form-group"><label>Lat *</label><input type="text" id="cdbEditLat"></div>
+        <div class="form-group"><label>Lng *</label><input type="text" id="cdbEditLng"></div>
+        <div class="form-group"><label>Range</label><input type="text" id="cdbEditRange"></div>
+        <div class="form-group"><label>RAT</label><input type="text" id="cdbEditRadio" placeholder="GSM / UMTS / LTE / NR"></div>
+      </div>
+      <div class="online-row">
+        <div class="form-group"><label>Source</label><input type="text" id="cdbEditSource"></div>
+        <div class="form-group"><label>Mô tả</label><input type="text" id="cdbEditDescription"></div>
+      </div>
+      <div class="online-row">
+        <div class="form-group"><label>Địa chỉ</label><input type="text" id="cdbEditAddress"></div>
+        <div class="form-group"><label>Thành phố</label><input type="text" id="cdbEditCity"></div>
+      </div>
+      <div class="form-group"><label>Lý do sửa (ghi vào cells_audit)</label><input type="text" id="cdbEditNote"></div>
+      <div class="btn-row">
+        <button class="btn" onclick="cdbCloseEdit()">Cancel</button>
+        <button class="btn btn-primary" id="cdbEditSaveBtn" onclick="cdbSaveEdit()">Lưu</button>
       </div>
     </div>
   </div>

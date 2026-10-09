@@ -3,7 +3,7 @@
 // ============================================
 const I18N = {
   en: {
-    'app.title': 'Cell Tracker',
+    'app.title': 'Cell.id.vn',
     'nav.logout': 'Logout',
     'sidebar.title': 'Workspace',
     'tab.cells': 'Cell Lookup',
@@ -31,6 +31,9 @@ const I18N = {
     'legend.smsIn': 'SMS In',
     'legend.smsOut': 'SMS Out',
     'legend.annotations': 'Draw Annotations',
+    'legend.towerHint': 'Tower colour = network technology (RAT). Click a tower for details.',
+    'legend.radio': 'Network technology',
+    'legend.radioUnknown': 'Unknown',
     'filter.all': 'All',
     'filter.callIn': 'Call In',
     'filter.callOut': 'Call Out',
@@ -51,6 +54,8 @@ const I18N = {
     'hist.allModes': 'All',
     'hist.modeSingle': 'Single',
     'hist.modeBatch': 'Batch',
+    'hist.filterDate': 'Filter by date',
+    'hist.clearDate': 'Clear date filter',
     'hist.deleteSelected': 'Delete Selected',
     'hist.deleteAll': 'Delete All',
     'hist.loading': 'Loading...',
@@ -69,9 +74,24 @@ const I18N = {
     'hist.deleted': 'Deleted',
     'hist.needAuth': 'Please sign in to view lookup history.',
     'hist.openOnMap': 'Show on map',
+    'hist.summary': 'Summary',
+    'hist.cells': 'cells',
+    'hist.foundCells': 'resolved',
+    'hist.notFoundCells': 'no coords',
+    'hist.expand': 'Expand cells',
+    'hist.collapse': 'Collapse',
+    'hist.range': 'Range',
+    'hist.coords': 'Coords',
+    'hist.batchOf': 'Batch',
+    'hist.uploadBatch': 'Uploaded file',
+    'hist.batchEmpty': 'No cells recorded for this batch.',
+    'hist.showAll': 'Show all cells on map',
+    'hist.srcLocal': 'Source: local DB',
+    'hist.srcOnline': 'Source: online API',
+    'hist.radio': 'Network',
   },
   vi: {
-    'app.title': 'Cell Tracker',
+    'app.title': 'Cell.id.vn',
     'nav.logout': 'Đăng Xuất',
     'sidebar.title': 'Công Cụ',
     'tab.subscribers': 'Thuê Bao',
@@ -104,6 +124,9 @@ const I18N = {
     'legend.smsIn': 'Tin Nhắn Đến',
     'legend.smsOut': 'Tin Nhắn Đi',
     'legend.annotations': 'Chú Thích Bản Đồ',
+    'legend.towerHint': 'Màu trạm = công nghệ mạng (RAT). Bấm vào trạm để xem chi tiết.',
+    'legend.radio': 'Công nghệ mạng',
+    'legend.radioUnknown': 'Không xác định',
     'filter.all': 'Tất Cả',
     'filter.callIn': 'Gọi Đến',
     'filter.callOut': 'Gọi Đi',
@@ -124,6 +147,8 @@ const I18N = {
     'hist.allModes': 'Tất cả',
     'hist.modeSingle': 'Đơn lẻ',
     'hist.modeBatch': 'Hàng loạt',
+    'hist.filterDate': 'Lọc theo ngày',
+    'hist.clearDate': 'Bỏ lọc ngày',
     'hist.deleteSelected': 'Xóa đã chọn',
     'hist.deleteAll': 'Xóa tất cả',
     'hist.loading': 'Đang tải...',
@@ -142,6 +167,21 @@ const I18N = {
     'hist.deleted': 'Đã xóa',
     'hist.needAuth': 'Vui lòng đăng nhập để xem lịch sử tra cứu.',
     'hist.openOnMap': 'Hiện trên bản đồ',
+    'hist.summary': 'Tổng quan',
+    'hist.cells': 'cell',
+    'hist.foundCells': 'tra được',
+    'hist.notFoundCells': 'không có toạ độ',
+    'hist.expand': 'Mở rộng danh sách cell',
+    'hist.collapse': 'Thu gọn',
+    'hist.range': 'Bán kính',
+    'hist.coords': 'Toạ độ',
+    'hist.batchOf': 'Lần tra hàng loạt',
+    'hist.uploadBatch': 'File đã tải lên',
+    'hist.batchEmpty': 'Không có cell nào được ghi cho lần tra này.',
+    'hist.showAll': 'Hiện toàn bộ cell trên bản đồ',
+    'hist.srcLocal': 'Nguồn: dữ liệu local',
+    'hist.srcOnline': 'Nguồn: API online',
+    'hist.radio': 'Công nghệ mạng',
   }
 };
 
@@ -224,6 +264,9 @@ function applyI18n() {
   });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
     el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.title = t(el.dataset.i18nTitle);
   });
   document.title = t('app.title');
   const lt = document.getElementById('langToggle');
@@ -515,15 +558,134 @@ const drawControl = new L.Control.Draw({
 map.addControl(drawControl);
 
 // ============================================
-// Đo khoảng cách (leaflet-ruler)
+// Đo khoảng cách — tích hợp vào toolbar leaflet-draw
 // ============================================
-if (typeof L.control.ruler === 'function') {
-  L.control.ruler({
-    position: 'topright',
-    lengthUnit: { display: 'km', decimal: 2, label: 'Khoảng cách:' },
-    angleUnit: { display: '&deg;', decimal: 0, label: 'Góc:' }
-  }).addTo(map);
+const measureState = {
+  active: false,
+  pts: [],
+  line: null,
+  vertices: [],
+  tooltip: null
+};
+
+function haversineKm(a, b) {
+  const R = 6371;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLon = toRad(b.lng - a.lng);
+  const s = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
 }
+
+function measureTotalKm(pts) {
+  let km = 0;
+  for (let i = 1; i < pts.length; i++) km += haversineKm(pts[i - 1], pts[i]);
+  return km;
+}
+
+function fmtDistance(km) {
+  return km < 1 ? Math.round(km * 1000) + ' m' : km.toFixed(2) + ' km';
+}
+
+function makeVertexIcon() {
+  return L.divIcon({ className: '', html: '<div class="measure-vertex"></div>', iconSize: [12, 12], iconAnchor: [6, 6] });
+}
+
+function clearMeasureDrawing(keepLine) {
+  measureState.vertices.forEach((m) => map.removeLayer(m));
+  measureState.vertices = [];
+  if (measureState.tooltip) { map.removeLayer(measureState.tooltip); measureState.tooltip = null; }
+  if (measureState.line && !keepLine) { map.removeLayer(measureState.line); measureState.line = null; }
+}
+
+function updateMeasureDrawing() {
+  const pts = measureState.pts;
+  if (measureState.line) map.removeLayer(measureState.line);
+  measureState.line = L.polyline(pts, { color: '#facc15', weight: 3, dashArray: '6,6', className: 'measure-line' }).addTo(map);
+  if (measureState.tooltip) map.removeLayer(measureState.tooltip);
+  if (pts.length >= 2) {
+    const km = measureTotalKm(pts);
+    measureState.tooltip = L.marker(pts[pts.length - 1], {
+      icon: L.divIcon({ className: '', html: '<div class="measure-tip">' + fmtDistance(km) + '</div>' }),
+      interactive: false
+    }).addTo(map);
+  }
+}
+
+function addMeasurePoint(latlng) {
+  measureState.pts.push(latlng);
+  measureState.vertices.push(L.marker(latlng, { icon: makeVertexIcon(), interactive: false }).addTo(map));
+  updateMeasureDrawing();
+}
+
+function setMeasureMode(on) {
+  measureState.active = on;
+  const btn = document.querySelector('.leaflet-draw-measure');
+  if (btn) btn.classList.toggle('active', on);
+  const container = map.getContainer();
+  container.style.cursor = on ? 'crosshair' : '';
+  if (!on) {
+    clearMeasureDrawing(false);
+    measureState.pts = [];
+  }
+}
+
+function commitMeasure() {
+  if (measureState.pts.length < 2) { setMeasureMode(false); return; }
+  const km = measureTotalKm(measureState.pts);
+  const line = L.polyline(measureState.pts, { color: '#facc15', weight: 3, className: 'measure-line' });
+  line.bindTooltip(fmtDistance(km), { permanent: true, direction: 'center', className: 'measure-tip' });
+  drawnItems.addLayer(line);
+  saveAnnotation('polyline', line.toGeoJSON(), 'Khoảng cách', km);
+  clearMeasureDrawing(false);
+  measureState.pts = [];
+}
+
+map.on('click', function (e) {
+  if (measureState.active) addMeasurePoint(e.latlng);
+});
+map.on('dblclick', function (e) {
+  if (!measureState.active) return;
+  L.DomEvent.stop(e);
+  // Double-click fires two 'click' events first → drop trailing duplicates at same spot.
+  const pts = measureState.pts;
+  while (pts.length >= 2) {
+    const a = pts[pts.length - 1];
+    const b = pts[pts.length - 2];
+    if (Math.abs(a.lat - b.lat) < 1e-7 && Math.abs(a.lng - b.lng) < 1e-7) {
+      pts.pop();
+      const v = measureState.vertices.pop();
+      if (v) map.removeLayer(v);
+    } else break;
+  }
+  commitMeasure();
+});
+document.addEventListener('keydown', function (e) {
+  if (!measureState.active) return;
+  if (e.key === 'Escape') { setMeasureMode(false); }
+  else if (e.key === 'Enter') { commitMeasure(); }
+  else if (e.key === 'Backspace') {
+    if (measureState.pts.length) {
+      measureState.pts.pop();
+      const v = measureState.vertices.pop();
+      if (v) map.removeLayer(v);
+      updateMeasureDrawing();
+      e.preventDefault();
+    }
+  }
+});
+
+// Chèn nút đo vào toolbar của leaflet-draw (dưới nút marker)
+(function injectMeasureButton() {
+  const toolbar = document.querySelector('.leaflet-draw-toolbar');
+  if (!toolbar) return;
+  const btn = L.DomUtil.create('a', 'leaflet-draw-measure', toolbar);
+  btn.href = '#';
+  btn.title = 'Đo khoảng cách (click điểm, double-click để kết thúc)';
+  L.DomEvent.on(btn, 'click', L.DomEvent.stop)
+    .on(btn, 'click', function () { setMeasureMode(!measureState.active); });
+})();
 
 let annotationIdCounter = 0;
 
@@ -585,11 +747,90 @@ function switchTab(tabId) {
 // ============================================
 let histState = { page: 1, totalPages: 1, rows: [], selected: new Set() };
 let histBatchGroup = null;
+let histBatchCache = {};
+// Card batch đang mở (accordion): { rowId, btn } — chỉ 1 card mở tại một thời điểm.
+let histOpenBatch = null;
+// Tên file Excel của lần upload gần nhất → gắn vào metadata nhóm lịch sử.
+let currentUploadFileName = '';
 
 function histEsc(s) {
   return String(s === undefined || s === null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ============================================
+// RAT (Radio Access Technology) — màu + nhãn hiển thị
+// ============================================
+// Nhãn `label` là chữ ngắn in giữa icon marker; `full` dùng cho popup/tooltip.
+const RADIO_STYLE = {
+  GSM:   { color: '#e8a33d', label: '2G', full: 'GSM (2G)' },
+  CDMA:  { color: '#8e6fd8', label: 'CD', full: 'CDMA' },
+  UMTS:  { color: '#2fa8c9', label: '3G', full: 'UMTS (3G)' },
+  LTE:   { color: '#3d7ce0', label: '4G', full: 'LTE (4G)' },
+  NR:    { color: '#d64545', label: '5G', full: 'NR (5G)' },
+  NBIOT: { color: '#3fae7a', label: 'NB', full: 'NB-IoT' },
+  EVDO:  { color: '#b05fc4', label: 'EV', full: 'EVDO' },
+  IDEN:  { color: '#7a8a99', label: 'iD', full: 'iDEN' }
+};
+const RADIO_ALIASES = {
+  GSM: 'GSM', '2G': 'GSM',
+  CDMA: 'CDMA', CDMA2000: 'CDMA',
+  UMTS: 'UMTS', WCDMA: 'UMTS', '3G': 'UMTS', HSPA: 'UMTS',
+  LTE: 'LTE', 'LTE-M': 'LTE', LTEM: 'LTE', '4G': 'LTE', EUTRAN: 'LTE',
+  NR: 'NR', '5G': 'NR', NR5G: 'NR', '5GNR': 'NR',
+  NBIOT: 'NBIOT', 'NB-IOT': 'NBIOT', NB_IOT: 'NBIOT',
+  EVDO: 'EVDO', IDEN: 'IDEN'
+};
+const RADIO_UNKNOWN = { color: '#8892a0', label: '?', full: '' };
+
+// Chuẩn hoá RAT về khoá trong RADIO_STYLE; '' nếu không nhận diện được.
+function radioKey(radio) {
+  if (radio === null || radio === undefined) return '';
+  const k = String(radio).trim().toUpperCase().replace(/[\s_]/g, '');
+  return RADIO_ALIASES[k] || '';
+}
+
+// Trả style { color, label, full, key } cho 1 giá trị RAT bất kỳ.
+function radioStyle(radio) {
+  const key = radioKey(radio);
+  const st = RADIO_STYLE[key];
+  return st ? { key, color: st.color, label: st.label, full: st.full } : { key: '', ...RADIO_UNKNOWN };
+}
+
+// Icon giữa marker: pin định vị tô màu RAT + chữ ngắn (2G/3G/4G/5G...) ở đầu pin.
+function makeCellDivIcon(rs) {
+  return L.divIcon({
+    className: 'cell-marker-wrap',
+    html: `<div class="cell-marker" style="--mc:${rs.color}">` +
+            `<i class="fas fa-map-marker-alt"></i>` +
+            `<span class="cell-marker-txt">${histEsc(rs.label)}</span>` +
+          `</div>`,
+    iconSize: [26, 34],
+    iconAnchor: [13, 32],
+    popupAnchor: [0, -30]
+  });
+}
+
+// Dòng "Công nghệ mạng" cho popup (rỗng nếu không xác định được).
+function radioPopupLine(radio) {
+  const rs = radioStyle(radio);
+  if (!rs.key) return '';
+  return `<br>${t('hist.radio')}: <span style="color:${rs.color};font-weight:600">${histEsc(rs.full || rs.label)}</span>`;
+}
+
+// batch_id an toàn để nhúng vào chuỗi JS trong onclick/attribute
+function histJsSafe(s) {
+  return String(s === undefined || s === null ? '' : s).replace(/[^A-Za-z0-9_-]/g, '');
+}
+
+// Nguồn dữ liệu → CHỈ hiện icon (tooltip giữ tên nguồn) để tránh lặp chữ.
+function histSrcIcon(source, showSource) {
+  if (!showSource || !source) return '';
+  const online = source !== 'local';
+  const label = online ? t('hist.srcOnline') : t('hist.srcLocal');
+  const icon = online ? 'fa-cloud' : 'fa-database';
+  return `<i class="hist-src-i ${online ? 'online' : 'local'} fas ${icon}" title="${histEsc(label)}"></i>`;
 }
 
 async function loadLookupHistory(page) {
@@ -598,16 +839,48 @@ async function loadLookupHistory(page) {
   if (!Auth.getToken()) { list.innerHTML = `<span>${histEsc(t('hist.needAuth'))}</span>`; return; }
   histState.page = page || 1;
   histState.selected = new Set();
+  histBatchCache = {};
+  histOpenBatch = null;
   const mode = document.getElementById('histModeFilter')?.value || '';
+  const date = document.getElementById('histDate')?.value || '';
+  syncHistDateClear();
   list.innerHTML = `<span>${histEsc(t('hist.loading'))}</span>`;
   try {
-    const data = await apiRequest('GET', `/api/lookup-history?page=${histState.page}&limit=50${mode ? '&mode=' + mode : ''}`);
+    const qs = `page=${histState.page}&limit=50`
+      + (mode ? '&mode=' + encodeURIComponent(mode) : '')
+      + (isValidIsoDate(date) ? '&date=' + encodeURIComponent(date) : '');
+    const data = await apiRequest('GET', `/api/lookup-history?${qs}`);
     histState.rows = data.data || [];
     histState.totalPages = data.totalPages || 1;
     renderLookupHistory();
   } catch (e) {
     list.innerHTML = `<span style="color:var(--bg-btn-danger)">${histEsc(e.message)}</span>`;
   }
+}
+
+// Ngày ISO YYYY-MM-DD hợp lệ (dùng cả client-side trước khi gọi API).
+function isValidIsoDate(s) {
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+// Nút xoá lọc ngày chỉ hiện khi đang có ngày được chọn.
+function syncHistDateClear() {
+  const btn = document.getElementById('histDateClear');
+  const inp = document.getElementById('histDate');
+  if (!btn) return;
+  btn.classList.toggle('hidden', !(inp && inp.value));
+}
+
+function onHistDateChange() {
+  syncHistDateClear();
+  loadLookupHistory(1);
+}
+
+function clearHistDate() {
+  const inp = document.getElementById('histDate');
+  if (inp) inp.value = '';
+  syncHistDateClear();
+  loadLookupHistory(1);
 }
 
 function renderLookupHistory() {
@@ -623,47 +896,107 @@ function renderLookupHistory() {
   const showSource = (typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin());
 
   list.innerHTML = rows.map(r => {
-    const cell = `${histEsc(r.mcc)}-${histEsc(r.mnc)}-${histEsc(r.lac)}-${histEsc(r.cellid)}`;
-    const srcClass = r.source === 'local' ? 'local' : (r.source ? 'online' : '');
-    const src = (showSource && r.source) ? `<span class="hist-source ${srcClass}">${histEsc(r.source)}</span>` : '';
-    const modeBadge = r.mode === 'batch'
-      ? `<span class="badge badge-batch">${histEsc(t('hist.modeBatch'))}</span>`
-      : `<span class="badge badge-single">${histEsc(t('hist.modeSingle'))}</span>`;
+    const isBatch = r.mode === 'batch' && r.batch_id;
+    const bid = isBatch ? histJsSafe(r.batch_id) : '';
+    // rowKey là id của row đại diện → DUY NHẤT cho mỗi card (id DOM, state).
+    const rowKey = String(r.id);
+    // Mode không còn badge: thể hiện bằng màu nền + viền trái của row.
+    const modeCls = r.mode === 'batch' ? ' hist-card--batch' : ' hist-card--single';
     const checked = histState.selected.has(r.id) ? ' checked' : '';
-    return `<div class="hist-card${checked ? ' selected' : ''}" data-id="${r.id}">
-      <div class="hist-card-check"><input type="checkbox" value="${r.id}"${checked} onchange="histToggleOne(${r.id}, this.checked)" onclick="event.stopPropagation()"></div>
-      <div class="hist-card-main" onclick="histOpenOnMap(${r.id})" title="${histEsc(t('hist.openOnMap'))}">
-        <div class="hist-card-top">
-          ${modeBadge}
-          <span class="hist-cell">${cell}</span>
-          ${src}
-          <span class="hist-meta"><i class="fas fa-clock"></i>${histEsc(r.created_at || '')}</span>
+    const src = histSrcIcon(r.source, showSource);
+    const cell = isBatch
+      ? (r.file_name ? histEsc(r.file_name) : t('hist.uploadBatch'))
+      : `${histEsc(r.mcc)}-${histEsc(r.mnc)}-${histEsc(r.lac)}-${histEsc(r.cellid)}`;
+
+    // Dòng phụ hiển thị ngay: số cell tra / số cell tìm thấy (batch) hoặc toạ độ (single).
+    const subMeta = isBatch
+      ? `<div class="hist-meta">
+          <span><i class="fas fa-layer-group"></i>${parseInt(r.cell_count, 10) || 0} ${histEsc(t('hist.cells'))}</span>
+          <span class="ok"><i class="fas fa-map-pin"></i>${parseInt(r.found_count, 10) || 0}/${parseInt(r.cell_count, 10) || 0}</span>
+        </div>`
+      : '';
+
+    const coordsTxt = (r.lat && r.lng) ? `${parseFloat(r.lat)}, ${parseFloat(r.lng)}` : '';
+    const coordsMeta = coordsTxt
+      ? `<span><i class="fas fa-map-pin"></i>${histEsc(coordsTxt)}</span>`
+      : `<span class="miss"><i class="fas fa-map-pin"></i>${histEsc(t('hist.notFound'))}</span>`;
+
+    // Hover metadata: chỉ thông tin KHÔNG xuất hiện ở dòng chính
+    // (mode = màu nền row, nguồn = icon) để tránh trùng lặp.
+    const hoverMeta = isBatch ? '' : `<div class="hist-meta">
+      <span><i class="fas fa-clock"></i>${histEsc(r.created_at || '')}</span>
+      ${coordsMeta}
+      ${r.range ? `<span><i class="fas fa-circle-notch"></i>${parseFloat(r.range)}m</span>` : ''}
+    </div>`;
+
+    const expandBtn = isBatch
+      ? `<button class="hist-expand-btn" data-row="${rowKey}" title="${histEsc(t('hist.expand'))}"
+           onclick="event.stopPropagation(); histToggleBatch(${rowKey}, this)"><i class="fas fa-plus"></i></button>`
+      : '';
+
+    return `<div class="hist-row" data-id="${r.id}">
+      <div class="hist-card${modeCls}${checked ? ' selected' : ''}" data-id="${r.id}">
+        <div class="hist-card-check"><input type="checkbox" value="${r.id}"${checked} onchange="histToggleOne(${r.id}, this.checked)" onclick="event.stopPropagation()"></div>
+        <div class="hist-card-main" onclick="histOpenOnMap(${r.id})" title="${histEsc(isBatch ? t('hist.showAll') : t('hist.openOnMap'))}">
+          <div class="hist-card-top">
+            <span class="hist-cell" title="${cell}">${isBatch ? '<i class="fas fa-file-lines"></i> ' : ''}${cell}</span>
+            ${src}
+          </div>
+          ${subMeta}
+          ${hoverMeta}
         </div>
+        ${expandBtn}
+        <button class="hist-del" title="${histEsc(t('hist.deleteEntry'))}" onclick="event.stopPropagation(); deleteLookupEntry(${r.id})"><i class="fas fa-trash"></i></button>
       </div>
-      <button class="hist-del" title="${histEsc(t('hist.deleteEntry'))}" onclick="event.stopPropagation(); deleteLookupEntry(${r.id})"><i class="fas fa-trash"></i></button>
+      ${isBatch ? `<div class="hist-batch-panel" id="histBatch-${rowKey}" data-row="${rowKey}" data-batch="${bid}"></div>` : ''}
     </div>`;
   }).join('');
   updateHistPager();
 }
 
-// Click tiêu đề dòng lịch sử → hiển thị cell trên bản đồ như lúc tra mới
+// Click dòng lịch sử → hiển thị cell trên bản đồ như lúc tra mới
 async function histOpenOnMap(id) {
   const r = histState.rows.find(x => x.id === id);
   if (!r) return;
   if (r.mode === 'batch' && r.batch_id) {
+    // Tra cứu tổng: hiện TOÀN BỘ cell đã tra của file log đó.
     await histOpenBatchOnMap(r.batch_id);
+  } else if (r.lat && r.lng) {
+    showHistCellDetail(r);
   } else {
-    // Tra cứu lại y như tra mới (tái tạo circle + marker + popup + setView)
+    // Không có toạ độ trong lịch sử → tra lại như tra mới.
     await lookupCell(r.mcc, r.mnc, r.lac, r.cellid);
   }
+}
+
+// Chi tiết 1 cell lịch sử (popup giống hệt tra đơn lẻ)
+function showHistCellDetail(r) {
+  const showSource = (typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin());
+  const srcType = r.source === 'local' ? 'local' : 'online';
+  showCellOnMap({
+    lat: r.lat, lon: r.lng, range: r.range || 500,
+    color: r.source === 'local' ? '#ff4444' : '#22aa44',
+    mcc: r.mcc, mnc: r.mnc, lac: r.lac, cellid: r.cellid,
+    cellLine: formatCellId(r.cellid, r.sector),
+    radio: r.radio,
+    sourceLabel: r.source, srcType: srcType, showSource: showSource
+  });
+}
+
+// Lấy (và cache) danh sách cell của 1 batch
+async function histLoadBatch(batchId) {
+  if (!histBatchCache[batchId]) {
+    const rows = await apiRequest('GET', `/api/lookup-history/batch/${encodeURIComponent(batchId)}`);
+    histBatchCache[batchId] = Array.isArray(rows) ? rows : (rows.data || []);
+  }
+  return histBatchCache[batchId];
 }
 
 // Vẽ toàn bộ cell của một batch lịch sử lên bản đồ
 async function histOpenBatchOnMap(batchId) {
   if (histBatchGroup) { map.removeLayer(histBatchGroup); histBatchGroup = null; }
   try {
-    const rows = await apiRequest('GET', `/api/lookup-history/batch/${encodeURIComponent(batchId)}`);
-    const arr = Array.isArray(rows) ? rows : (rows.data || []);
+    const arr = await histLoadBatch(batchId);
     const showSource = (typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin());
     const markers = [];
     arr.forEach(r => {
@@ -673,11 +1006,14 @@ async function histOpenBatchOnMap(batchId) {
       const range = parseFloat(r.range || 500);
       const srcType = r.source === 'local' ? 'local' : 'online';
       const srcLine = (showSource && r.source) ? `<br>${t('hist.source')}: <span class="hist-source ${srcType}">${histEsc(r.source)}</span>` : '';
+      const rs = radioStyle(r.radio);
       const popup = `<b>${t('hist.cell')}: ${histEsc(r.mcc)}-${histEsc(r.mnc)}-${histEsc(r.lac)}</b><br>` +
-        `${formatCellId(r.cellid, r.sector)}<br>` +
-        `Bán kính: ${r.range}m` + srcLine +
+        `${formatCellId(r.cellid, r.sector)}` +
+        radioPopupLine(r.radio) + `<br>` +
+        `${t('hist.range')}: ${r.range}m` + srcLine +
         `<br>${t('hist.result')}: ${lat}, ${lon} <i class="fas fa-copy" style="cursor:pointer" title="Copy tọa độ" onclick="copyCoords(${lat},${lon})"></i>`;
-      markers.push(L.circle([lat, lon], { radius: range, color: '#ff8800', fillColor: '#ff8800', fillOpacity: 0.15, weight: 2 }).bindPopup(popup));
+      markers.push(L.circle([lat, lon], { radius: range, color: rs.color, fillColor: rs.color, fillOpacity: 0.15, weight: 2 }).bindPopup(popup));
+      markers.push(L.marker([lat, lon], { icon: makeCellDivIcon(rs) }).bindPopup(popup));
     });
     if (!markers.length) { showToast(t('hist.notFound'), 'error'); return; }
     histBatchGroup = L.featureGroup(markers).addTo(map);
@@ -685,6 +1021,90 @@ async function histOpenBatchOnMap(batchId) {
   } catch (e) {
     showToast(e.message, 'error');
   }
+}
+
+// Mở rộng / thu gọn danh sách cell của một batch (lazy fetch).
+// rowKey = id của row đại diện (duy nhất). Accordion: mở card này thì thu card khác.
+async function histToggleBatch(rowKey, btn) {
+  const panel = document.getElementById('histBatch-' + rowKey);
+  if (!panel) return;
+  const batchId = panel.dataset.batch || '';
+  if (!batchId) return;
+
+  if (panel.classList.contains('open')) {
+    if (btn) btn.innerHTML = '<i class="fas fa-plus"></i>';
+    histCollapseBatch(rowKey);
+    return;
+  }
+  // Thu panel đang mở trước (nếu là card khác).
+  if (histOpenBatch && histOpenBatch.rowId !== rowKey) histCollapseBatch(histOpenBatch.rowId);
+  if (btn) btn.innerHTML = '<i class="fas fa-minus"></i>';
+  panel.classList.add('open');
+  histOpenBatch = { rowId: rowKey, btn };
+  panel.innerHTML = `<div class="hist-batch-empty"><i class="fas fa-spinner fa-spin"></i> ${histEsc(t('hist.loading'))}</div>`;
+
+  try {
+    const arr = await histLoadBatch(batchId);
+    // Race guard: user đã thu card này (hoặc mở card khác) trong lúc chờ fetch.
+    if (!histOpenBatch || histOpenBatch.rowId !== rowKey) return;
+    if (!arr.length) {
+      panel.innerHTML = `<div class="hist-batch-empty">${histEsc(t('hist.batchEmpty'))}</div>`;
+      return;
+    }
+    const showSource = (typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin());
+    const found = arr.filter(x => x.lat && x.lng).length;
+    const miss = arr.length - found;
+
+    panel.innerHTML =
+      `<div class="hist-batch-summary" onclick="histOpenBatchOnMap('${histJsSafe(batchId)}')" title="${histEsc(t('hist.showAll'))}">
+        <i class="fas fa-list-ul"></i>
+        <b>${arr.length}</b> ${histEsc(t('hist.cells'))}
+        <span class="hist-batch-stat ok">${found} ${histEsc(t('hist.foundCells'))}</span>
+        ${miss ? `<span class="hist-batch-stat miss">${miss} ${histEsc(t('hist.notFoundCells'))}</span>` : ''}
+      </div>` +
+      arr.map((c, i) => {
+        const hasCoords = c.lat && c.lng;
+        const stat = hasCoords
+          ? '<i class="fas fa-map-pin ok"></i>'
+          : '<i class="fas fa-triangle-exclamation miss"></i>';
+        const src = histSrcIcon(c.source, showSource);
+        return `<div class="hist-child${hasCoords ? '' : ' miss'}" data-row="${rowKey}" data-idx="${i}"
+          onclick="histChildClick(${rowKey}, ${i})" title="${histEsc(hasCoords ? t('hist.openOnMap') : t('hist.notFound'))}">
+          ${stat}
+          <span class="hist-cell" title="${histEsc(c.mcc)}-${histEsc(c.mnc)}-${histEsc(c.lac)}-${histEsc(c.cellid)}">${histEsc(c.mcc)}-${histEsc(c.mnc)}-${histEsc(c.lac)}-${histEsc(c.cellid)}</span>
+          ${src}
+          <span class="hist-child-coords">${hasCoords ? `${parseFloat(c.lat)}, ${parseFloat(c.lng)}` : ''}</span>
+        </div>`;
+      }).join('');
+  } catch (e) {
+    if (!histOpenBatch || histOpenBatch.rowId !== rowKey) return;
+    panel.innerHTML = `<div class="hist-batch-empty" style="color:var(--bg-btn-danger)">${histEsc(e.message)}</div>`;
+  }
+}
+
+// Thu một panel batch theo rowKey + đồng bộ icon nút expand của card đó.
+function histCollapseBatch(rowKey) {
+  const panel = document.getElementById('histBatch-' + rowKey);
+  if (panel) { panel.classList.remove('open'); panel.innerHTML = ''; }
+  const btn = document.querySelector(`.hist-expand-btn[data-row="${rowKey}"]`);
+  if (btn) btn.innerHTML = '<i class="fas fa-plus"></i>';
+  if (histOpenBatch && histOpenBatch.rowId === rowKey) histOpenBatch = null;
+}
+
+// Click 1 cell trong danh sách con → xem chi tiết như tra đơn lẻ
+function histChildClick(rowKey, idx) {
+  const panel = document.getElementById('histBatch-' + rowKey);
+  const batchId = panel ? (panel.dataset.batch || '') : '';
+  const arr = histBatchCache[batchId] || [];
+  const c = arr[idx];
+  if (!c) return;
+  if (!c.lat || !c.lng) { showToast(t('hist.notFound'), 'error'); return; }
+  document.querySelectorAll('.hist-child.active').forEach(el => el.classList.remove('active'));
+  const el = document.querySelector(`.hist-child[data-row="${rowKey}"][data-idx="${idx}"]`);
+  if (el) el.classList.add('active');
+  // Đóng lớp tổng của batch rồi hiện chi tiết 1 cell.
+  if (histBatchGroup) { map.removeLayer(histBatchGroup); histBatchGroup = null; }
+  showHistCellDetail(c);
 }
 
 function histToggleAll(checked) {
@@ -763,8 +1183,29 @@ async function apiRequest(method, path, body) {
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(path, opts);
+  const ct = r.headers.get('content-type') || '';
+  if (!ct.includes('application/json')) {
+    const body = await r.text().catch(() => '');
+    const err = new Error(`Máy chủ trả về ${r.status} không phải JSON (${ct || 'không có content-type'}) cho ${path}`);
+    err.code = r.status;
+    err.bodySnippet = body.slice(0, 200);
+    if (r.status === 401 && typeof Auth !== 'undefined' && Auth.logout) Auth.logout();
+    throw err;
+  }
   const data = await r.json();
+  if (r.status === 402) {
+    // Hết điểm — báo rõ và cập nhật badge, không ném lỗi chung chung.
+    if (typeof Auth !== 'undefined' && Auth.setCreditBalance) Auth.setCreditBalance(data.balance);
+    const err = new Error(data.error || 'Không đủ điểm');
+    err.code = 402;
+    err.balance = data.balance;
+    err.required = data.required;
+    throw err;
+  }
   if (!r.ok) throw new Error(data.error || 'Request failed');
+  if (data && data.credit && typeof Auth !== 'undefined' && Auth.setCreditBalance) {
+    Auth.setCreditBalance(data.credit.balance);
+  }
   return data;
 }
 
@@ -779,6 +1220,7 @@ function plotCallLogs(records) {
   cellMarkers = [];
   if (lookupCircle) { map.removeLayer(lookupCircle); lookupCircle = null; }
   if (lookupCenterMarker) { map.removeLayer(lookupCenterMarker); lookupCenterMarker = null; }
+  if (measureState.active) setMeasureMode(false);
   drawnItems.clearLayers();
 
   const cellGroups = {};
@@ -836,6 +1278,38 @@ function cellLookupEnter(e) {
   if (mcc && mnc && lac && cellid) lookupCell();
 }
 
+// ============================================
+// Hiển thị 1 cell trên bản đồ (dùng chung cho tra đơn lẻ + lịch sử)
+// ============================================
+// opts: { lat, lon, range, color, mcc, mnc, lac, cellid, cellLine, radio,
+//         sourceLabel, srcType, showSource, description }
+function showCellOnMap(opts) {
+  const lat = parseFloat(opts.lat);
+  const lon = parseFloat(opts.lon);
+  if (!isFinite(lat) || !isFinite(lon)) return;
+  const range = parseFloat(opts.range || 500) || 500;
+  const rs = radioStyle(opts.radio);
+  // Màu vòng: theo RAT khi biết, ngược lại giữ màu theo nguồn (đỏ = nội bộ).
+  const color = rs.key ? rs.color : (opts.color || '#22aa44');
+  const popupText = `<b>${t('hist.cell')}: ${histEsc(opts.mcc)}-${histEsc(opts.mnc)}-${histEsc(opts.lac)}</b><br>` +
+    `${histEsc(opts.cellLine || '')}` +
+    radioPopupLine(opts.radio) + '<br>' +
+    (opts.showSource && opts.sourceLabel ? `${t('hist.source')}: <span class="hist-source ${opts.srcType}">${histEsc(opts.sourceLabel)}</span><br>` : '') +
+    `${t('hist.range')}: ${histEsc(range)}m<br>` +
+    `${t('hist.result')}: ${lat}, ${lon} <i class="fas fa-copy" style="cursor:pointer" title="Copy tọa độ" onclick="copyCoords(${lat},${lon})"></i>` +
+    (opts.description ? `<br>${histEsc(opts.description)}` : '');
+
+  if (lookupCircle) { map.removeLayer(lookupCircle); lookupCircle = null; }
+  if (lookupCenterMarker) { map.removeLayer(lookupCenterMarker); lookupCenterMarker = null; }
+  map.setView([lat, lon], 15);
+  lookupCircle = L.circle([lat, lon], {
+    radius: range, color: color, fillOpacity: 0.1, weight: 2
+  }).addTo(map).bindPopup(popupText);
+  lookupCenterMarker = L.marker([lat, lon], { icon: makeCellDivIcon(rs) })
+    .addTo(map).bindPopup(popupText);
+  lookupCenterMarker.openPopup();
+}
+
 async function lookupCell(mccArg, mncArg, lacArg, cellidArg) {
   const mcc = (mccArg != null && mccArg !== '') ? mccArg : document.getElementById('cellMcc').value;
   const mnc = (mncArg != null && mncArg !== '') ? mncArg : document.getElementById('cellMnc').value;
@@ -868,10 +1342,12 @@ async function lookupCell(mccArg, mncArg, lacArg, cellidArg) {
     const dLat = parseFloat(d.lat);
     const dLon = parseFloat(d.lon);
     const dCell = `${d.mcc || mcc}-${d.mnc || mnc}-${d.lac || lac}-${d.cellid || cellid}`;
+    const rs = radioStyle(d.radio);
     resultEl.innerHTML =
       `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">` +
         `<i class="fas fa-check-circle"></i>` +
         `<span class="hist-cell">${dCell}</span>` +
+        (rs.key ? `<span class="hist-radio-badge" style="background:${rs.color}" title="${histEsc(t('hist.radio'))}">${histEsc(rs.full || rs.label)}</span>` : '') +
         (showSource ? `<span class="hist-source ${srcType}">${sourceLabel}</span>` : '') +
       `</div>` +
       `<div style="font-size:11px">${formatCellId(d.cellid || cellid, sector)}</div>` +
@@ -885,33 +1361,22 @@ async function lookupCell(mccArg, mncArg, lacArg, cellidArg) {
     const cellLine = formatCellId(d.cellid || cellid, sector);
     const range = parseFloat(d.range || 500);
     const color = result.source === 'local' ? '#ff4444' : '#22aa44';
-    const popupText = `<b>${t('hist.cell')}: ${d.mcc || mcc}-${d.mnc || mnc}-${d.lac || lac}</b><br>` +
-      `${cellLine}<br>` +
-      (showSource ? `${t('hist.source')}: <span class="hist-source ${srcType}">${sourceLabel}</span><br>` : '') +
-      `Bán kính: ${d.range}m<br>` +
-      `${t('hist.result')}: ${dLat}, ${dLon} <i class="fas fa-copy" style="cursor:pointer" title="Copy tọa độ" onclick="copyCoords(${dLat},${dLon})"></i>` +
-      (d.description ? `<br>${d.description}` : '');
-    // Remove previous lookup result (keep only one on map)
-    if (lookupCircle) { map.removeLayer(lookupCircle); lookupCircle = null; }
-    if (lookupCenterMarker) { map.removeLayer(lookupCenterMarker); lookupCenterMarker = null; }
-    map.setView([dLat, dLon], 15);
-    lookupCircle = L.circle([dLat, dLon], {
-      radius: range,
-      color: color,
-      fillOpacity: 0.1,
-      weight: 2
-    }).addTo(map).bindPopup(popupText);
-    lookupCenterMarker = L.circleMarker([dLat, dLon], {
-      radius: 6,
-      color: '#ffffff',
-      weight: 2,
-      fillColor: color,
-      fillOpacity: 1
-    }).addTo(map).bindPopup(popupText);
+    showCellOnMap({
+      lat: dLat, lon: dLon, range: range, color: color,
+      mcc: d.mcc || mcc, mnc: d.mnc || mnc, lac: d.lac || lac, cellid: d.cellid || cellid,
+      cellLine: cellLine, radio: d.radio,
+      sourceLabel: sourceLabel, srcType: srcType,
+      showSource: showSource, description: d.description || ''
+    });
   } catch (e) {
     resultEl.className = 'cell-lookup-result show error';
     const msg = (e && e.message) ? e.message : '';
-    if (msg.indexOf('Chưa cấu hình') !== -1) {
+    if (e && e.code === 402) {
+      // Hết điểm tra cứu — dẫn user sang trang nạp/lịch sử điểm.
+      resultEl.innerHTML = '<i class="fas fa-gem"></i> ' + msg +
+        ` (còn ${e.balance != null ? e.balance : 0}, cần ${e.required != null ? e.required : 1})` +
+        ' — <a href="/credits.html" style="color:inherit;text-decoration:underline">Xem điểm</a>';
+    } else if (msg.indexOf('Chưa cấu hình') !== -1) {
       resultEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + msg;
     } else {
       resultEl.innerHTML = '<i class="fas fa-times-circle"></i> Không tìm thấy cell trong CSDL nội bộ và OpenCellID.org.';
@@ -967,11 +1432,27 @@ async function searchCells() {
 // ============================================
 // Annotation save/load
 // ============================================
-async function saveAnnotation(type, geojson, label) {
+async function saveAnnotation(type, geojson, label, distance) {
   try {
-    await apiRequest('POST', '/api/annotations', { type, geojson, label: label || type });
+    await apiRequest('POST', '/api/annotations', { type, geojson, label: label || type, distance: distance || 0 });
   } catch (e) {
     console.error('Save annotation error:', e);
+  }
+}
+
+const ANNOTATION_STYLE = { color: '#6666ff', weight: 2, opacity: 0.7, fillOpacity: 0.1 };
+
+function annotationStyle(feature) {
+  const g = feature && feature.geometry;
+  if (g && (g.type === 'LineString' || g.type === 'MultiLineString')) {
+    return { color: '#facc15', weight: 3, opacity: 0.9 };
+  }
+  return ANNOTATION_STYLE;
+}
+
+function bindAnnotationLabel(layer, a) {
+  if (a.type === 'polyline' && a.distance) {
+    layer.bindTooltip(fmtDistance(a.distance), { permanent: true, direction: 'center', className: 'measure-tip' });
   }
 }
 
@@ -979,13 +1460,13 @@ async function loadAnnotations() {
   try {
     const annotations = await apiRequest('GET', '/api/annotations');
     if (!annotations || annotations.length === 0) return;
-    drawnItems.clearLayers();
     annotations.forEach(a => {
       try {
-        const layer = L.geoJSON(a.geojson, {
-          style: { color: '#6666ff', weight: 2, opacity: 0.7, fillOpacity: 0.1 }
+        const layer = L.geoJSON(a.geojson, { style: annotationStyle });
+        layer.eachLayer(l => {
+          bindAnnotationLabel(l, a);
+          drawnItems.addLayer(l);
         });
-        layer.eachLayer(l => drawnItems.addLayer(l));
       } catch (e) {}
     });
   } catch (e) {
@@ -1004,6 +1485,8 @@ async function uploadCallLogExcel(event) {
   const file = event.target.files[0];
   event.target.value = '';
   if (!file) return;
+  // Nhớ tên file để ghi vào metadata nhóm lịch sử tra cứu hàng loạt.
+  currentUploadFileName = file.name || '';
 
   const prog = document.getElementById('callLogUploadProgress');
   const status = document.getElementById('callLogUploadStatus');
@@ -1098,9 +1581,12 @@ async function resolveUnmatchedCells() {
   const resolvedMap = {};
   const MAX_ROUNDS = 5;
   let batch = unresolved;
+  // Một uploadId dùng chung cho MỌI vòng → các vòng resolve gộp về 1 nhóm lịch sử.
+  const uploadId = 'up' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
   try {
     for (let round = 0; round < MAX_ROUNDS && batch.length > 0; round++) {
-      const resp = await apiRequest('POST', '/api/cells/resolve-batch', { cells: batch });
+      const resp = await apiRequest('POST', '/api/cells/resolve-batch',
+        { cells: batch, uploadId, fileName: currentUploadFileName });
       if (!resp.results) break;
       const stillPending = [];
       for (const r of resp.results) {
@@ -1480,6 +1966,12 @@ function updatePlayBtn() {
 
 function toggleLegend() {
   document.getElementById('legendPanel').classList.toggle('show');
+}
+
+// Mở/đóng sub-section "Công nghệ mạng" trong legend
+function toggleLegendRadio() {
+  const sub = document.getElementById('legendRadioSub');
+  if (sub) sub.classList.toggle('open');
 }
 
 // ============================================

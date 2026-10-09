@@ -1,4 +1,4 @@
-// Shared authentication module for Cell Tracker
+// Shared authentication module for Cell.id.vn
 const Auth = {
   TOKEN_KEY: 'cell_tracker_token',
 
@@ -34,6 +34,19 @@ const Auth = {
   isAdmin() {
     const user = this.getUser();
     return user && user.role === 'admin';
+  },
+
+  getCreditBalance() {
+    const user = this.getUser();
+    return user && user.credit_balance != null ? Number(user.credit_balance) : null;
+  },
+
+  setCreditBalance(balance) {
+    const user = this.getUser();
+    if (!user) return;
+    user.credit_balance = Number(balance) || 0;
+    this.setUser(user);
+    if (typeof window.updateCreditBadge === 'function') window.updateCreditBadge(user.credit_balance);
   },
 
   logout() {
@@ -141,7 +154,7 @@ Auth.initNavbar = function() {
 
   // Build uniform HTML
   const isEn = (localStorage.getItem('lang') === 'en');
-  const appTitle = isEn ? 'Cell Tracker' : 'Cell Tracker';
+  const appTitle = 'Cell.id.vn';
   const mapTxt = isEn ? 'Map' : 'Bản đồ';
   const toolsTxt = isEn ? 'Tools' : 'Công cụ';
   const portTxt = isEn ? 'Port Check' : 'Tra cứu chuyển mạng';
@@ -287,6 +300,32 @@ Auth.initNavbar = function() {
       }
       .user-dropdown-item-common:hover { background: var(--bg-hover, rgba(0,0,0,0.06)) !important; }
       .user-dropdown-divider-common { height: 1px !important; background: var(--border-color, rgba(0,0,0,0.1)) !important; margin: 6px 0 !important; }
+
+      /* Credit badge */
+      .credit-badge-common {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        padding: 4px 10px !important;
+        border-radius: 14px !important;
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        cursor: pointer !important;
+        border: 1px solid rgba(120, 220, 160, 0.4) !important;
+        background: rgba(120, 220, 160, 0.14) !important;
+        color: #1f9e5a !important;
+        height: 30px !important;
+        box-sizing: border-box !important;
+        line-height: normal !important;
+        text-decoration: none !important;
+      }
+      .credit-badge-common:hover { background: rgba(120, 220, 160, 0.26) !important; }
+      .credit-badge-common.low {
+        border-color: rgba(255, 100, 100, 0.45) !important;
+        background: rgba(255, 100, 100, 0.15) !important;
+        color: #e04444 !important;
+      }
+      .credit-badge-common.low:hover { background: rgba(255, 100, 100, 0.28) !important; }
     `;
     document.head.appendChild(style);
   }
@@ -315,6 +354,11 @@ Auth.initNavbar = function() {
 
       ${isAdmin ? `<a class="btn-header-common" href="/admin.html" style="${path.includes('/admin.html') ? 'border-color: var(--border-focus, #4444cc) !important; font-weight: bold;' : ''}"><i class="fas fa-cog"></i> ${adminTxt}</a>` : ''}
       
+      <!-- Credit badge -->
+      <a class="credit-badge-common" id="creditBadgeCommon" href="/credits.html" title="${isEn ? 'Your lookup credits' : 'Điểm tra cứu của bạn'}">
+        <i class="fas fa-gem"></i><span id="creditBadgeValue">--</span>
+      </a>
+
       <!-- User menu -->
       <div class="user-menu-common" id="userMenuCommon" onclick="Auth.toggleUserDropdownCommon(event)">
         <div class="user-avatar-common">${user.username.substring(0, 2).toUpperCase()}</div>
@@ -341,6 +385,36 @@ Auth.initNavbar = function() {
       uMenu.classList.remove('show');
     }
   });
+
+  // Số dư điểm: hiện cache trước (không nhấp nháy), rồi làm mới từ server.
+  window.updateCreditBadge(this.getCreditBalance());
+  this.refreshCreditBalance();
+};
+
+// Vẽ số dư lên badge navbar. `null` → chưa biết (chưa đăng nhập).
+window.updateCreditBadge = function(balance) {
+  const el = document.getElementById('creditBadgeValue');
+  const badge = document.getElementById('creditBadgeCommon');
+  if (!el || !badge) return;
+  if (balance === null || balance === undefined) { badge.style.display = 'none'; return; }
+  badge.style.display = '';
+  const n = Number(balance);
+  el.textContent = (Number.isInteger(n) ? n : n.toFixed(2));
+  badge.classList.toggle('low', n <= 1);
+};
+
+// Làm mới số dư từ server (không chặn UI nếu lỗi mạng).
+Auth.refreshCreditBalance = async function() {
+  if (!this.isLoggedIn()) return null;
+  try {
+    const res = await this.fetch('/api/credits/balance');
+    if (!res.ok) return null;
+    const data = await res.json();
+    this.setCreditBalance(data.balance);
+    return data.balance;
+  } catch (e) {
+    return null;
+  }
 };
 
 Auth.toggleToolsDropdownCommon = function(event) {

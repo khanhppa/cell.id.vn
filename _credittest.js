@@ -365,8 +365,8 @@ async function main() {
 
   // ---- Nạp điểm tách sang trang riêng (topup.html) ----
   console.log('\n== credits.html: chỉ còn số dư + lịch sử, KHÔNG còn wizard/payOS ==');
-  ok('credits.html có nút mở trang nạp điểm (#topupCta → /topup.html)',
-    /id="topupCta"[^>]*href="\/topup\.html"/.test(creditsHtml));
+  ok('credits.html có nút mở trang nạp điểm (#topupBtn → /topup.html)',
+    /id="topupBtn"[^>]*href="\/topup\.html"/.test(creditsHtml));
   ok('credits.html KHÔNG còn thanh wizard (#wzSteps / .wz-step)',
     !/id="wzSteps"/.test(creditsHtml) && !/class="wz-step/.test(creditsHtml));
   ok('credits.html KHÔNG còn pane bước #wzStep1..5',
@@ -394,7 +394,7 @@ async function main() {
     /function viewOrder\(orderCode\)[\s\S]{0,200}\/topup\.html\?order=/.test(creditsHtml));
 
   // ---- Trang nạp điểm riêng: topup.html ----
-  console.log('\n== topup.html: wizard 5 bước + QR tại chỗ (không dialog/khung nhúng) ==');
+  console.log('\n== topup.html: wizard 4 bước + QR tại chỗ (không dialog/khung nhúng) ==');
   ok('topup.html nạp auth.js', /<script src="auth\.js"><\/script>/.test(topupHtml));
   ok('topup.html gọi Auth.initNavbar()', /Auth\.initNavbar\(\)/.test(topupHtml));
   ok('topup.html yêu cầu đăng nhập qua Auth.goLogin (không hard-code login.html)',
@@ -405,50 +405,68 @@ async function main() {
     /\.container\s*\{[^}]*padding:\s*(\d+)px/.test(topupHtml) &&
     Number(/\.container\s*\{[^}]*padding:\s*(\d+)px/.exec(topupHtml)[1]) >= 48);
 
-  ok('thanh tiến trình #wzSteps có đúng 5 mốc data-wz 1..5',
+  ok('thanh tiến trình #wzSteps có đúng 4 mốc data-wz 1..4',
     (() => {
       const steps = [...topupHtml.matchAll(/data-wz="(\d)"/g)].map(m => m[1]);
-      return steps.length === 5 && steps.join(',') === '1,2,3,4,5';
+      return steps.length === 4 && steps.join(',') === '1,2,3,4';
     })());
-  ok('5 nhãn mốc đúng thứ tự Số tiền → Số tiền tự chọn → Đơn nạp → Thanh toán → Hoàn tất',
+  ok('4 nhãn mốc đúng thứ tự Số tiền → Đơn nạp → Thanh toán → Hoàn tất',
     (() => {
-      const order = ['Số tiền', 'Số tiền tự chọn', 'Đơn nạp', 'Thanh toán', 'Hoàn tất'];
+      const order = ['Số tiền', 'Đơn nạp', 'Thanh toán', 'Hoàn tất'];
       const idx = order.map(l => topupHtml.indexOf('>' + l + '<'));
       return idx.every(i => i > 0) && idx.every((v, i) => i === 0 || idx[i - 1] < v);
     })());
-  ok('có đủ 5 pane bước #wzStep1..#wzStep5',
-    ['1', '2', '3', '4', '5'].every(n => topupHtml.includes(`id="wzStep${n}"`)));
-  ok('bước 2..5 mặc định ẩn, bước 1 mặc định hiện',
-    ['2', '3', '4', '5'].every(n => new RegExp(`id="wzStep${n}" hidden`).test(topupHtml))
-    && !/id="wzStep1" hidden/.test(topupHtml));
-  ok('bước 1 chứa #topupCard + #pkgGrid; bước 2 chứa ô số tiền tự chọn (#customVnd)',
-    /id="wzStep1"[\s\S]*?id="pkgGrid"[\s\S]*?id="wzStep2"/.test(topupHtml)
-    && /id="wzStep2"[\s\S]*?id="customVnd"/.test(topupHtml));
-  ok('bước 3 có bảng xác nhận: mã đơn · gói · tiền · điểm · hạn',
-    /id="wzStep3"[\s\S]*?id="wzOrderCode"[\s\S]*?id="wzPackageLabel"[\s\S]*?id="wzAmount"[\s\S]*?id="wzCredits"[\s\S]*?id="wzExpires"/.test(topupHtml));
-  ok('bước 4 chứa #payCard + QR (#payQr) + số TK (#payAccNo) + nội dung CK (#payDesc)',
-    /id="wzStep4"[\s\S]*?id="payCard"[\s\S]*?id="payDesc"[\s\S]*?id="payQr"/.test(topupHtml));
-  ok('bước 5 chứa kết quả (#resOrder/#resStatus/#resAmount/#resCredits)',
-    /id="wzStep5"[\s\S]*?id="resOrder"[\s\S]*?id="resStatus"[\s\S]*?id="resAmount"[\s\S]*?id="resCredits"/.test(topupHtml));
+  ok('thanh tiến trình KHÔNG còn mốc riêng "Số tiền tự chọn"',
+    !topupHtml.includes('>Số tiền tự chọn<'));
+  ok('có đủ 4 pane bước #wzStep1..#wzStep4',
+    ['1', '2', '3', '4'].every(n => topupHtml.includes(`id="wzStep${n}"`)));
+  ok('mọi pane mặc định ẩn (chờ loadPackages xong mới hiện)',
+    ['1', '2', '3', '4'].every(n => new RegExp(`id="wzStep${n}" hidden`).test(topupHtml)));
+  ok('bước 1 chứa CẢ #pkgGrid và ô số tiền tự chọn (#customVnd) trong cùng pane',
+    /id="wzStep1"[\s\S]*?id="pkgGrid"[\s\S]*?id="customVnd"[\s\S]*?id="wzStep2"/.test(topupHtml));
+  ok('bước 2 có bảng xác nhận: mã đơn · gói · tiền · điểm · hạn',
+    /id="wzStep2"[\s\S]*?id="wzOrderCode"[\s\S]*?id="wzPackageLabel"[\s\S]*?id="wzAmount"[\s\S]*?id="wzCredits"[\s\S]*?id="wzExpires"/.test(topupHtml));
+  ok('bước 3 chứa #payCard + QR (#payQr) + số TK (#payAccNo) + nội dung CK (#payDesc)',
+    /id="wzStep3"[\s\S]*?id="payCard"[\s\S]*?id="payDesc"[\s\S]*?id="payQr"/.test(topupHtml));
+  ok('bước 4 chứa kết quả (#resOrder/#resStatus/#resAmount/#resCredits)',
+    /id="wzStep4"[\s\S]*?id="resOrder"[\s\S]*?id="resStatus"[\s\S]*?id="resAmount"[\s\S]*?id="resCredits"/.test(topupHtml));
   ok('KHÔNG hiển thị tên chủ tài khoản nhận tiền (không có nhãn "Chủ tài khoản")',
     !/payAccName/.test(topupHtml) && !/>\s*Chủ tài khoản/.test(topupHtml));
   ok('KHÔNG dùng khung nhúng/dialog payOS (không #config_root, CDN payos-checkout, PayOSCheckout)',
     !/id="config_root"/.test(topupHtml) && !/cdn\.payos\.vn/.test(topupHtml)
     && !/PayOSCheckout/.test(topupHtml) && !/<dialog\s+id="payDialog"/.test(topupHtml));
-  ok('renderWizard tô active/done + ẩn hiện pane theo bước (TOTAL_STEPS=5)',
+  ok('renderWizard tô active/done + ẩn hiện pane theo bước (TOTAL_STEPS=4)',
     /function renderWizard\(step\)/.test(topupHtml) &&
     /classList\.toggle\('active', n === step\)/.test(topupHtml) &&
     /classList\.toggle\('done', n < step\)/.test(topupHtml) &&
-    /TOTAL_STEPS = 5/.test(topupHtml));
-  ok('createOrder/createCustomOrder gán activeOrder = d rồi qua bước 3',
+    /TOTAL_STEPS = 4/.test(topupHtml));
+  ok('createOrder/createCustomOrder gán activeOrder = d rồi qua bước 2',
     (topupHtml.match(/^\s{4}activeOrder = d;/gm) || []).length === 2 &&
-    (topupHtml.match(/^\s*wzGotoStep\(3\);/gm) || []).length === 2);
+    (topupHtml.match(/^\s*wzGotoStep\(2\);/gm) || []).length === 3);  // 2 tạo đơn + payBack
+  ok('bước 3 có đủ 4 nút: Quay lại · Thanh toán · Hủy đơn · Đóng (+ nút test ẩn)',
+    /id="payBackBtn"[^>]*onclick="payBack\(\)"/.test(topupHtml) &&
+    /id="payNowBtn"[^>]*onclick="payNow\(\)"/.test(topupHtml) &&
+    /id="payCancelBtn"[^>]*onclick="cancelOrder\(\)"/.test(topupHtml) &&
+    /onclick="closeTopupFlow\(\)"/.test(topupHtml) &&
+    /id="payMockBtn" hidden/.test(topupHtml));
+  ok('payBack giữ đơn (KHÔNG gọi /cancel) rồi về bước 2',
+    /function payBack\(\)[\s\S]{0,400}wzGotoStep\(2\)/.test(topupHtml) &&
+    !/function payBack\(\)[\s\S]{0,400}\/cancel/.test(topupHtml));
+  ok('popup thanh toán có #payModal + số TK + nội dung CK + QR (#payModalQr)',
+    /id="payModal"[\s\S]*?id="payModalAccNo"[\s\S]*?id="payModalDesc"[\s\S]*?id="payModalQr"/.test(topupHtml));
+  ok('payNow mở popup; showResult đóng popup rồi về bước 4',
+    /function payNow\(\)[\s\S]{0,400}payModal'\)\.hidden = false/.test(topupHtml) ||
+    /function payNow\(\)[\s\S]{0,400}modal\.hidden = false/.test(topupHtml));
+  ok('showResult đóng popup (closePayModal) trước khi render bước 4',
+    /async function showResult\(o\)[\s\S]{0,300}closePayModal\(\)/.test(topupHtml));
+  ok('test_mode bật nút giả lập (#payMockBtn) ở bước 3',
+    /getElementById\('payMockBtn'\)\.hidden = !d\.test_mode/.test(topupHtml));
   ok('confirmOrderBack huỷ đơn tạm rồi về bước 1',
     /async function confirmOrderBack\(\)[\s\S]{0,900}wzGotoStep\(1\)/.test(topupHtml) &&
     /\/cancel`/.test(topupHtml));
   ok('confirmOrderNext → showPayCard + guard null báo lỗi rõ',
     /function confirmOrderNext\(\)[\s\S]{0,400}if \(!activeOrder\)[\s\S]{0,400}showPayCard\(activeOrder\)/.test(topupHtml));
-  ok('startPolling khi PAID → showResult (bước 5)',
+  ok('startPolling khi PAID → showResult (bước 4)',
     /d\.status === 'PAID'[\s\S]{0,400}showResult\(/.test(topupHtml));
   ok('showResult đổ trạng thái PAID/PENDING/CANCELLED',
     /'PAID'/.test(topupHtml) && /'PENDING'/.test(topupHtml) && /'CANCELLED'/.test(topupHtml));

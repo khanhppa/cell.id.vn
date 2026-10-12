@@ -3,10 +3,10 @@
  * Chạy: node _creditwizard.test.js
  *
  * Vì sao cần: bug "bấm Tiếp tục thanh toán không sang bước 3" lọt qua mọi test
- * regex tĩnh (chúng chỉ xác nhận `fillConfirmStep(d)` + `wzGotoStep(3)` tồn tại,
+ * regex tĩnh (chúng chỉ xác nhận `fillConfirmStep(d)` + `wzGotoStep(2)` tồn tại,
  * không thấy được `activeOrder` chưa được gán). Ở đây eval ĐÚNG khối <script>
  * của trang trong một DOM stub tối thiểu rồi chạy chuỗi thao tác thật:
- *   createOrder(1) -> confirmOrderNext() -> #wzStep4 hiện, #wzStep1..3 ẩn.
+ *   createOrder(1) -> confirmOrderNext() -> #wzStep3 hiện, #wzStep1/2/4 ẩn.
  */
 const fs = require('fs');
 const path = require('path');
@@ -61,19 +61,24 @@ function byId(id) {
   return els.get(id);
 }
 
-// #wzStep2..#wzStep5 mang attribute `hidden` ngay trong markup → stub phải khớp.
+// #wzStep1..#wzStep4 mang attribute `hidden` ngay trong markup → stub phải khớp.
+byId('wzStep1').hidden = true;
 byId('wzStep2').hidden = true;
 byId('wzStep3').hidden = true;
 byId('wzStep4').hidden = true;
-byId('wzStep5').hidden = true;
 byId('payCard').hidden = false;
 byId('wzSteps').querySelectorAll = sel => (sel === '.wz-step' ? WZ_STEPS : []);
 
 // #payQr nằm trong #payQrBox; showPayCard ẩn/hiện qua qr.parentElement.
 byId('payQr').parentElement = byId('payQrBox');
 
-// 5 mốc wizard phải khớp markup thật (#wzSteps .wz-step[data-wz]).
-const WZ_STEPS = [1, 2, 3, 4, 5].map(n => {
+// Popup thanh toán: #payModalQr nằm trong #payModalQrBox (fillPayModal ẩn/hiện
+// qua box.hidden), #payModal là overlay bật/tắt bằng .hidden.
+byId('payModalQr').parentElement = byId('payModalQrBox');
+byId('payModal').hidden = true;
+
+// 4 mốc wizard phải khớp markup thật (#wzSteps .wz-step[data-wz]).
+const WZ_STEPS = [1, 2, 3, 4].map(n => {
   const e = makeEl('wz-step-' + n);
   e.attrs['data-wz'] = String(n);
   return e;
@@ -141,43 +146,49 @@ sandbox.fetch = sandbox.Auth.fetch;
 
 const ctx = vm.createContext(sandbox);
 vm.runInContext(
-  appJs + '\n;globalThis.__t = { createOrder, confirmOrderNext, confirmOrderBack, renderWizard, showResult };',
+  appJs + '\n;globalThis.__t = { createOrder, confirmOrderNext, confirmOrderBack, renderWizard, showResult, payNow, payBack, closePayModal, fillPayModal };',
   ctx, { filename: 'topup-inline.js' }
 );
 
 // ---------------------------------------------------------------------------
 (async () => {
   const T = ctx.__t;
-  console.log('\n== Wizard: createOrder -> confirmOrderNext -> bước 4 ==');
+  console.log('\n== Wizard: createOrder -> confirmOrderNext -> bước 3 ==');
 
-  ok('#wzStep1 hiện, #wzStep2..5 ẩn lúc đầu',
+  ok('#wzStep1..4 đều ẩn lúc đầu (chờ loadPackages xong mới hiện)',
+    byId('wzStep1').hidden === true && byId('wzStep2').hidden === true
+    && byId('wzStep3').hidden === true && byId('wzStep4').hidden === true,
+    { s1: byId('wzStep1').hidden });
+
+  T.renderWizard(1);
+  ok('renderWizard(1): #wzStep1 hiện, #wzStep2..4 ẩn',
     byId('wzStep1').hidden === false && byId('wzStep2').hidden === true
-    && byId('wzStep3').hidden === true, byId('wzStep1').hidden);
+    && byId('wzStep3').hidden === true && byId('wzStep4').hidden === true);
 
   await T.createOrder(1);
   ok('createOrder gọi POST /api/credits/topup/create',
     callLog.some(c => /\/api\/credits\/topup\/create$/.test(c.url)), callLog.map(c => c.url).slice(-3));
   ok('sau createOrder: bước 3 (đơn nạp) hiện, bước 1+2+4 ẩn',
-    byId('wzStep1').hidden === true && byId('wzStep3').hidden === false
-    && byId('wzStep4').hidden === true,
-    { s1: byId('wzStep1').hidden, s3: byId('wzStep3').hidden, s4: byId('wzStep4').hidden });
+    byId('wzStep1').hidden === true && byId('wzStep2').hidden === false
+    && byId('wzStep3').hidden === true && byId('wzStep4').hidden === true,
+    { s1: byId('wzStep1').hidden, s2: byId('wzStep2').hidden, s3: byId('wzStep3').hidden });
   ok('bảng xác nhận đổ đúng đơn (#wzOrderCode/#wzCredits/#wzAmount)',
     byId('wzOrderCode').textContent === '#4242'
     && byId('wzCredits').textContent === '50 điểm'
     && /50/.test(byId('wzAmount').textContent),
     { code: byId('wzOrderCode').textContent, amount: byId('wzAmount').textContent });
 
-  // Bug đã báo: bấm "Tiếp tục thanh toán" phải sang bước thanh toán (4).
+  // Bug đã báo: bấm "Tiếp tục thanh toán" phải sang bước thanh toán (3).
   T.confirmOrderNext();
-  ok('confirmOrderNext(): #wzStep4 HIỆN (bug cũ: đứng ở bước đơn nạp)',
-    byId('wzStep4').hidden === false, { s4: byId('wzStep4').hidden });
-  ok('confirmOrderNext(): #wzStep1/#wzStep2/#wzStep3 ẩn',
+  ok('confirmOrderNext(): #wzStep3 HIỆN (bug cũ: đứng ở bước đơn nạp)',
+    byId('wzStep3').hidden === false, { s3: byId('wzStep3').hidden });
+  ok('confirmOrderNext(): #wzStep1/#wzStep2/#wzStep4 ẩn',
     byId('wzStep1').hidden === true && byId('wzStep2').hidden === true
-    && byId('wzStep3').hidden === true);
-  ok('thanh tiến trình: mốc 4 active, mốc 1+2+3 done, mốc 5 chưa',
-    WZ_STEPS[3].classList.contains('active') && WZ_STEPS[0].classList.contains('done')
-    && WZ_STEPS[1].classList.contains('done') && WZ_STEPS[2].classList.contains('done')
-    && !WZ_STEPS[4].classList.contains('done'),
+    && byId('wzStep4').hidden === true);
+  ok('thanh tiến trình: mốc 3 active, mốc 1+2 done, mốc 4 chưa',
+    WZ_STEPS[2].classList.contains('active') && WZ_STEPS[0].classList.contains('done')
+    && WZ_STEPS[1].classList.contains('done')
+    && !WZ_STEPS[3].classList.contains('done'),
     WZ_STEPS.map(s => ({ n: s.attrs['data-wz'], cls: [...s.classList._s] })));
   ok('thẻ thanh toán #payCard hiện + đúng mã đơn',
     byId('payCard').hidden === false && /4242/.test(byId('payOrderCode').textContent),
@@ -191,18 +202,49 @@ vm.runInContext(
     byId('payAccNo').textContent === '123456' && byId('payDesc').textContent === 'NAP 4242',
     { acc: byId('payAccNo').textContent, desc: byId('payDesc').textContent });
   ok('đơn thiếu QR → #payQrBox ẩn', byId('payQr').parentElement.hidden === true);
-  ok('nút mở trang payOS trỏ đúng checkout_url',
-    byId('payCheckout').href === 'https://pay.payos.vn/web/abc', byId('payCheckout').href);
-  ok('bước 5 (kết quả) chưa hiện khi đơn còn PENDING', byId('wzStep5').hidden === true);
+  ok('đơn thiếu QR → popup ẩn QR + hiện link mở trang payOS',
+    byId('payModalQr').parentElement.hidden === true && byId('payModalMsg').textContent.length > 0,
+    { qrBox: byId('payModalQr').parentElement.hidden, msg: byId('payModalMsg').textContent });
+  ok('tạo đơn xong popup thanh toán ĐANG ĐÓNG (chờ khách bấm Thanh toán)',
+    byId('payModal').hidden === true);
+  ok('bước 4 (kết quả) chưa hiện khi đơn còn PENDING', byId('wzStep4').hidden === true);
 
-  console.log('\n== Bước 5: showResult(PAID) ==');
+  console.log('\n== Bước 3 -> popup "Thanh toán" -> Quay lại ==');
+  // Đang ở bước 3 với đơn PENDING (từ createOrder + confirmOrderNext ở trên).
+  T.payNow();
+  ok('payNow(): popup #payModal MỞ', byId('payModal').hidden === false);
+  ok('payNow(): popup đổ đúng tiền + điểm + số TK + nội dung CK',
+    /50/.test(byId('payModalAmount').textContent)
+    && byId('payModalCredits').textContent === '50 điểm'
+    && byId('payModalAccNo').textContent === '123456'
+    && byId('payModalDesc').textContent === 'NAP 4242',
+    {
+      amt: byId('payModalAmount').textContent, cr: byId('payModalCredits').textContent,
+      acc: byId('payModalAccNo').textContent, desc: byId('payModalDesc').textContent
+    });
+  T.closePayModal();
+  ok('closePayModal(): popup đóng, vẫn ở bước 3', byId('payModal').hidden === true && byId('wzStep3').hidden === false);
+
+  T.payNow();
+  T.payBack();
+  ok('payBack(): đóng popup + về bước 2, KHÔNG huỷ đơn (không gọi /cancel mới)',
+    byId('payModal').hidden === true && byId('wzStep2').hidden === false
+    && !callLog.some(c => /\/api\/credits\/topup\/4242\/cancel$/.test(c.url)),
+    { s2: byId('wzStep2').hidden, calls: callLog.map(c => c.url).slice(-3) });
+  T.confirmOrderNext();
+  T.payNow();
+  ok('quay lại bước 3 rồi mở lại popup: vẫn mở được', byId('payModal').hidden === false);
+
+  console.log('\n== Bước 4: showResult(PAID) ==');
   await T.showResult({ order_code: 4242, status: 'PAID', amount_vnd: 50000, credits: 50 });
-  ok('showResult(PAID): #wzStep5 hiện, #wzStep4 ẩn',
-    byId('wzStep5').hidden === false && byId('wzStep4').hidden === true);
+  ok('showResult(PAID): #wzStep4 hiện, #wzStep3 ẩn',
+    byId('wzStep4').hidden === false && byId('wzStep3').hidden === true);
+  ok('showResult(PAID): popup thanh toán tự ĐÓNG (quét QR xong trả về bước 4)',
+    byId('payModal').hidden === true);
   ok('kết quả đổ đúng mã đơn + trạng thái PAID',
     byId('resOrder').textContent === '#4242' && /PAID/.test(byId('resStatus').innerHTML),
     { code: byId('resOrder').textContent, st: byId('resStatus').innerHTML });
-  ok('thanh tiến trình: cả 5 mốc done/active khi hoàn tất',
+  ok('thanh tiến trình: cả 4 mốc done/active khi hoàn tất',
     WZ_STEPS.every(s => s.classList.contains('done') || s.classList.contains('active')),
     WZ_STEPS.map(s => [...s.classList._s]));
 
@@ -213,9 +255,9 @@ vm.runInContext(
     && callLog.some(c => /\/api\/credits\/topup\/4242\/cancel$/.test(c.url)),
     { s1: byId('wzStep1').hidden, calls: callLog.map(c => c.url).slice(-3) });
   T.confirmOrderNext();
-  ok('confirmOrderNext() khi chưa có đơn: KHÔNG sang bước 4 + báo lỗi rõ ở #wzMsg',
-    byId('wzStep4').hidden === true && byId('wzMsg').textContent.length > 0,
-    { s4: byId('wzStep4').hidden, msg: byId('wzMsg').textContent });
+  ok('confirmOrderNext() khi chưa có đơn: KHÔNG sang bước 3 + báo lỗi rõ ở #wzMsg',
+    byId('wzStep3').hidden === true && byId('wzMsg').textContent.length > 0,
+    { s3: byId('wzStep3').hidden, msg: byId('wzMsg').textContent });
 
   console.log(`\n${pass} passed, ${fail} failed\n`);
   process.exit(fail ? 1 : 0);

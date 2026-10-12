@@ -66,6 +66,7 @@
   .btn {
     border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);
     border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
   }
   .btn:hover { background: var(--bg-hover); }
   .btn:disabled { opacity: .5; cursor: default; }
@@ -129,14 +130,17 @@
     background: rgba(31,158,90,0.12); color: var(--ok);
     border: 1px solid rgba(31,158,90,0.35);
   }
-  /* Nút mở trang nạp điểm riêng (topup.html). */
-  .topup-cta {
-    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-    background: var(--bg-card); border: 1px solid var(--border-color);
-    border-radius: 12px; padding: 14px 18px; margin-bottom: 18px;
+  /* Nút mở trang nạp điểm riêng (topup.html) — đứng cạnh nút Làm mới. */
+  .balance-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  /* Nổi bật, dễ thấy; <a> nên phải tự bỏ underline mặc định của trình duyệt. */
+  .btn-topup {
+    background: var(--ok); border-color: var(--ok); color: #fff; font-weight: 700;
+    box-shadow: 0 2px 8px rgba(31, 158, 90, .28);
   }
-  .topup-cta .cta-text { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
-  .topup-cta .cta-text b { color: var(--text-primary); }
+  .btn-topup:hover, .btn-topup:focus, .btn-topup:active {
+    background: var(--ok); border-color: var(--ok); color: #fff;
+    text-decoration: none; filter: brightness(1.08);
+  }
   .copy-btn {
     border: none; background: transparent; color: var(--text-faint); cursor: pointer;
     padding: 2px 5px; border-radius: 5px; font-size: 11px; margin-left: 4px;
@@ -187,16 +191,6 @@
 <body>
 <nav class="navbar"></nav>
 <div class="container">
-  <div class="topup-cta">
-    <div class="cta-text">
-      <b><i class="fas fa-wallet"></i> Nạp điểm</b><br>
-      Mở trang nạp điểm để chọn gói, quét QR hoặc thanh toán payOS.
-    </div>
-    <a class="btn" id="topupCta" href="/topup.html" style="margin-left:auto;font-weight:600">
-      <i class="fas fa-arrow-right"></i> Nạp điểm
-    </a>
-  </div>
-
   <div class="card">
     <div class="balance-row">
       <div>
@@ -204,7 +198,11 @@
         <div class="muted" style="font-size:12px">điểm còn lại</div>
       </div>
       <div class="balance-meta" id="balMeta"></div>
-      <div style="margin-left:auto">
+      <div class="balance-actions">
+        <!-- Nút nạp điểm nổi bật (màu --ok) cạnh nút làm mới. -->
+        <a class="btn btn-topup" id="topupBtn" href="/topup.html">
+          <i class="fas fa-wallet"></i> Nạp điểm
+        </a>
         <button class="btn" id="refreshBtn" onclick="loadAll()"><i class="fas fa-rotate"></i> Làm mới</button>
       </div>
     </div>

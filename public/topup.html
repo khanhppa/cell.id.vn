@@ -110,8 +110,8 @@
   .countdown.late { background: rgba(224,68,68,.14); color: var(--danger); }
   .quick-amt { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
   .quick-amt .btn { padding: 4px 10px; font-size: 12px; }
-  /* Thanh tiến trình wizard 5 bước:
-     (1) Số tiền (2) Số tiền tự chọn (3) Đơn nạp (4) Thanh toán (5) Hoàn tất. */
+  /* Thanh tiến trình wizard 4 bước:
+     (1) Số tiền (2) Đơn nạp (3) Thanh toán (4) Hoàn tất. */
   .wz-steps {
     display: flex; align-items: flex-start; gap: 0;
     margin: 0 0 18px; padding: 0 0 4px;
@@ -188,6 +188,37 @@
   .res-bal .num { font-size: 30px; font-weight: 800; color: var(--ok); line-height: 1; }
   .res-bal .lbl { color: var(--text-secondary); font-size: 12.5px; }
   .res-bal[hidden] { display: none; }
+  /* Popup thanh toán (QR payOS). Không dùng <dialog>/thư viện payOS:
+     payOS không cho ẩn tên chủ tài khoản nhận tiền. */
+  .pay-modal {
+    position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
+    padding: 18px; background: rgba(12, 16, 24, .58); overflow-y: auto;
+  }
+  .pay-modal[hidden] { display: none; }
+  .pay-modal-box {
+    width: 100%; max-width: 420px; background: var(--bg-card); color: var(--text-primary);
+    border: 1px solid var(--border-color); border-radius: 14px; padding: 16px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, .32); margin: auto;
+  }
+  .pay-modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 14px; }
+  .pay-modal-head b { flex: 1; }
+  .pay-modal-x {
+    border: none; background: none; color: var(--text-faint); cursor: pointer;
+    font-size: 15px; padding: 4px 6px; border-radius: 6px;
+  }
+  .pay-modal-x:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .pay-modal-body {
+    display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center;
+  }
+  .pay-modal-body .pay-row { justify-content: center; margin-bottom: 0; }
+  .pay-modal-amt { font-size: 26px; font-weight: 800; color: var(--ok); line-height: 1.2; }
+  .pay-modal-qr { margin: 8px 0; }
+  .pay-modal-qr[hidden] { display: none; }
+  #payModalQr {
+    width: 232px; height: 232px; border: 1px solid var(--border-color);
+    border-radius: 10px; background: #fff;
+  }
+  .pay-modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 </style>
 </head>
 <body>
@@ -198,14 +229,13 @@
 
   <div class="wz-steps" id="wzSteps">
     <button class="wz-step active" type="button" data-wz="1"><div class="wz-dot">1</div><div class="wz-label">Số tiền</div></button>
-    <button class="wz-step" type="button" data-wz="2"><div class="wz-dot">2</div><div class="wz-label">Số tiền tự chọn</div></button>
-    <button class="wz-step" type="button" data-wz="3"><div class="wz-dot">3</div><div class="wz-label">Đơn nạp</div></button>
-    <button class="wz-step" type="button" data-wz="4"><div class="wz-dot">4</div><div class="wz-label">Thanh toán</div></button>
-    <button class="wz-step" type="button" data-wz="5"><div class="wz-dot">5</div><div class="wz-label">Hoàn tất</div></button>
+    <button class="wz-step" type="button" data-wz="2"><div class="wz-dot">2</div><div class="wz-label">Đơn nạp</div></button>
+    <button class="wz-step" type="button" data-wz="3"><div class="wz-dot">3</div><div class="wz-label">Thanh toán</div></button>
+    <button class="wz-step" type="button" data-wz="4"><div class="wz-dot">4</div><div class="wz-label">Hoàn tất</div></button>
   </div>
 
-  <!-- ===== Bước 1: chọn gói nạp ===== -->
-  <div id="wzStep1">
+  <!-- ===== Bước 1: chọn số tiền (gói nạp HOẶC số tiền tự chọn) ===== -->
+  <div id="wzStep1" hidden>
     <div class="card" id="topupCard" hidden>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         <b style="font-size:14px"><i class="fas fa-gift"></i> Gói nạp</b>
@@ -216,19 +246,10 @@
         <span>Nạp điểm tạm chưa khả dụng — vui lòng liên hệ admin để bật cổng thanh toán.</span>
       </div>
       <div id="pkgGrid" class="pkg-grid"></div>
-      <div class="wz-actions">
-        <button class="btn" onclick="wzGotoStep(2)"><i class="fas fa-keyboard"></i> Tự nhập số tiền khác</button>
-        <button class="btn" onclick="closeTopupFlow()"><i class="fas fa-xmark"></i> Đóng</button>
-      </div>
-      <div id="topupMsg" class="error" style="margin-top:10px"></div>
-    </div>
-  </div>
 
-  <!-- ===== Bước 2: nhập số tiền tự chọn ===== -->
-  <div id="wzStep2" hidden>
-    <div class="card">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <b style="font-size:14px"><i class="fas fa-keyboard"></i> Số tiền tự chọn</b>
+      <hr style="border:none;border-top:1px dashed var(--border-color);margin:16px 0 12px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <b style="font-size:14px"><i class="fas fa-keyboard"></i> Hoặc nhập số tiền khác</b>
         <span class="muted" id="customRate" style="font-size:12px"></span>
       </div>
       <label style="font-size:12px" class="muted">Nhập số tiền muốn nạp (VND)</label>
@@ -247,16 +268,17 @@
       </div>
       <div id="customNote" class="muted" style="font-size:12px;margin-top:6px"></div>
       <div id="customPreview" class="muted" style="font-size:13px;margin-top:4px"></div>
+
       <div class="wz-actions">
-        <button class="btn" onclick="wzGotoStep(1)"><i class="fas fa-arrow-left"></i> Quay lại</button>
         <button class="btn" onclick="closeTopupFlow()"><i class="fas fa-xmark"></i> Đóng</button>
       </div>
+      <div id="topupMsg" class="error" style="margin-top:10px"></div>
       <div id="customMsg" class="error" style="margin-top:10px"></div>
     </div>
   </div>
 
-  <!-- ===== Bước 3: xác nhận đơn nạp ===== -->
-  <div id="wzStep3" hidden>
+  <!-- ===== Bước 2: xác nhận đơn nạp ===== -->
+  <div id="wzStep2" hidden>
     <div class="card">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
         <b style="font-size:14px"><i class="fas fa-receipt"></i> Xác nhận đơn nạp</b>
@@ -277,8 +299,8 @@
     </div>
   </div>
 
-  <!-- ===== Bước 4: thanh toán (QR ngay trên trang, không dialog/khung nhúng) ===== -->
-  <div id="wzStep4" hidden>
+  <!-- ===== Bước 3: thanh toán (QR ngay trên trang, không dialog/khung nhúng) ===== -->
+  <div id="wzStep3" hidden>
     <div class="card" id="payCard">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
         <b style="font-size:14px">Đơn nạp <span id="payOrderCode" style="font-family:monospace"></span></b>
@@ -308,18 +330,50 @@
         </div>
       </div>
 
-      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
-        <a class="btn" id="payCheckout" href="#" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Mở trang thanh toán payOS</a>
-        <button class="btn" id="payMockBtn" hidden onclick="mockPaid()"><i class="fas fa-flask"></i> Giả lập đã trả tiền (test)</button>
-        <button class="btn" id="payCancelBtn" onclick="cancelOrder()"><i class="fas fa-ban"></i> Huỷ đơn</button>
+      <div class="wz-actions">
+        <button class="btn" id="payBackBtn" onclick="payBack()"><i class="fas fa-arrow-left"></i> Quay lại</button>
+        <button class="btn btn-primary" id="payNowBtn" onclick="payNow()"><i class="fas fa-qrcode"></i> Thanh toán</button>
+        <button class="btn" id="payCancelBtn" onclick="cancelOrder()"><i class="fas fa-ban"></i> Hủy đơn</button>
         <button class="btn" onclick="closeTopupFlow()"><i class="fas fa-xmark"></i> Đóng</button>
+        <button class="btn" id="payMockBtn" hidden onclick="mockPaid()"><i class="fas fa-flask"></i> Giả lập đã trả tiền (test)</button>
       </div>
       <div id="payMsg" class="error" style="margin-top:10px"></div>
     </div>
   </div>
 
-  <!-- ===== Bước 5: kết quả ===== -->
-  <div id="wzStep5" hidden>
+  <!-- Popup thanh toán: QR payOS (VietQR) + thông tin chuyển khoản.
+       Test mode (không có ảnh QR) → ẩn QR, hiện link mở trang payOS. -->
+  <div class="pay-modal" id="payModal" hidden>
+    <div class="pay-modal-box" role="dialog" aria-modal="true" aria-labelledby="payModalTitle">
+      <div class="pay-modal-head">
+        <b id="payModalTitle">Thanh toán đơn <span id="payModalCode" class="mono">—</span></b>
+        <button class="pay-modal-x" type="button" onclick="closePayModal()" title="Đóng"><i class="fas fa-xmark"></i></button>
+      </div>
+      <div class="pay-modal-body">
+        <div class="muted" style="font-size:12px">Số tiền</div>
+        <div class="pay-modal-amt" id="payModalAmount">—</div>
+        <div class="muted" style="font-size:12px">Điểm nhận được: <b id="payModalCredits">—</b></div>
+        <div class="pay-row" style="justify-content:center">Số tài khoản: <b id="payModalAccNo" class="mono">—</b>
+          <button class="copy-btn" onclick="copyText(document.getElementById('payModalAccNo').textContent, this)" title="Sao chép số tài khoản"><i class="fas fa-copy"></i></button>
+        </div>
+        <div class="pay-row" style="justify-content:center">Nội dung CK: <b id="payModalDesc" class="mono">—</b>
+          <button class="copy-btn" onclick="copyText(document.getElementById('payModalDesc').textContent, this)" title="Sao chép nội dung chuyển khoản"><i class="fas fa-copy"></i></button>
+        </div>
+        <div class="pay-modal-qr" id="payModalQrBox">
+          <img id="payModalQr" alt="QR thanh toán">
+        </div>
+        <div class="muted" style="font-size:12px">Quét mã QR bằng app ngân hàng. Trang này tự kiểm tra trạng thái mỗi 4 giây và trả về bước kết quả khi đã trả tiền.</div>
+        <a class="btn" id="payModalCheckout" href="#" target="_blank" rel="noopener" hidden><i class="fas fa-external-link-alt"></i> Mở trang thanh toán payOS</a>
+        <div id="payModalMsg" class="error" style="font-size:12px"></div>
+      </div>
+      <div class="pay-modal-foot">
+        <button class="btn" type="button" onclick="closePayModal()"><i class="fas fa-xmark"></i> Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Bước 4: kết quả ===== -->
+  <div id="wzStep4" hidden>
     <div class="card">
       <div class="res-icon" id="resIcon"><i class="fas fa-circle-notch"></i></div>
       <h2 class="res-title" id="resTitle">—</h2>
@@ -350,15 +404,16 @@
 <script src="version.js"></script>
 <script>
 // ============================================================================
-// Trang nạp điểm (/topup.html) — wizard 5 bước:
-//   (1) Số tiền → (2) Số tiền tự chọn → (3) Đơn nạp → (4) Thanh toán → (5) Hoàn tất
+// Trang nạp điểm (/topup.html) — wizard 4 bước:
+//   (1) Số tiền → (2) Đơn nạp → (3) Thanh toán → (4) Hoàn tất
+// Bước 1 gồm CẢ lưới gói nạp VÀ ô nhập số tiền tự chọn (cùng một pane).
 // Điều hướng: nút Quay lại/Tiếp tục ở mỗi bước, hoặc bấm mốc trên thanh tiến
-// trình (chỉ cho 1–3; bước 4 phải vào qua nút Tiếp tục thanh toán).
+// trình (mốc 1–2 quay lại tự do; mốc 3 chỉ khi đơn đã PAID).
 // payOS KHÔNG cho ẩn tên chủ tài khoản nhận tiền (CreatePaymentLinkRequest không
 // có tham số đó) → trang này KHÔNG dùng khung nhúng/dialog của payOS; chỉ hiển
 // thị QR VietQR + số TK + nội dung CK do server trả về (không có tên chủ TK).
 // ============================================================================
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 4;
 const ORDER_KEY = 'ct_topup_order';     // sessionStorage: khôi phục đơn sau F5
 
 let wzStep = 1;
@@ -435,11 +490,11 @@ function fallbackCopy(value) {
 }
 
 // ============================================================================
-// Wizard 5 bước — điều hướng
+// Wizard 4 bước — điều hướng
 // ============================================================================
 /**
  * Tô thanh tiến trình + ẩn/hiện pane tương ứng bước `step`.
- * Từ bước 4 đi tiếp lên chỉ khi đơn đã PAID; mốc 1–3 bấm được (quay lại).
+ * Từ bước 3 đi tiếp lên chỉ khi đơn đã PAID; mốc 1–2 bấm được (quay lại).
  */
 function renderWizard(step) {
   wzStep = step;
@@ -447,9 +502,9 @@ function renderWizard(step) {
     const n = Number(el.getAttribute('data-wz'));
     el.classList.toggle('active', n === step);
     el.classList.toggle('done', n < step);
-    // Mốc 1–3 là lối tắt quay lại (khi đang ở bước 4/5 hoặc trong 1–3).
-    // Mốc 4 chỉ bấm được khi đơn đã PAID; mốc 5 không cho bấm tay.
-    const clickable = n <= 3 ? n !== step : (n === 4 && orderPaid);
+    // Mốc 1–2 là lối tắt quay lại (khi đang ở bước 3/4 hoặc trong 1–2).
+    // Mốc 3 chỉ bấm được khi đơn đã PAID; mốc 4 không cho bấm tay.
+    const clickable = n <= 2 ? n !== step : (n === 3 && orderPaid);
     if (clickable) el.setAttribute('data-go', String(n));
     else el.removeAttribute('data-go');
   });
@@ -459,11 +514,11 @@ function renderWizard(step) {
   }
 }
 
-/** Đi tới bước `step` (bấm mốc 1–3 hoặc mốc 4 khi đã trả tiền). */
+/** Đi tới bước `step` (bấm mốc 1–2 hoặc mốc 3 khi đã trả tiền). */
 function wzGotoStep(step) {
-  if (step === 4 && !activeOrder) { showMsg('wzMsg', 'Chưa có đơn nạp hợp lệ.', true); return; }
+  if (step === 3 && !activeOrder) { showMsg('wzMsg', 'Chưa có đơn nạp hợp lệ.', true); return; }
   renderWizard(step);
-  if (step === 4) startCountdown(activeOrder && activeOrder.expires_at);
+  if (step === 3) startCountdown(activeOrder && activeOrder.expires_at);
   else stopCountdown();
   // Đồng bộ ?step= để F5/back/forward mở đúng bước (bỏ khi đã hoàn tất).
   if (step < TOTAL_STEPS) {
@@ -484,7 +539,7 @@ function onStepClick(el) {
 }
 
 // ============================================================================
-// Bước 1–2: gói nạp + số tiền tự chọn
+// Bước 1: gói nạp + số tiền tự chọn (cùng một pane)
 // ============================================================================
 async function loadPackages() {
   let apiFailed = false;
@@ -574,9 +629,9 @@ function forgetOrder() {
 }
 
 // ============================================================================
-// Bước 3: xác nhận đơn nạp
+// Bước 2: xác nhận đơn nạp
 // ============================================================================
-/** Đổ dữ liệu đơn vào bảng xác nhận ở bước 3. */
+/** Đổ dữ liệu đơn vào bảng xác nhận ở bước 2. */
 function fillConfirmStep(d) {
   document.getElementById('wzOrderCode').textContent = '#' + d.order_code;
   document.getElementById('wzPackageLabel').textContent = d.package_label || 'Số tiền tự chọn';
@@ -597,10 +652,10 @@ async function createOrder(packageId) {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || 'Không tạo được đơn nạp');
-    activeOrder = d;          // bước 3–4 cần đơn này (và để huỷ khi Quay lại)
+    activeOrder = d;          // bước 2–3 cần đơn này (và để huỷ khi Quay lại)
     rememberOrder(d);
     fillConfirmStep(d);
-    wzGotoStep(3);
+    wzGotoStep(2);
   } catch (e) { showMsg('topupMsg', e.message, true); }
   finally { setPkgLoading(packageId, false); }
 }
@@ -619,15 +674,15 @@ async function createCustomOrder() {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || 'Không tạo được đơn nạp');
-    activeOrder = d;          // bước 3–4 cần đơn này (và để huỷ khi Quay lại)
+    activeOrder = d;          // bước 2–3 cần đơn này (và để huỷ khi Quay lại)
     rememberOrder(d);
     fillConfirmStep(d);
-    wzGotoStep(3);
+    wzGotoStep(2);
   } catch (e) { showMsg('customMsg', e.message, true); }
   finally { btn.disabled = false; }
 }
 
-/** Bước 3 → huỷ đơn vừa tạo rồi quay lại bước chọn số tiền (không để đơn treo). */
+/** Bước 2 → huỷ đơn vừa tạo rồi quay lại bước chọn số tiền (không để đơn treo). */
 async function confirmOrderBack() {
   const btn = document.getElementById('wzBackBtn');
   const msg = document.getElementById('wzMsg');
@@ -649,9 +704,9 @@ async function confirmOrderBack() {
   } finally { if (btn) btn.disabled = false; }
 }
 
-/** Bước 3 → sang bước 4 (thẻ QR + thông tin chuyển khoản). */
+/** Bước 2 → sang bước 3 (thẻ QR + thông tin chuyển khoản). */
 function confirmOrderNext() {
-  // activeOrder được set ngay khi tạo đơn ở bước 1–2 (createOrder/createCustomOrder).
+  // activeOrder được set ngay khi tạo đơn ở bước 1 (createOrder/createCustomOrder).
   // Nếu thiếu nghĩa là state lệch → báo rõ thay vì thoát im lặng.
   if (!activeOrder) {
     console.warn('confirmOrderNext: activeOrder rỗng — chưa có đơn để thanh toán');
@@ -662,7 +717,7 @@ function confirmOrderNext() {
 }
 
 // ============================================================================
-// Bước 4: thanh toán (QR ngay trên trang)
+// Bước 3: thanh toán (QR ngay trên trang)
 // ============================================================================
 function showPayCard(d) {
   activeOrder = d;
@@ -675,17 +730,64 @@ function showPayCard(d) {
   document.getElementById('payDesc').textContent = d.description || '—';
   const hint = document.getElementById('payCopiedHint');
   if (hint) hint.textContent = '';
-  const qr = document.getElementById('payQr');
   // payOS trả chuỗi VietQR (ảnh); test mode trả URL nội bộ → ẩn QR.
   const isImg = /^https?:\/\//i.test(d.qr_code || '') && !/\.html(\?|$)/i.test(d.qr_code || '');
+  const qr = document.getElementById('payQr');
   if (isImg) { qr.src = d.qr_code; qr.parentElement.hidden = false; }
   else { qr.removeAttribute('src'); qr.parentElement.hidden = true; }
-  document.getElementById('payCheckout').href = d.checkout_url || '#';
+  // Popup QR dùng chung dữ liệu với thẻ trên trang.
+  fillPayModal(d, isImg);
   document.getElementById('payMockBtn').hidden = !d.test_mode;
   setPayStatus('PENDING');
-  wzGotoStep(4);
+  closePayModal();
+  wzGotoStep(3);
   document.getElementById('payCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
   startPolling(d.order_code);
+}
+
+// ============================================================================
+// Popup thanh toán (QR payOS) — mở bằng nút "Thanh toán" ở bước 3
+// ============================================================================
+/** Đổ số tiền/điểm/số TK/nội dung CK + QR vào popup. */
+function fillPayModal(d, hasQr) {
+  document.getElementById('payModalCode').textContent = '#' + d.order_code;
+  document.getElementById('payModalAmount').textContent = fmtVnd(d.amount_vnd);
+  document.getElementById('payModalCredits').textContent = d.credits + ' điểm';
+  document.getElementById('payModalAccNo').textContent = d.account_number || '—';
+  document.getElementById('payModalDesc').textContent = d.description || '—';
+  const img = document.getElementById('payModalQr');
+  const box = document.getElementById('payModalQrBox');
+  if (hasQr) { img.src = d.qr_code; box.hidden = false; }
+  else { img.removeAttribute('src'); box.hidden = true; }
+  // Không có ảnh QR (test mode) → cho khách mở trang payOS ở tab mới.
+  const link = document.getElementById('payModalCheckout');
+  const url = d.checkout_url || '';
+  const usable = /^https?:\/\//i.test(url) && !/\.html(\?|$)/i.test(url);
+  if (usable) { link.href = url; link.hidden = false; } else { link.href = '#'; link.hidden = true; }
+  document.getElementById('payModalMsg').textContent = hasQr ? '' : 'Chưa có mã QR — nhờ admin kiểm tra cấu hình payOS.';
+}
+
+/** Nút "Thanh toán" ở bước 3 → mở popup QR, khách quét mã bằng app ngân hàng. */
+function payNow() {
+  if (!activeOrder) { showMsg('payMsg', 'Chưa có đơn nạp hợp lệ.', true); return; }
+  const modal = document.getElementById('payModal');
+  modal.hidden = false;
+  document.getElementById('payModalQrBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // Poll đã chạy từ showPayCard; khởi động lại nếu bị dừng (tab ẩn lúc mở đơn).
+  if (!payPoll && activeOrder.order_code) startPolling(activeOrder.order_code);
+}
+
+function closePayModal() {
+  const modal = document.getElementById('payModal');
+  if (modal) modal.hidden = true;
+}
+
+/** Bước 3 → quay lại bước 2 (đơn GIỮ NGUYÊN, không huỷ). */
+function payBack() {
+  closePayModal();
+  if (!activeOrder) { showMsg('payMsg', 'Chưa có đơn nạp hợp lệ.', true); return; }
+  fillConfirmStep(activeOrder);
+  wzGotoStep(2);
 }
 
 const PAY_STATUS_TEXT = {
@@ -753,7 +855,7 @@ function stopCountdown() {
 }
 
 // ============================================================================
-// Poll trạng thái đơn (mỗi 4 giây) → PAID thì sang bước 5
+// Poll trạng thái đơn (mỗi 4 giây) → PAID thì sang bước 4
 // ============================================================================
 function startPolling(orderCode) {
   stopPolling();
@@ -791,7 +893,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ============================================================================
-// Bước 5: kết quả nạp điểm
+// Bước 4: kết quả nạp điểm
 // ============================================================================
 const RES_STATUS_TEXT = {
   PENDING: 'Chờ thanh toán', PAID: 'Đã thanh toán', CANCELLED: 'Đã huỷ',
@@ -802,6 +904,9 @@ async function showResult(o) {
   const st = o.status || 'PENDING';
   stopPolling();
   stopCountdown();
+  // Đã có kết quả (đặc biệt khi khách vừa quét QR trong popup) → đóng popup
+  // rồi trả về bước 4 "Hoàn tất".
+  closePayModal();
   const icon = document.getElementById('resIcon');
   const title = document.getElementById('resTitle');
   const sub = document.getElementById('resSub');
@@ -847,8 +952,8 @@ async function showResult(o) {
   document.getElementById('resAmount').textContent = fmtVnd(o.amount_vnd);
   document.getElementById('resCredits').textContent = (st === 'PAID' ? '+' : '') + o.credits + ' điểm';
 
-  renderWizard(5);
-  // Bước 5 là trạng thái cuối → gỡ ?step= để lần mở lại bắt đầu từ bước 1.
+  renderWizard(4);
+  // Bước 4 là trạng thái cuối → gỡ ?step= để lần mở lại bắt đầu từ bước 1.
   try {
     const url = new URL(location.href);
     url.searchParams.delete('step');
@@ -905,6 +1010,7 @@ function mockPaid() {
 
 /** Đóng luồng nạp giữa chừng: dọn poll/countdown và gỡ ?order=/?step= trên URL. */
 function closeTopupFlow() {
+  closePayModal();
   stopPolling();
   stopCountdown();
   activeOrder = null;
@@ -919,7 +1025,7 @@ function closeTopupFlow() {
   location.href = '/credits.html';
 }
 
-/** Bước 5 → nạp đơn khác: reset về bước 1. */
+/** Bước 4 → nạp đơn khác: reset về bước 1. */
 function restartTopup() {
   activeOrder = null;
   orderPaid = false;
@@ -980,6 +1086,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const cv = document.getElementById('customVnd');
   if (cv) cv.addEventListener('input', renderCustomPreview);
 
+  // Popup thanh toán: Esc hoặc bấm nền mờ để đóng (đơn vẫn được poll tiếp).
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closePayModal();
+  });
+  const payModalEl = document.getElementById('payModal');
+  if (payModalEl) {
+    payModalEl.addEventListener('click', e => {
+      if (e.target === payModalEl) closePayModal();
+    });
+  }
+
   const params = new URLSearchParams(location.search);
   const code = parseInt(params.get('order'), 10);
   const wantStep = parseInt(params.get('step'), 10);
@@ -994,6 +1111,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (ok) return;
     }
     // ?step=1..3 điều hướng trực tiếp (chỉ khi không có đơn để khôi phục).
+    // Giá trị 1–4 đều được chấp nhận để link cũ (?step=4 = "Thanh toán" thời còn 5 bước)
+    // không kẹt ở bước chết; bước 4 là trạng thái cuối, không mở bằng deep-link.
     if (Number.isFinite(wantStep) && wantStep >= 1 && wantStep <= 3) wzGotoStep(wantStep);
     else renderWizard(1);
   });

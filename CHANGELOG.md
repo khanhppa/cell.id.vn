@@ -19,16 +19,22 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
 
 ### Added
 - **Trang nạp điểm riêng `public/topup.html`** — tách toàn bộ luồng nạp khỏi `credits.html`.
-  Wizard **5 bước** có thanh tiến trình **(1) Số tiền → (2) Số tiền tự chọn → (3) Đơn nạp →
-  (4) Thanh toán → (5) Hoàn tất**: bước 1 chọn gói, bước 2 nhập số tiền tự chọn (tách riêng khỏi
-  bước 1), bước 3 xác nhận đơn, bước 4 quét QR thanh toán, bước 5 hiển thị kết quả **tại chỗ**
-  (số tiền · điểm · trạng thái · số dư mới) kèm nút **Nạp đơn khác** (reset về bước 1) và
-  **Về trang điểm**. Điều hướng bằng **mũi tên Quay lại/Tiếp tục** ở mỗi bước hoặc **bấm mốc**
-  trên thanh tiến trình (mốc 1–3 quay lại tự do; mốc 4 chỉ bấm được khi đơn đã `PAID`). Bước
+  Wizard **4 bước** có thanh tiến trình **(1) Số tiền → (2) Đơn nạp → (3) Thanh toán →
+  (4) Hoàn tất**: bước 1 gồm **cả lưới gói nạp lẫn ô nhập số tiền tự chọn** (chọn gói = bấm thẻ,
+  nhập tiền = gõ số / dùng nút số tiền nhanh rồi bấm **Tạo đơn nạp** — không còn bước riêng cho
+  số tiền tự chọn), bước 2 xác nhận đơn, bước 3 **thẻ thanh toán với 4 nút** — **Quay lại** (giữ đơn,
+  về bước 2), **Thanh toán** (mở popup QR), **Hủy đơn** (`POST /api/credits/topup/<code>/cancel`) và
+  **Đóng** (rời luồng) — bước 4 hiển thị kết quả **tại chỗ** (số tiền · điểm · trạng thái · số dư mới)
+  kèm nút **Nạp đơn khác** (reset về bước 1) và **Về trang điểm**. Bấm **Thanh toán** mở **popup QR**
+  (VietQR + số tài khoản + nội dung CK, hoặc link mở trang payOS khi đơn không có QR) đè lên trang;
+  popup vẫn poll đơn mỗi 4 giây, đóng bằng **Esc** / bấm nền mờ / nút **Đóng**, và tự đóng khi đơn
+  chuyển `PAID` (hoặc bằng `closePayModal()` trong `showResult`). Điều hướng bằng **mũi tên Quay lại/Tiếp tục** ở mỗi bước hoặc **bấm mốc**
+  trên thanh tiến trình (mốc 1–2 quay lại tự do; mốc 3 chỉ bấm được khi đơn đã `PAID`). Bước
   hiện tại ghi vào `?step=` (`history.replaceState`) nên F5/back/forward hoạt động; đơn đang dở
   lưu `sessionStorage['ct_topup_order']` để khôi phục khi tải lại. Deep-link `?order=<code>` vào
-  thẳng bước thanh toán (đơn `PAID` → bước 5).
-- **Nút “Nạp điểm” trên `credits.html`** (`.topup-cta` + `#topupCta` → `/topup.html`).
+  thẳng bước thanh toán (đơn `PAID` → bước 4).
+- **Nút “Nạp điểm” trên `credits.html`** (`#topupBtn` màu nhấn `--ok`, icon `fa-wallet`, nằm cạnh
+  nút **Làm mới** trong `.balance-actions` — banner `.topup-cta` cũ đã bỏ) → `/topup.html`.
   `payment-result.html` có thêm nút **Nạp đơn khác** → `topup.html` (nút **Về trang điểm** giữ nguyên).
 
 - **`credits.html` chia thành 3 tab**: **Nạp điểm** (mặc định) · **Đơn nạp gần đây** · **Lịch sử giao dịch**

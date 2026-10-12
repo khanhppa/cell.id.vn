@@ -9,6 +9,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="/auth.js"></script>
+  <script src="/version.js"></script>
   <style>
     :root {
       --bg-body: #f0f2f5;
@@ -100,6 +101,21 @@
     .sidebar-item:hover { color: var(--text-secondary); background: var(--bg-hover); }
     .sidebar-item.active { color: var(--text-primary); background: rgba(100,100,255,0.1); border-left-color: var(--border-focus); }
     .sidebar-item i { width: 18px; text-align: center; }
+    /* Caret gập/mở của nhóm có menu con */
+    .sidebar-caret { margin-left: auto; font-size: 11px; transition: transform 0.2s; }
+    .sidebar-item.active .sidebar-caret { transform: rotate(180deg); }
+    /* Menu con: chỉ hiện khi nhóm cha đang mở */
+    .sidebar-sub { display: none; background: rgba(0,0,0,0.18); }
+    .sidebar-sub.open { display: block; }
+    .sidebar-sub-item {
+      padding: 10px 20px 10px 46px; font-size: 13px;
+      color: var(--text-muted); cursor: pointer;
+      display: flex; align-items: center; gap: 10px;
+      border-left: 3px solid transparent; transition: all 0.2s;
+    }
+    .sidebar-sub-item:hover { color: var(--text-secondary); background: var(--bg-hover); }
+    .sidebar-sub-item.active { color: var(--text-primary); background: rgba(100,100,255,0.08); border-left-color: var(--border-focus); }
+    .sidebar-sub-item i { width: 16px; text-align: center; font-size: 12px; }
     .content {
       flex: 1;
       padding: 24px;
@@ -238,7 +254,7 @@
     .muted-text { color: var(--text-muted) !important; }
 
     /* Tabs */
-    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-color); margin-bottom: 18px; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border-color); margin-bottom: 18px; }
     .tab-btn {
       padding: 10px 16px;
       background: none; border: none; border-bottom: 3px solid transparent;
@@ -278,6 +294,40 @@
     .checklist label:hover { background: var(--bg-hover); border-radius: 6px; }
     .bulk-preview { max-height: 220px; overflow-y: auto; }
     .hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+    /* Version history (render bởi public/version.js → renderChangelog) */
+    #verAdminList { font-size: 13px; }
+    .ver-head {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      background: var(--bg-surface); border: 1px solid var(--border-color);
+      border-radius: 12px; padding: 14px 16px; margin-bottom: 14px;
+    }
+    .ver-num {
+      font-size: 19px; font-weight: 800; color: var(--bg-btn-primary);
+      background: var(--bg-surface2); border-radius: 8px; padding: 6px 12px; white-space: nowrap;
+    }
+    .ver-meta { font-size: 13px; line-height: 1.7; }
+    .ver-entry {
+      background: var(--bg-surface); border: 1px solid var(--border-color);
+      border-radius: 12px; padding: 14px 16px; margin-bottom: 12px;
+    }
+    .ver-entry.latest { border-color: var(--bg-btn-primary); }
+    .ver-entry-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+    .ver-tag {
+      font-size: 13px; font-weight: 800; color: var(--text-primary);
+      background: var(--bg-surface2); border-radius: 6px; padding: 3px 10px;
+    }
+    .ver-chip {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+      color: #fff; background: var(--bg-btn-primary); border-radius: 10px; padding: 2px 9px;
+    }
+    .ver-section { margin: 8px 0 0; }
+    .ver-section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+      color: var(--text-secondary); margin-bottom: 4px;
+    }
+    .ver-section ul { margin: 0; padding-left: 20px; }
+    .ver-section li { line-height: 1.7; }
   </style>
 </head>
 <body>
@@ -290,12 +340,31 @@
       </div>
       <div class="sidebar-item" data-section="cells" onclick="switchSection('cells')">
         <i class="fas fa-database"></i> Cell ID Database
+        <i class="fas fa-chevron-down sidebar-caret"></i>
+      </div>
+      <!-- Menu con của Cell ID Database: điều hướng bằng switchCellSub() -->
+      <div class="sidebar-sub" data-parent="cells">
+        <div class="sidebar-sub-item" data-sub="sources" onclick="switchCellSub('sources')">
+          <i class="fas fa-cloud-download-alt"></i> Quản lý nguồn dữ liệu Online
+        </div>
+        <div class="sidebar-sub-item active" data-sub="local" onclick="switchCellSub('local')">
+          <i class="fas fa-hard-drive"></i> Quản lý dữ liệu Local
+        </div>
+        <div class="sidebar-sub-item" data-sub="audit" onclick="switchCellSub('audit')">
+          <i class="fas fa-clock-rotate-left"></i> Lịch sử chỉnh sửa
+        </div>
       </div>
       <div class="sidebar-item" data-section="users" onclick="switchSection('users')">
         <i class="fas fa-users"></i> User Management
       </div>
+      <div class="sidebar-item" data-section="payments" onclick="switchSection('payments')">
+        <i class="fas fa-credit-card"></i> Nạp điểm (payOS)
+      </div>
       <div class="sidebar-item" data-section="settings" onclick="switchSection('settings')">
         <i class="fas fa-sliders-h"></i> Cấu hình
+      </div>
+      <div class="sidebar-item" data-section="version" onclick="switchSection('version')">
+        <i class="fas fa-code-branch"></i> Phiên bản
       </div>
     </div>
 
@@ -315,10 +384,33 @@
         </div>
       </div>
 
-      <!-- Settings -->
+      <!-- Settings — chia tab theo nhóm (điều hướng bằng switchSettingsTab()).
+           Mọi id field giữ NGUYÊN; saveSettings() vẫn gửi toàn bộ form 1 lần. -->
       <div id="section-settings" class="section">
         <h3>Cấu hình hệ thống</h3>
+
+        <div class="tabs" id="settingsTabs">
+          <button class="tab-btn active" data-settingstab="general" onclick="switchSettingsTab('general')">
+            <i class="fas fa-sliders-h"></i> Chung
+          </button>
+          <button class="tab-btn" data-settingstab="credit" onclick="switchSettingsTab('credit')">
+            <i class="fas fa-coins"></i> Điểm
+          </button>
+          <button class="tab-btn" data-settingstab="payos" onclick="switchSettingsTab('payos')">
+            <i class="fas fa-credit-card"></i> payOS
+          </button>
+          <button class="tab-btn" data-settingstab="topup" onclick="switchSettingsTab('topup')">
+            <i class="fas fa-money-bill-wave"></i> Quy đổi &amp; nạp
+          </button>
+          <button class="tab-btn" data-settingstab="smtp" onclick="switchSettingsTab('smtp')">
+            <i class="fas fa-envelope"></i> Email (SMTP)
+          </button>
+        </div>
+
         <div class="card" style="max-width:640px">
+
+          <!-- Tab: Chung -->
+          <div class="tab-pane active" id="settingstab-general">
           <div class="form-group">
             <label>Số cell tối đa tra online mỗi lần (max_online_resolve)</label>
             <input type="number" id="setMaxOnline" min="0" placeholder="50">
@@ -329,6 +421,10 @@
             <input type="number" id="setRetention" min="1" placeholder="90">
             <div class="hint">Lịch sử tra cứu cũ hơn số ngày này sẽ tự động bị xóa (job chạy 03:30 mỗi ngày).</div>
           </div>
+          </div><!-- /settingstab-general -->
+
+          <!-- Tab: Điểm -->
+          <div class="tab-pane" id="settingstab-credit">
           <div class="form-group">
             <label>Chế độ tính điểm tra cứu (credit_enabled / credit_cost_per_lookup / credit_signup_bonus)</label>
             <label class="toggle-row" style="margin-bottom:12px">
@@ -351,28 +447,246 @@
               </span>
             </label>
           </div>
+          </div><!-- /settingstab-credit -->
+
+          <!-- Tab: payOS -->
+          <div class="tab-pane" id="settingstab-payos">
+          <div class="form-group">
+            <label style="font-weight:600;display:block;margin-bottom:4px">Cổng nạp điểm payOS</label>
+            <div class="hint" style="margin-bottom:12px">
+              Admin cần tạo kênh thanh toán trên <b>my.payos.vn</b> để lấy Client ID / API Key / Checksum Key.
+              Số tiền nạp sẽ được quy đổi ra điểm theo tỉ lệ bên dưới.
+            </div>
+
+            <label class="toggle-row" style="margin-bottom:12px">
+              <span class="toggle-text">Bật cổng thanh toán payOS</span>
+              <span class="toggle-switch">
+                <input type="checkbox" id="setPayosEnabled">
+                <span class="toggle-track"></span>
+              </span>
+            </label>
+
+            <label class="toggle-row" style="margin-bottom:12px">
+              <span class="toggle-text">Chế độ test (không gọi payOS thật)</span>
+              <span class="toggle-switch">
+                <input type="checkbox" id="setPayosTestMode">
+                <span class="toggle-track"></span>
+              </span>
+            </label>
+            <div class="hint" style="margin-bottom:12px">
+              Bật chế độ test để thử luồng nạp hoàn toàn offline: link thanh toán trả về nội bộ,
+              admin dùng nút <b>Giả lập đã trả tiền</b> ở trang Nạp điểm để cộng điểm.
+            </div>
+
+            <label style="display:block;font-weight:400">Client ID (payos_client_id)</label>
+            <input type="text" id="setPayosClientId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off">
+            <label style="display:block;font-weight:400;margin-top:8px">API Key (payos_api_key)</label>
+            <input type="text" id="setPayosApiKey" placeholder="Để trống nếu không đổi" autocomplete="off">
+            <div class="hint" id="setPayosApiKeyHint" style="margin-bottom:8px"></div>
+            <label style="display:block;font-weight:400">Checksum Key (payos_checksum_key)</label>
+            <input type="text" id="setPayosChecksumKey" placeholder="Để trống nếu không đổi" autocomplete="off">
+            <div class="hint" id="setPayosChecksumKeyHint" style="margin-bottom:8px"></div>
+
+            <label style="display:block;font-weight:400">Base URL API (payos_base_url — để trống = production)</label>
+            <input type="text" id="setPayosBaseUrl" placeholder="https://api-merchant.payos.vn">
+            <div class="hint" style="margin-bottom:8px">Chỉ điền khi payOS cung cấp môi trường sandbox riêng.</div>
+
+            <label style="display:block;font-weight:400">URL webhook (payos_webhook_url — để trống = tự nhận diện)</label>
+            <input type="text" id="setPayosWebhookUrl" placeholder="https://ten-mien/api/payos/webhook">
+            <div class="hint" id="setPayosWebhookHint" style="margin-bottom:8px"></div>
+
+            <label style="display:block;font-weight:400">URL công khai của site (public_base_url — để trống = tự nhận diện)</label>
+            <input type="text" id="setPublicBaseUrl" placeholder="https://cell.id.vn">
+            <div class="hint" style="margin-bottom:8px">Dùng để tạo returnUrl/cancelUrl. Production nên điền để link trả về đúng tên miền HTTPS.</div>
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+              <button class="btn" onclick="turnupCheckWebhook()"><i class="fas fa-link"></i> Xem URL webhook</button>
+              <button class="btn" onclick="turnupConfirmWebhook()"><i class="fas fa-plug"></i> Đăng ký webhook với payOS</button>
+              <button class="btn" onclick="turnupTestConnection()"><i class="fas fa-vial"></i> Kiểm tra kết nối</button>
+            </div>
+            <div class="hint" id="setPayosStatus" style="margin-top:8px"></div>
+          </div>
+          </div><!-- /settingstab-payos -->
+
+          <!-- Tab: Quy đổi & nạp -->
+          <div class="tab-pane" id="settingstab-topup">
+          <div class="form-group">
+            <label>Tỉ lệ quy đổi &amp; giới hạn nạp</label>
+            <label style="display:block;font-weight:400">Số VND cho 1 điểm (topup_vnd_per_credit)</label>
+            <input type="number" id="setVndPerCredit" min="1" step="1" placeholder="1000" style="margin-bottom:8px">
+            <div class="hint" style="margin-bottom:8px">Ví dụ 1000 → nạp 50.000đ được 50 điểm.</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <div style="flex:1;min-width:160px">
+                <label style="display:block;font-weight:400">Nạp tối thiểu (VND)</label>
+                <input type="number" id="setTopupMin" min="1000" step="1000" placeholder="10000">
+              </div>
+              <div style="flex:1;min-width:160px">
+                <label style="display:block;font-weight:400">Nạp tối đa (VND)</label>
+                <input type="number" id="setTopupMax" min="1000" step="1000" placeholder="5000000">
+              </div>
+            </div>
+            <div class="hint">Áp dụng cho cả nạp tự do lẫn các gói nạp bên dưới.</div>
+          </div>
+          </div><!-- /settingstab-topup -->
+
+          <!-- Tab: Email (SMTP) -->
+          <div class="tab-pane" id="settingstab-smtp">
+          <div class="form-group">
+            <label>Email (SMTP) — kích hoạt tài khoản &amp; quên mật khẩu</label>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <input type="checkbox" id="setSmtpEnabled" style="width:auto">
+              <span style="font-weight:400">Bật gửi email qua SMTP</span>
+            </div>
+            <div class="hint" style="margin-bottom:8px">TẮT: mã kích hoạt ghi ra console server; admin vẫn copy link ở phần Người dùng. BẬT: cần đủ máy chủ + địa chỉ gửi.</div>
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+              <div style="flex:2;min-width:200px">
+                <label style="display:block;font-weight:400">Máy chủ SMTP (smtp_host)</label>
+                <input type="text" id="setSmtpHost" placeholder="smtp.gmail.com / smtp.zoho.com / smtp-relay.brevo.com" autocomplete="off" oninput="syncSmtpTlsHint()">
+              </div>
+              <div style="flex:1;min-width:110px">
+                <label style="display:block;font-weight:400">Cổng</label>
+                <input type="number" id="setSmtpPort" min="1" max="65535" placeholder="587" oninput="syncSmtpTlsHint()">
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <input type="checkbox" id="setSmtpSecure" style="width:auto" onchange="syncSmtpTlsHint()">
+              <span style="font-weight:400">Dùng TLS ngay khi kết nối (implicit TLS — thường là cổng 465)</span>
+            </div>
+            <div class="hint" id="setSmtpTlsHint" style="margin-bottom:8px"></div>
+            <div class="hint" id="setSmtpProviderHint" style="margin-bottom:8px"></div>
+
+            <label style="display:block;font-weight:400">Tài khoản SMTP (smtp_user)</label>
+            <input type="text" id="setSmtpUser" placeholder="user@ten-mien-cua-ban.com" autocomplete="off" style="margin-bottom:8px">
+            <label style="display:block;font-weight:400">Mật khẩu / App password (smtp_pass)</label>
+            <input type="text" id="setSmtpPass" placeholder="Để trống nếu không đổi" autocomplete="off" style="margin-bottom:8px">
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+              <div style="flex:1;min-width:200px">
+                <label style="display:block;font-weight:400">Địa chỉ gửi (smtp_from)</label>
+                <input type="text" id="setSmtpFrom" placeholder="no-reply@cell.id.vn">
+              </div>
+              <div style="flex:1;min-width:160px">
+                <label style="display:block;font-weight:400">Tên người gửi</label>
+                <input type="text" id="setSmtpFromName" placeholder="Cell Tracker">
+              </div>
+            </div>
+
+            <div class="hint" style="margin-bottom:8px">
+              Nhiều dịch vụ <b>không nhận mật khẩu đăng nhập thường</b> — cần "mật khẩu riêng cho ứng dụng":<br>
+              <b>Gmail / Zoho / Yahoo</b>: App Password (Zoho: App Password) &nbsp;•&nbsp;
+              <b>Brevo</b>: SMTP Key &nbsp;•&nbsp; <b>Resend</b>: API Key (user = <code>resend</code>) &nbsp;•&nbsp;
+              <b>SendGrid</b>: API Key (user = <code>apikey</code>) &nbsp;•&nbsp;
+              <b>Mailgun</b>: <code>postmaster@&lt;domain&gt;</code> &nbsp;•&nbsp;
+              <b>Amazon SES</b>: SMTP Credential.<br>
+              Địa chỉ gửi chỉ giữ nguyên khi tên miền đã <b>xác minh</b> (SPF/DKIM) tại nhà cung cấp. Lưu cấu hình trước khi gửi thử.
+            </div>
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+              <input type="email" id="smtpTestTo" placeholder="Email nhận thử" autocomplete="off"
+                     style="flex:2;min-width:200px;padding:8px 10px;border-radius:8px;border:1px solid var(--border-color,rgba(0,0,0,.2));background:transparent;color:inherit">
+              <button class="btn" onclick="sendSmtpTest()"><i class="fas fa-paper-plane"></i> Gửi email thử</button>
+            </div>
+            <div class="hint" id="setSmtpStatus" style="margin-top:8px"></div>
+          </div>
+          </div><!-- /settingstab-smtp -->
+
           <div class="page-actions">
             <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> Lưu cấu hình</button>
           </div>
         </div>
       </div>
 
-      <!-- Cell ID Database -->
-      <div id="section-cells" class="section">
-        <h3>Cell ID Database</h3>
-        <div class="card">
-          <h4>Quản lý dữ liệu Cell</h4>
-          <div class="filter-bar">
-            <button class="btn btn-primary" onclick="showSourcePage()"><i class="fas fa-cloud-download-alt"></i> Nguồn Online</button>
-            <button class="btn btn-primary" onclick="showBulkPage()"><i class="fas fa-file-csv"></i> Upload CSV</button>
-            <button class="btn btn-primary" onclick="showClfPage()"><i class="fas fa-exchange-alt"></i> Chuyển đổi CLF</button>
-          </div>
-          <p class="muted-text" style="font-size:12px">Tải cell từ nguồn OpenCellID / t0stbrot / Combain hoặc upload file CSV/GZ/ZIP vào cơ sở dữ liệu. Chuyển đổi qua lại định dạng CLF V4.1 cho G-MoN Pro.</p>
+      <!-- Nạp điểm (payOS) -->
+      <div id="section-payments" class="section">
+        <h3>Nạp điểm qua payOS</h3>
+
+        <div class="stats-grid" id="payStats">
+          <div class="stat-card"><div class="num" id="payRevenue">0</div><div class="label">Doanh thu (VND)</div></div>
+          <div class="stat-card"><div class="num" id="payCreditsGranted">0</div><div class="label">Điểm đã cấp</div></div>
+          <div class="stat-card"><div class="num" id="payPaidOrders">0</div><div class="label">Đơn đã trả</div></div>
+          <div class="stat-card"><div class="num" id="payPendingOrders">0</div><div class="label">Đơn chờ</div></div>
+          <div class="stat-card"><div class="num" id="payConversion">0%</div><div class="label">Tỉ lệ chuyển đổi</div></div>
+          <div class="stat-card"><div class="num" id="payCreditsUsed">0</div><div class="label">Điểm đã dùng</div></div>
+          <div class="stat-card"><div class="num" id="payLookups">0</div><div class="label">Lượt tra cứu</div></div>
+          <div class="stat-card"><div class="num" id="payRemaining">0</div><div class="label">Điểm còn lại (hệ thống)</div></div>
         </div>
 
-        <!-- CSDL Cells (admin CRUD) -->
         <div class="card">
-          <h4><i class="fas fa-table"></i> CSDL Cells <span id="cdbTotal" class="muted-text" style="font-size:12px"></span></h4>
+          <h4><i class="fas fa-box"></i> Gói nạp</h4>
+          <div id="pkgList" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải…</div>
+          <div class="page-actions">
+            <button class="btn btn-primary" onclick="pkgOpenCreate()"><i class="fas fa-plus"></i> Thêm gói nạp</button>
+            <button class="btn" onclick="loadPayments()"><i class="fas fa-rotate"></i> Làm mới</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h4><i class="fas fa-receipt"></i> Đơn nạp gần đây</h4>
+          <div class="filter-bar" style="align-items:center">
+            <select id="payStatus">
+              <option value="">Mọi trạng thái</option>
+              <option value="PENDING">Chờ thanh toán</option>
+              <option value="PAID">Đã thanh toán</option>
+              <option value="CANCELLED">Đã huỷ</option>
+              <option value="EXPIRED">Hết hạn</option>
+              <option value="UNDERPAID">Trả thiếu</option>
+              <option value="FAILED">Thất bại</option>
+            </select>
+            <input type="text" id="payQ" placeholder="Mã đơn / username" style="max-width:200px">
+            <input type="date" id="payFrom" style="max-width:150px">
+            <input type="date" id="payTo" style="max-width:150px">
+            <button class="btn btn-primary btn-sm" onclick="loadPayOrders(1)"><i class="fas fa-search"></i> Tìm</button>
+          </div>
+          <div id="payLoading" class="loading" hidden><i class="fas fa-spinner fa-spin"></i> Đang tải…</div>
+          <div style="overflow-x:auto">
+            <table id="payTable" hidden>
+              <thead>
+                <tr><th>Mã đơn</th><th>User</th><th>Số tiền</th><th>Điểm</th><th>Trạng thái</th><th>Tạo lúc</th><th>Trả lúc</th><th></th></tr>
+              </thead>
+              <tbody id="payBody"></tbody>
+            </table>
+          </div>
+          <div id="payEmpty" class="muted-text" hidden>Chưa có đơn nạp nào.</div>
+          <div class="page-actions" id="payPagerActions" hidden>
+            <button class="btn btn-sm" id="payPrev" onclick="loadPayOrders(payPg-1)"><i class="fas fa-chevron-left"></i> Trước</button>
+            <span class="muted-text" id="payPageInfo"></span>
+            <button class="btn btn-sm" id="payNext" onclick="loadPayOrders(payPg+1)">Sau <i class="fas fa-chevron-right"></i></button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h4><i class="fas fa-chart-line"></i> Doanh thu 30 ngày</h4>
+          <div id="payDaily" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải…</div>
+        </div>
+
+        <div class="card">
+          <h4><i class="fas fa-trophy"></i> Top nạp nhiều / dùng nhiều</h4>
+          <div id="payTop" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải…</div>
+        </div>
+      </div>
+
+      <!-- Cell ID Database - Sub-page: Quản lý dữ liệu Local -->
+      <div id="sub-local" class="section">
+        <h3>Quản lý dữ liệu Local</h3>
+
+        <!-- Tab con: mỗi bảng 1 tab. Điều hướng bằng switchLocalTab(). -->
+        <div class="tabs" id="localTabs">
+          <button class="tab-btn active" data-localtab="cells" onclick="switchLocalTab('cells')">
+            <i class="fas fa-table"></i> CSDL Cells <span id="cdbTotal" class="muted-text" style="font-size:12px"></span>
+          </button>
+          <button class="tab-btn" data-localtab="import" onclick="switchLocalTab('import')">
+            <i class="fas fa-file-csv"></i> Nhập hàng loạt
+          </button>
+          <button class="tab-btn" data-localtab="clf" onclick="switchLocalTab('clf')">
+            <i class="fas fa-exchange-alt"></i> Chuyển đổi CLF
+          </button>
+        </div>
+
+        <!-- Tab 1: CSDL Cells (admin CRUD) -->
+        <div class="tab-pane active" id="localtab-cells">
+        <div class="card">
+          <h4><i class="fas fa-table"></i> CSDL Cells</h4>
           <div class="filter-bar" style="align-items:center">
             <input type="text" id="cdbQ" placeholder="cellid / mcc / mnc / lac" style="max-width:180px">
             <input type="text" id="cdbMcc" placeholder="MCC" style="max-width:80px">
@@ -413,8 +727,103 @@
             <button class="btn btn-sm" onclick="cdbPage(1)">Sau <i class="fas fa-chevron-right"></i></button>
           </div>
         </div>
+        </div><!-- /#localtab-cells -->
 
-        <!-- Lịch sử sửa/xoá cells_audit -->
+        <!-- Tab 2: Upload hàng loạt từ CSV -->
+        <div class="tab-pane" id="localtab-import">
+        <div class="card" style="max-width:720px">
+          <h4><i class="fas fa-file-csv"></i> Nhập hàng loạt từ CSV (.csv / .gz / .zip)</h4>
+          <div class="upload-zone" id="bulkZone" onclick="document.getElementById('bulkCsvFile').click()">
+            <i class="fas fa-cloud-upload-alt"></i>
+            <p><strong>Click to select CSV</strong> or drag & drop</p>
+            <p class="muted-text" style="font-size:12px;margin-top:8px">
+              Hỗ trợ: <strong>.csv</strong> (text/UTF-8), <strong>.gz</strong> (gzip nén CSV), <strong>.zip</strong> (chứa file CSV)
+              <br>Columns: mcc, mnc, lac, cellid, lat, lon (range optional)
+              <br>Hoặc định dạng OpenCellID: net, area, cell, lat, lon
+            </p>
+          </div>
+          <input type="file" id="bulkCsvFile" accept=".csv,.gz,.zip" style="display:none" onchange="handleBulkFile(event)">
+          <div class="progress-bar" id="bulkProgressBar"><div class="progress-fill" id="bulkProgressFill">0%</div></div>
+          <div class="progress-info" id="bulkProgressInfo"></div>
+          <div class="upload-result" id="bulkResult"></div>
+          <div class="bulk-preview" id="bulkPreview"></div>
+        </div>
+        <div class="card" style="max-width:720px;border-color:rgba(255,60,60,0.35);margin-top:16px">
+          <h4 style="color:#ff5555"><i class="fas fa-exclamation-triangle"></i> Nguy hiểm</h4>
+          <p class="muted-text" style="font-size:13px">
+            Xóa <b>toàn bộ</b> cell ID trong cơ sở dữ liệu để tải lên bộ cellid mới.
+            Hành động này <b>không thể hoàn tác</b>.
+          </p>
+          <button class="btn btn-danger btn-sm" id="clearAllCellsBtn" onclick="clearAllCells()">
+            <i class="fas fa-trash"></i> Xóa toàn bộ cell ID
+          </button>
+        </div>
+        </div><!-- /#localtab-import -->
+
+        <!-- Tab 3: Chuyển đổi CLF V4.1 (G-MoN Pro) -->
+        <div class="tab-pane" id="localtab-clf">
+        <div class="card" style="max-width:860px">
+          <h4><i class="fas fa-exchange-alt"></i> Chuyển đổi CLF V4.1 (G-MoN Pro)</h4>
+          <div class="filter-bar">
+            <button class="btn btn-primary" id="clfDirCsvToClf" onclick="setClfDirection('csv2clf')">
+              <i class="fas fa-file-import"></i> CSV &rarr; CLF
+            </button>
+            <button class="btn" id="clfDirClfToCsv" onclick="setClfDirection('clf2csv')">
+              <i class="fas fa-file-export"></i> CLF &rarr; CSV
+            </button>
+          </div>
+          <p class="muted-text" style="font-size:12px" id="clfDirHint">
+            OpenCellID CSV (radio,mcc,net,area,cell,unit,lon,lat,range,samples,...) &rarr; CLF V4.1.
+          </p>
+        </div>
+
+        <div class="card" style="max-width:860px">
+          <h4 id="clfUploadTitle">Upload file nguồn</h4>
+          <div class="upload-zone" id="clfZone" onclick="document.getElementById('clfFile').click()">
+            <i class="fas fa-exchange-alt"></i>
+            <p><strong>Click để chọn file</strong> hoặc kéo thả</p>
+            <p class="muted-text" style="font-size:12px;margin-top:8px" id="clfZoneHint">
+              Hỗ trợ: <strong>.csv</strong> (OpenCellID world database dump)
+            </p>
+          </div>
+          <input type="file" id="clfFile" accept=".csv,.clf,.txt" style="display:none" onchange="handleClfFile(event)">
+          <div id="clfSelected" class="muted-text" style="font-size:12px;margin-top:8px"></div>
+          <div class="filter-bar" style="margin-top:12px">
+            <button class="btn btn-primary" id="clfConvertBtn" onclick="convertClf()" disabled>
+              <i class="fas fa-play"></i> Chuyển đổi
+            </button>
+            <button class="btn" onclick="convertClfDefault()" id="clfDefaultBtn">
+              <i class="fas fa-database"></i> Dùng Database_free.csv có sẵn
+            </button>
+            <button class="btn" onclick="resetClfForm()"><i class="fas fa-redo"></i> Làm lại</button>
+          </div>
+          <div class="progress-bar" id="clfProgressBar" style="display:none"><div class="progress-fill" id="clfProgressFill">0%</div></div>
+          <div class="upload-result" id="clfResult"></div>
+        </div>
+
+        <div class="card" style="max-width:860px;display:none" id="clfOutputCard">
+          <h4><i class="fas fa-check-circle" style="color:#4ade80"></i> Kết quả</h4>
+          <div id="clfStats" class="muted-text" style="font-size:13px"></div>
+          <div style="margin-top:12px">
+            <button class="btn btn-success" id="clfDownloadBtn"><i class="fas fa-download"></i> Tải file kết quả</button>
+          </div>
+          <div style="margin-top:14px">
+            <div class="muted-text" style="font-size:12px;margin-bottom:6px" id="clfFormatLabel">Định dạng trường:</div>
+            <code id="clfFields" class="muted-text" style="font-size:11px;word-break:break-all"></code>
+          </div>
+          <div style="margin-top:14px">
+            <div class="muted-text" style="font-size:12px;margin-bottom:6px">Xem trước:</div>
+            <pre id="clfSample" style="font-size:11px;overflow:auto;max-height:260px;background:var(--bg-secondary);padding:10px;border-radius:6px"></pre>
+          </div>
+          <div id="clfErrors" class="muted-text" style="font-size:12px;margin-top:10px"></div>
+        </div>
+        </div><!-- /#localtab-clf -->
+
+      </div>
+
+      <!-- Cell ID Database - Sub-page: Lịch sử chỉnh sửa -->
+      <div id="sub-audit" class="section">
+        <h3>Lịch sử chỉnh sửa</h3>
         <div class="card">
           <h4>Lịch sử sửa / xóa (cells_audit)</h4>
           <div class="filter-bar">
@@ -423,7 +832,7 @@
             <input type="text" id="cdbAuditUser" placeholder="username" style="max-width:140px">
             <button class="btn btn-primary btn-sm" onclick="cdbLoadAudit(1)"><i class="fas fa-search"></i> Lọc</button>
           </div>
-          <div class="table-wrap" style="overflow:auto;max-height:40vh">
+          <div class="table-wrap" style="overflow:auto;max-height:52vh">
             <table>
               <thead><tr><th>ID</th><th>Cell</th><th>Hành động</th><th>User</th><th>IP</th><th>Note</th><th>Thay đổi</th><th>Thời gian</th></tr></thead>
               <tbody id="cdbAuditBody"><tr><td colspan="8" class="loading">Chưa tải</td></tr></tbody>
@@ -435,7 +844,6 @@
             <button class="btn btn-sm" onclick="cdbAuditPage(1)">Sau <i class="fas fa-chevron-right"></i></button>
           </div>
         </div>
-
       </div>
 
       <!-- Cell ID Database - Sub-page: Nguồn Online -->
@@ -455,6 +863,7 @@
             <div class="form-group"><label>Chọn nguồn</label>
               <select id="srcType" onchange="onSourceTypeChange()">
                 <option value="opencellid">OpenCellID.org</option>
+                <option value="opencellid_web">OpenCellID (web, không cần key)</option>
                 <option value="t0stbrot">t0stbrot.net</option>
                 <option value="combain">Combain.com</option>
               </select>
@@ -518,110 +927,6 @@
         </div>
       </div>
 
-      <!-- Cell ID Database - Sub-page: Thêm CSV -->
-      <div id="sub-bulk" class="section">
-        <h3>Nhập hàng loạt từ CSV</h3>
-        <div class="sub-head">
-          <div></div>
-          <div class="filter-bar">
-            <button class="btn" onclick="goBackToCells()"><i class="fas fa-arrow-left"></i> Quay lại</button>
-          </div>
-        </div>
-        <div class="card" style="max-width:720px">
-          <h4>Upload file CSV (.csv / .gz / .zip)</h4>
-          <div class="upload-zone" id="bulkZone" onclick="document.getElementById('bulkCsvFile').click()">
-            <i class="fas fa-cloud-upload-alt"></i>
-            <p><strong>Click to select CSV</strong> or drag & drop</p>
-            <p class="muted-text" style="font-size:12px;margin-top:8px">
-              Hỗ trợ: <strong>.csv</strong> (text/UTF-8), <strong>.gz</strong> (gzip nén CSV), <strong>.zip</strong> (chứa file CSV)
-              <br>Columns: mcc, mnc, lac, cellid, lat, lon (range optional)
-              <br>Hoặc định dạng OpenCellID: net, area, cell, lat, lon
-            </p>
-          </div>
-          <input type="file" id="bulkCsvFile" accept=".csv,.gz,.zip" style="display:none" onchange="handleBulkFile(event)">
-          <div class="progress-bar" id="bulkProgressBar"><div class="progress-fill" id="bulkProgressFill">0%</div></div>
-          <div class="progress-info" id="bulkProgressInfo"></div>
-          <div class="upload-result" id="bulkResult"></div>
-          <div class="bulk-preview" id="bulkPreview"></div>
-        </div>
-        <div class="card" style="max-width:720px;border-color:rgba(255,60,60,0.35);margin-top:16px">
-          <h4 style="color:#ff5555"><i class="fas fa-exclamation-triangle"></i> Nguy hiểm</h4>
-          <p class="muted-text" style="font-size:13px">
-            Xóa <b>toàn bộ</b> cell ID trong cơ sở dữ liệu để tải lên bộ cellid mới.
-            Hành động này <b>không thể hoàn tác</b>.
-          </p>
-          <button class="btn btn-danger btn-sm" id="clearAllCellsBtn" onclick="clearAllCells()">
-            <i class="fas fa-trash"></i> Xóa toàn bộ cell ID
-          </button>
-        </div>
-      </div>
-
-      <!-- Cell ID Database - Sub-page: Chuyển đổi CLF -->
-      <div id="sub-clf" class="section">
-        <h3>Chuyển đổi CLF V4.1 (G-MoN Pro)</h3>
-        <div class="sub-head">
-          <div></div>
-          <div class="filter-bar">
-            <button class="btn" onclick="goBackToCells()"><i class="fas fa-arrow-left"></i> Quay lại</button>
-          </div>
-        </div>
-
-        <div class="card" style="max-width:860px">
-          <h4>Chiều chuyển đổi</h4>
-          <div class="filter-bar">
-            <button class="btn btn-primary" id="clfDirCsvToClf" onclick="setClfDirection('csv2clf')">
-              <i class="fas fa-file-import"></i> CSV &rarr; CLF
-            </button>
-            <button class="btn" id="clfDirClfToCsv" onclick="setClfDirection('clf2csv')">
-              <i class="fas fa-file-export"></i> CLF &rarr; CSV
-            </button>
-          </div>
-          <p class="muted-text" style="font-size:12px" id="clfDirHint">
-            OpenCellID CSV (radio,mcc,net,area,cell,unit,lon,lat,range,samples,...) &rarr; CLF V4.1.
-          </p>
-        </div>
-
-        <div class="card" style="max-width:860px">
-          <h4 id="clfUploadTitle">Upload file nguồn</h4>
-          <div class="upload-zone" id="clfZone" onclick="document.getElementById('clfFile').click()">
-            <i class="fas fa-exchange-alt"></i>
-            <p><strong>Click để chọn file</strong> hoặc kéo thả</p>
-            <p class="muted-text" style="font-size:12px;margin-top:8px" id="clfZoneHint">
-              Hỗ trợ: <strong>.csv</strong> (OpenCellID world database dump)
-            </p>
-          </div>
-          <input type="file" id="clfFile" accept=".csv,.clf,.txt" style="display:none" onchange="handleClfFile(event)">
-          <div id="clfSelected" class="muted-text" style="font-size:12px;margin-top:8px"></div>
-          <div class="filter-bar" style="margin-top:12px">
-            <button class="btn btn-primary" id="clfConvertBtn" onclick="convertClf()" disabled>
-              <i class="fas fa-play"></i> Chuyển đổi
-            </button>
-            <button class="btn" onclick="convertClfDefault()" id="clfDefaultBtn">
-              <i class="fas fa-database"></i> Dùng Database_free.csv có sẵn
-            </button>
-            <button class="btn" onclick="resetClfForm()"><i class="fas fa-redo"></i> Làm lại</button>
-          </div>
-          <div class="progress-bar" id="clfProgressBar" style="display:none"><div class="progress-fill" id="clfProgressFill">0%</div></div>
-          <div class="upload-result" id="clfResult"></div>
-        </div>
-
-        <div class="card" style="max-width:860px;display:none" id="clfOutputCard">
-          <h4><i class="fas fa-check-circle" style="color:#4ade80"></i> Kết quả</h4>
-          <div id="clfStats" class="muted-text" style="font-size:13px"></div>
-          <div style="margin-top:12px">
-            <button class="btn btn-success" id="clfDownloadBtn"><i class="fas fa-download"></i> Tải file kết quả</button>
-          </div>
-          <div style="margin-top:14px">
-            <div class="muted-text" style="font-size:12px;margin-bottom:6px" id="clfFormatLabel">Định dạng trường:</div>
-            <code id="clfFields" class="muted-text" style="font-size:11px;word-break:break-all"></code>
-          </div>
-          <div style="margin-top:14px">
-            <div class="muted-text" style="font-size:12px;margin-bottom:6px">Xem trước:</div>
-            <pre id="clfSample" style="font-size:11px;overflow:auto;max-height:260px;background:var(--bg-secondary);padding:10px;border-radius:6px"></pre>
-          </div>
-          <div id="clfErrors" class="muted-text" style="font-size:12px;margin-top:10px"></div>
-        </div>
-      </div>
 
       <!-- User Management + Điểm tra cứu (gộp) -->
       <div id="section-users" class="section">
@@ -640,7 +945,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>ID</th><th>Username</th><th>Vai trò</th><th>Trạng thái</th>
+                  <th>ID</th><th>Username</th><th>Email</th><th>Vai trò</th><th>Trạng thái</th>
                   <th style="text-align:right">Số dư</th>
                   <th style="text-align:right">Đã dùng</th>
                   <th>Ngày tạo</th>
@@ -648,7 +953,7 @@
                 </tr>
               </thead>
               <tbody id="userTableBody">
-                <tr><td colspan="8" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải...</td></tr>
+                <tr><td colspan="9" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải...</td></tr>
               </tbody>
             </table>
           </div>
@@ -683,6 +988,16 @@
             </table>
           </div>
         </div>
+      </div>
+
+      <!-- Version (chỉ admin — dữ liệu từ /api/version/changelog, LỌC còn phiên bản đang chạy) -->
+      <div id="section-version" class="section">
+        <h3>Phiên bản</h3>
+        <p class="muted-text" style="margin:0 0 10px">
+          Phiên bản đang chạy trên máy chủ. Lịch sử đầy đủ xem tại
+          <a href="/version.html">trang Lịch sử phiên bản</a>.
+        </p>
+        <div id="verAdminList" class="muted-text">Đang tải…</div>
       </div>
     </div>
   </div>

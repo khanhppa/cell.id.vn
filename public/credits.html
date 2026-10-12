@@ -11,12 +11,24 @@
     --text-primary: #1c2333; --text-secondary: #5a6478; --text-faint: #98a1b5;
     --accent: #4f7cff; --ok: #1f9e5a; --danger: #e04444;
     --bg-hover: rgba(0,0,0,0.05);
+    /* Biến dùng bởi navbar chung (auth.js). Thiếu các biến này navbar rơi vào
+       fallback hardcode màu sáng → không đổi theo dark mode. */
+    --bg-surface: #ffffff;
+    --bg-surface2: #eef1f7;
+    --bg-btn-primary: #4f7cff;
+    --border-focus: #4f7cff;
+    --header-bg: #ffffff;
   }
   [data-theme="dark"] {
     --bg-page: #14171f; --bg-card: #1c2029; --border-color: #2b3140;
     --text-primary: #e7ebf3; --text-secondary: #a4adc0; --text-faint: #6d7689;
     --accent: #6b93ff; --ok: #45c07d; --danger: #ff6b6b;
     --bg-hover: rgba(255,255,255,0.07);
+    --bg-surface: #1c2029;
+    --bg-surface2: #232833;
+    --bg-btn-primary: #6b93ff;
+    --border-focus: #6b93ff;
+    --header-bg: #1c2029;
   }
   * { box-sizing: border-box; }
   body {
@@ -81,14 +93,109 @@
     .balance-num { font-size: 32px; }
     th:nth-child(5), td:nth-child(5) { display: none; }
     .pager-info { margin-left: 0; width: 100%; }
+    .quick-amt { display: grid; grid-template-columns: repeat(2, 1fr); }
   }
+  .pkg-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  .pkg-grid.is-disabled { opacity: .5; pointer-events: none; }
+  .pkg-item {
+    border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;
+    background: var(--bg-page); cursor: pointer; text-align: center;
+    transition: border-color .15s, transform .15s; position: relative;
+  }
+  .pkg-item:hover { border-color: var(--accent, #3b82f6); transform: translateY(-2px); }
+  .pkg-item.loading { opacity: .6; pointer-events: none; }
+  .pkg-item .pkg-vnd { font-size: 16px; font-weight: 700; }
+  .pkg-item .pkg-credits { font-size: 12px; margin-top: 4px; color: var(--text-muted, #888); }
+  .pkg-item .pkg-label { font-size: 11px; margin-top: 6px; color: var(--text-muted, #888); }
+  .pkg-item .pkg-spin {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.06); border-radius: 10px; font-size: 20px; color: var(--accent);
+  }
+  .pkg-item.loading .pkg-spin { display: flex; }
+  .banner {
+    display: flex; align-items: flex-start; gap: 8px; font-size: 13px;
+    padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; line-height: 1.5;
+  }
+  .banner i { margin-top: 2px; }
+  .banner-warn {
+    background: rgba(255,170,60,0.14); color: #b47d13;
+    border: 1px solid rgba(255,170,60,0.4);
+  }
+  [data-theme="dark"] .banner-warn { color: #e0ab4a; }
+  .banner-ok {
+    background: rgba(31,158,90,0.12); color: var(--ok);
+    border: 1px solid rgba(31,158,90,0.35);
+  }
+  /* Nút mở trang nạp điểm riêng (topup.html). */
+  .topup-cta {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    background: var(--bg-card); border: 1px solid var(--border-color);
+    border-radius: 12px; padding: 14px 18px; margin-bottom: 18px;
+  }
+  .topup-cta .cta-text { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+  .topup-cta .cta-text b { color: var(--text-primary); }
+  .copy-btn {
+    border: none; background: transparent; color: var(--text-faint); cursor: pointer;
+    padding: 2px 5px; border-radius: 5px; font-size: 11px; margin-left: 4px;
+  }
+  .copy-btn:hover { background: var(--bg-hover); color: var(--accent); }
+  .copy-btn.done { color: var(--ok); }
+  .pay-row { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; flex-wrap: wrap; }
+  .mono { font-family: monospace; }
+  .countdown {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+    padding: 2px 8px; border-radius: 10px; background: var(--bg-hover); color: var(--text-secondary);
+  }
+  .countdown.late { background: rgba(224,68,68,.14); color: var(--danger); }
+  .quick-amt { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .quick-amt .btn { padding: 4px 10px; font-size: 12px; }
+  .status-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; white-space: nowrap;
+  }
+  .status-PENDING { background: rgba(255,170,60,.16); color: #c98a1e; border: 1px solid rgba(255,170,60,.4); }
+  .status-PAID { background: rgba(31,158,90,.14); color: var(--ok); border: 1px solid rgba(31,158,90,.35); }
+  .status-CANCELLED, .status-EXPIRED, .status-FAILED, .status-UNDERPAID {
+    background: rgba(224,68,68,.12); color: var(--danger); border: 1px solid rgba(224,68,68,.32);
+  }
+  .btn-mini { padding: 3px 9px; font-size: 12px; }
+  .link-btn {
+    border: none; background: none; color: var(--accent); cursor: pointer;
+    font-size: 12px; font-family: inherit; padding: 0 4px;
+  }
+  .link-btn:hover { text-decoration: underline; }
+  .link-btn.danger { color: var(--danger); }
+  /* Tabs (cùng pattern với admin.html: .tabs / .tab-btn / .tab-pane). */
+  .tabs {
+    display: flex; flex-wrap: wrap; gap: 4px;
+    border-bottom: 1px solid var(--border-color); margin-bottom: 18px;
+  }
+  .tab-btn {
+    border: none; background: none; color: var(--text-faint);
+    padding: 9px 14px; font-size: 13.5px; font-family: inherit; cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 600;
+  }
+  .tab-btn:hover { color: var(--text-secondary); }
+  .tab-btn.active { color: var(--border-focus); border-bottom-color: var(--border-focus); }
+  .tab-btn .tab-count { font-weight: 400; color: var(--text-faint); font-size: 12px; }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
 </style>
 </head>
 <body>
 <nav class="navbar"></nav>
 <div class="container">
-  <h1><i class="fas fa-gem"></i> Điểm tra cứu</h1>
-  <div class="sub">Mỗi lần tra cứu <b>có kết quả</b> (dữ liệu nội bộ hoặc nguồn online) trừ điểm. Tra không ra kết quả không trừ.</div>
+  <div class="topup-cta">
+    <div class="cta-text">
+      <b><i class="fas fa-wallet"></i> Nạp điểm</b><br>
+      Mở trang nạp điểm để chọn gói, quét QR hoặc thanh toán payOS.
+    </div>
+    <a class="btn" id="topupCta" href="/topup.html" style="margin-left:auto;font-weight:600">
+      <i class="fas fa-arrow-right"></i> Nạp điểm
+    </a>
+  </div>
 
   <div class="card">
     <div class="balance-row">
@@ -104,35 +211,68 @@
     <div id="cfgNote" class="error" style="margin-top:10px"></div>
   </div>
 
-  <div class="card">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-      <b style="font-size:14px">Lịch sử giao dịch</b>
-      <span class="muted" id="txCount" style="font-size:12px"></span>
+  <div class="tabs" role="tablist">
+    <button class="tab-btn active" data-ctab="orders" onclick="switchCreditTab('orders')">
+      <i class="fas fa-receipt"></i> Đơn nạp gần đây <span class="tab-count" id="ordersTabCount"></span>
+    </button>
+    <button class="tab-btn" data-ctab="tx" onclick="switchCreditTab('tx')">
+      <i class="fas fa-clock-rotate-left"></i> Lịch sử giao dịch <span class="tab-count" id="txCount"></span>
+    </button>
+  </div>
+
+
+
+  <!-- ===== Tab 1: Đơn nạp gần đây ===== -->
+  <div class="tab-pane active" id="ctab-orders">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <b style="font-size:14px"><i class="fas fa-receipt"></i> Đơn nạp gần đây</b>
+        <button class="link-btn" style="margin-left:auto" onclick="loadOrders()"><i class="fas fa-rotate"></i> Làm mới</button>
+      </div>
+      <div id="ordersEmpty" class="muted" hidden style="font-size:13px">Chưa có đơn nạp nào.</div>
+      <div style="overflow-x:auto">
+        <table id="ordersTable" hidden>
+          <thead>
+            <tr><th>Mã đơn</th><th>Số tiền</th><th>Điểm</th><th>Trạng thái</th><th>Thời gian</th><th></th></tr>
+          </thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
+      </div>
     </div>
-    <div id="loading">Đang tải…</div>
-    <div style="overflow-x:auto">
-      <table id="txTable" hidden>
-        <thead>
-          <tr><th>Thời gian</th><th>Loại</th><th>Điểm</th><th>Số dư sau</th><th>Ghi chú</th></tr>
-        </thead>
-        <tbody id="txBody"></tbody>
-      </table>
-    </div>
-    <div id="txEmpty" class="muted" hidden style="font-size:13px">Chưa có giao dịch nào.</div>
-    <div class="pager" id="txPager" hidden>
-      <button class="pager-btn" id="txPrev" onclick="gotoPage(pg-1)" title="Trang trước"><i class="fas fa-chevron-left"></i></button>
-      <span id="txNums" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"></span>
-      <button class="pager-btn" id="txNext" onclick="gotoPage(pg+1)" title="Trang sau"><i class="fas fa-chevron-right"></i></button>
-      <span class="pager-info" id="txPagerInfo"></span>
+  </div>
+
+  <!-- ===== Tab 2: Lịch sử giao dịch ===== -->
+  <div class="tab-pane" id="ctab-tx">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <b style="font-size:14px"><i class="fas fa-clock-rotate-left"></i> Lịch sử giao dịch</b>
+      </div>
+      <div id="loading">Đang tải…</div>
+      <div style="overflow-x:auto">
+        <table id="txTable" hidden>
+          <thead>
+            <tr><th>Thời gian</th><th>Loại</th><th>Điểm</th><th>Số dư sau</th><th>Ghi chú</th></tr>
+          </thead>
+          <tbody id="txBody"></tbody>
+        </table>
+      </div>
+      <div id="txEmpty" class="muted" hidden style="font-size:13px">Chưa có giao dịch nào.</div>
+      <div class="pager" id="txPager" hidden>
+        <button class="pager-btn" id="txPrev" onclick="gotoPage(pg-1)" title="Trang trước"><i class="fas fa-chevron-left"></i></button>
+        <span id="txNums" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"></span>
+        <button class="pager-btn" id="txNext" onclick="gotoPage(pg+1)" title="Trang sau"><i class="fas fa-chevron-right"></i></button>
+        <span class="pager-info" id="txPagerInfo"></span>
+      </div>
     </div>
   </div>
 </div>
 
 <script src="auth.js"></script>
+<script src="version.js"></script>
 <script>
 const TYPE_LABELS = {
   lookup: 'Tra cứu', signup_bonus: 'Thưởng đăng ký', admin_topup: 'Admin nạp',
-  admin_adjust: 'Admin chỉnh', correction: 'Điều chỉnh', payment: 'Thanh toán', refund: 'Hoàn điểm'
+  admin_adjust: 'Admin chỉnh', correction: 'Điều chỉnh', payment: 'Nạp qua payOS', refund: 'Hoàn điểm'
 };
 const PAGE = 50;
 let cfg = null;
@@ -157,6 +297,10 @@ function fmtAmt(n) {
   const v = Number(n) || 0;
   const s = Number.isInteger(v) ? v : v.toFixed(2);
   return (v > 0 ? '+' : '') + s;
+}
+/** 50000 → "50.000đ" (dùng cho cột số tiền của đơn nạp). */
+function fmtVnd(n) {
+  return Number(n || 0).toLocaleString('vi-VN') + 'đ';
 }
 
 async function loadConfig() {
@@ -288,14 +432,123 @@ async function loadAll() {
   }
 }
 
+// ============================================================================
+// Tabs (Đơn nạp gần đây · Lịch sử giao dịch)
+// ============================================================================
+const CREDIT_TABS = ['orders', 'tx'];
+let activeCreditTab = 'orders';
+
+/** Đổi tab; lazy-load dữ liệu của tab khi mở lần đầu. */
+function switchCreditTab(name) {
+  if (CREDIT_TABS.indexOf(name) < 0) return;
+  activeCreditTab = name;
+
+  document.querySelectorAll('.tab-btn[data-ctab]').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-ctab') === name);
+  });
+  document.querySelectorAll('#ctab-orders, #ctab-tx').forEach(p => {
+    p.classList.toggle('active', p.id === 'ctab-' + name);
+  });
+
+  // Đồng bộ ?tab= vào URL (deep-link F5/back/forward mở đúng tab).
+  try {
+    const url = new URL(location.href);
+    if (name === 'orders') url.searchParams.delete('tab');
+    else url.searchParams.set('tab', name);
+    history.replaceState({}, '', url.toString());
+  } catch (e) { /* môi trường không hỗ trợ history — bỏ qua */ }
+
+  // Lazy: chỉ gọi API khi tab thật sự được mở.
+  if (name === 'orders') loadOrders();
+  if (name === 'tx') ensureTxLoaded();
+}
+
+/** Nạp lịch sử giao dịch lần đầu (tab tx được mở). */
+let txLoaded = false;
+function ensureTxLoaded() {
+  if (txLoaded) return;
+  txLoaded = true;
+  pg = 1;
+  loadTx().catch(e => {
+    const loading = document.getElementById('loading');
+    loading.hidden = false;
+    loading.textContent = e.message || 'Lỗi tải dữ liệu';
+    loading.classList.add('error');
+  });
+}
+
+// ============================================================================
+// Đơn nạp gần đây (user)
+// ============================================================================
+const ORDER_STATUS_TEXT = {
+  PENDING: 'Chờ thanh toán', PAID: 'Đã thanh toán', CANCELLED: 'Đã huỷ',
+  EXPIRED: 'Hết hạn', UNDERPAID: 'Trả thiếu', FAILED: 'Thất bại'
+};
+
+async function loadOrders() {
+  const table = document.getElementById('ordersTable');
+  const empty = document.getElementById('ordersEmpty');
+  const badge = document.getElementById('ordersTabCount');
+  try {
+    const r = await Auth.fetch('/api/credits/topup?limit=20');
+    if (!r.ok) { if (badge) badge.textContent = ''; return; }
+    const rows = await r.json();
+    const list = Array.isArray(rows) ? rows : [];
+    if (badge) badge.textContent = list.length ? `(${list.length})` : '';
+    if (!list.length) { table.hidden = true; empty.hidden = false; return; }
+    empty.hidden = true; table.hidden = false;
+    document.getElementById('ordersBody').innerHTML = list.map(o => {
+      const st = o.status || 'PENDING';
+      const canCancel = st === 'PENDING';
+      const canView = st === 'PENDING';
+      return `<tr>
+        <td class="mono">#${o.order_code}</td>
+        <td>${fmtVnd(o.amount_vnd)}</td>
+        <td>${o.credits} điểm</td>
+        <td><span class="status-badge status-${st}">${ORDER_STATUS_TEXT[st] || st}</span></td>
+        <td class="muted" style="white-space:nowrap">${fmtDate(o.created_at)}</td>
+        <td style="white-space:nowrap">
+          ${canView ? `<button class="link-btn" onclick="viewOrder(${o.order_code})">Xem</button>` : ''}
+          ${canCancel ? `<button class="link-btn danger" onclick="cancelOrderFromList(${o.order_code})">Huỷ</button>` : ''}
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (e) { if (badge) badge.textContent = ''; }
+}
+
+/** Mở lại đơn đang chờ ở trang nạp điểm (topup.html?order=<code>). */
+function viewOrder(orderCode) {
+  location.href = '/topup.html?order=' + encodeURIComponent(orderCode);
+}
+
+/** Huỷ đơn từ danh sách (không cần mở thẻ QR). */
+async function cancelOrderFromList(orderCode) {
+  if (!confirm('Huỷ đơn nạp #' + orderCode + '?')) return;
+  try {
+    const r = await Auth.fetch(`/api/credits/topup/${orderCode}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Người dùng huỷ' })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'Không huỷ được đơn');
+    loadOrders();
+  } catch (e) { alert(e.message); }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof Auth !== 'undefined' && Auth.initNavbar) Auth.initNavbar();
   window.loadTheme();
   if (typeof Auth === 'undefined' || !Auth.isLoggedIn()) {
-    location.href = 'login.html';
+    if (typeof Auth !== 'undefined' && Auth.goLogin) Auth.goLogin();
+    else location.href = 'index.html';
     return;
   }
   loadAll();
+  loadOrders();
+  // ?tab=orders|tx → mở đúng tab (lazy-load dữ liệu qua switchCreditTab).
+  const t = new URLSearchParams(location.search).get('tab');
+  if (t === 'orders' || t === 'tx') switchCreditTab(t);
 });
 </script>
 </body>

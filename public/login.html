@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cell.id.vn - Login</title>
   <script src="/auth.js"></script>
+  <script src="/auth-popup.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -132,12 +133,27 @@
       margin-right: 8px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .back-home {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: #8888aa; text-decoration: none; font-size: 13px; margin-bottom: 14px;
+    }
+    .back-home:hover { color: #ccccee; }
   </style>
 </head>
 <body>
   <div class="auth-container">
+    <a href="/index.html" class="back-home"><i class="fas fa-arrow-left"></i> Về trang chủ</a>
     <h1>Cell.id.vn</h1>
     <p class="subtitle">Cellular tower mapping & analysis</p>
+
+    <!-- Trang chủ giờ dùng popup. Giữ trang này cho link cũ & test; nút dưới mở popup. -->
+    <div style="background:rgba(120,180,255,.14);border:1px dashed rgba(80,140,220,.5);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#cfe1ff;line-height:1.6">
+      <b>Mẹo:</b> bạn có thể đăng nhập / đăng ký ngay trên trang chủ mà không cần rời bản đồ.
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" onclick="openPopup('login')" style="padding:8px 14px;border:0;border-radius:8px;background:#0ea5e9;color:#fff;font-weight:600;cursor:pointer">Mở popup đăng nhập</button>
+        <button type="button" onclick="openPopup('register')" style="padding:8px 14px;border:1px solid rgba(255,255,255,.25);border-radius:8px;background:transparent;color:#e8ecf7;font-weight:600;cursor:pointer">Mở popup đăng ký</button>
+      </div>
+    </div>
 
     <div class="tab-bar">
       <button id="tabLogin" class="active" onclick="switchTab('login')">Login</button>
@@ -235,26 +251,13 @@
 
     async function handleRegister(e) {
       e.preventDefault();
-      const username = document.getElementById('regUsername').value.trim();
-      const password = document.getElementById('regPassword').value;
-      const confirm = document.getElementById('regConfirm').value;
-
-      if (password !== confirm) {
-        showMsg('regMessage', 'Passwords do not match', 'error');
+      // Form đăng ký cũ chỉ có username/password; API mới cần email + captcha + điều khoản.
+      // Chuyển sang popup để nhập đủ (và giữ tương thích link cũ).
+      if (window.AuthPopup) {
+        AuthPopup.open('register');
         return;
       }
-
-      setLoading('register', true);
-      document.getElementById('regMessage').style.display = 'none';
-      try {
-        const data = await Auth.register(username, password);
-        showMsg('regMessage', data.message || 'Registration successful! Wait for admin activation.', 'success');
-        document.getElementById('registerForm').reset();
-      } catch (err) {
-        showMsg('regMessage', err.message, 'error');
-      } finally {
-        setLoading('register', false);
-      }
+      showMsg('regMessage', 'Vui lòng dùng popup đăng ký (cần email xác nhận).', 'error');
     }
 
     // Redirect if already logged in
@@ -265,6 +268,22 @@
       } else {
         window.location.href = '/index.html';
       }
+    }
+
+    // Mở tab Đăng ký khi vào bằng /login.html#register (nút "Đăng ký" trên navbar/gate).
+    function applyHashTab() {
+      if ((window.location.hash || '').toLowerCase() === '#register') switchTab('register');
+    }
+    applyHashTab();
+    window.addEventListener('hashchange', applyHashTab);
+
+    // Mở popup mới (màn đăng ký đầy đủ: email + captcha + điều khoản).
+    function openPopup(view) {
+      if (window.AuthPopup) AuthPopup.open(view || 'login');
+    }
+    // Hash điều hướng popup (#verify / #reset&email=..) → mở popup thay vì form cũ.
+    if (window.AuthPopup && !AuthPopup.autoOpen()) {
+      // #login/#register đã được tabs của trang này xử lý; không mở popup trùng.
     }
   </script>
 </body>

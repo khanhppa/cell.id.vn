@@ -15,6 +15,8 @@
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@0.79.0/dist/L.Control.Locate.min.js" charset="utf-8"></script>
   <script src="/auth.js"></script>
+  <script src="/auth-popup.js"></script>
+  <script src="/version.js"></script>
   <style>
     :root {
       --bg-body: #f0f2f5;
@@ -410,6 +412,9 @@
     /* Mode thể hiện bằng nền row + viền trái (thay cho badge) */
     .hist-card--single { background: rgba(68,68,204,0.10); border-left-color: #6666ee; }
     .hist-card--batch { background: rgba(255,136,0,0.09); border-left-color: #ee9922; }
+    /* Viền trái theo CÔNG NGHỆ MẠNG (RAT) — màu set inline từ RADIO_STYLE.
+       Không có `.hist-card--rat` thì giữ nguyên màu theo mode ở trên. */
+    .hist-card--rat { border-left-width: 4px; }
     .hist-card:hover { border-color: var(--border-hover); background: var(--bg-hover); }
     .hist-card--single:hover { border-left-color: #6666ee; }
     .hist-card--batch:hover { border-left-color: #ee9922; }
@@ -557,6 +562,78 @@
     }
 
     /* =====================================================
+       Tab Xem rút list — bộ lọc thu gọn + chip lọc hành động
+       ===================================================== */
+    .cl-filter-toggle {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      background: var(--bg-surface2); border: 1px solid var(--border-color);
+      color: var(--text-secondary); margin-bottom: 6px;
+    }
+    .cl-filter-toggle:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .cl-filter-toggle .cl-caret { margin-left: 2px; transition: transform 0.2s; font-size: 10px; }
+    .cl-filter-toggle.open .cl-caret { transform: rotate(180deg); }
+    .cl-badge {
+      display: none; font-size: 9.5px; font-weight: 700; line-height: 1;
+      padding: 2px 5px; border-radius: 999px;
+      background: var(--accent, #3d7ce0); color: #fff;
+    }
+    .cl-badge.show { display: inline-block; }
+    .cl-filter-panel { margin-bottom: 6px; }
+    /* Icon chips thay cho <select> lọc loại — gọn, 1 hàng, bấm nhanh. */
+    .cl-filter-chips { display: flex; gap: 4px; margin-bottom: 8px; }
+    .cl-chip {
+      flex: 1 1 0; height: 30px; display: flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border-color); background: var(--bg-surface2);
+      color: var(--text-muted); border-radius: 6px; cursor: pointer;
+      font-size: 12px; transition: all 0.15s; padding: 0;
+    }
+    .cl-chip:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .cl-chip.active {
+      background: var(--accent, #3d7ce0); border-color: var(--accent, #3d7ce0);
+      color: #fff;
+    }
+    /* Dòng phiên đang xem — tên file + nút xoá cả phiên */
+    .cl-cur-session {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      font-size: 11px; color: var(--text-secondary);
+      background: var(--bg-surface2); border: 1px solid var(--border-color);
+      border-radius: 8px; padding: 6px 8px; margin: 8px 0 0;
+    }
+    .cl-cur-session .cl-cur-name {
+      flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-weight: 600; color: var(--text-primary);
+    }
+    .cl-cur-session .cl-cur-meta { color: var(--text-faint); }
+
+    /* Khối "Phiên rút list" trong tab Lịch sử */
+    .cl-sessions {
+      border: 1px solid var(--border-color); border-radius: 8px;
+      margin-bottom: 8px; background: var(--bg-surface2);
+    }
+    .cl-sessions > summary {
+      cursor: pointer; padding: 6px 9px; font-size: 12px; font-weight: 600;
+      color: var(--text-primary); display: flex; align-items: center; gap: 6px;
+      list-style: none;
+    }
+    .cl-sessions > summary::-webkit-details-marker { display: none; }
+    .cl-sessions > summary .cl-count { font-size: 10.5px; font-weight: 600; color: var(--text-faint); }
+    .cl-sessions-list { max-height: 220px; overflow-y: auto; padding: 0 6px 6px; }
+    .cl-session-card {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 6px; border-radius: 6px; font-size: 11px;
+      border: 1px solid transparent;
+    }
+    .cl-session-card:hover { background: var(--bg-hover); }
+    .cl-session-card.active { border-color: var(--accent, #3d7ce0); }
+    .cl-session-info { flex: 1; min-width: 0; }
+    .cl-session-name {
+      display: block; font-weight: 600; color: var(--text-primary);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cl-session-meta { font-size: 10px; color: var(--text-faint); }
+    .cl-session-empty { font-size: 11px; color: var(--text-faint); padding: 4px 2px; }
+
+    /* =====================================================
        Movement-history timeline (bottom overlay)
        ===================================================== */
     #timelineBar {
@@ -612,6 +689,129 @@
     .tl-zoom button:hover { background: var(--bg-hover); color: var(--text-primary); }
     /* Icon đến/đi: xoay nhẹ để phân biệt hướng */
     .tl-node[data-dir="đến"] i { transform: rotate(180deg); }
+
+    /* ===== Guest mode ===== */
+    body.guest-mode .tl-zoom { bottom: 24px; }
+
+    /* Khách chỉ thấy tab Tra cứu (chế độ guest); mọi phần cần đăng nhập đều ẩn
+       — kể cả tab Lịch sử tra cứu trên sidebar. Không tạo liên kết dư thừa. */
+    .guest-only { display: none; }
+    body.guest-mode .member-only { display: none !important; }
+    body.guest-mode .guest-only { display: block; }
+    body.guest-mode .sidebar-tab[data-tab="lookuphistory"],
+    body.guest-mode .sidebar-tab[data-tab="calllogs"] { display: none !important; }
+
+    /* Chân left bar — số phiên bản, góc dưới-phải; luôn hiện (cả khách lẫn
+       người dùng). Chỉ là nhãn, không phải liên kết. */
+    .panel-foot {
+      flex: 0 0 auto;
+      margin-top: auto;
+      padding: 6px 12px 8px;
+      border-top: 1px solid var(--border-color);
+      display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+      text-align: right;
+    }
+    .panel-foot .panel-foot-row {
+      display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap;
+    }
+    /* Nhãn phiên bản: tĩnh, không gạch chân/di chuột. */
+    .panel-foot .panel-foot-ver {
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.3px;
+      color: var(--text-faint); cursor: default; user-select: none;
+    }
+    .panel-foot .panel-foot-note {
+      font-size: 10px; color: var(--text-faint); opacity: 0.85;
+    }
+    /* Số lượt thử chỉ dành cho khách. */
+    .panel-foot .guest-only { display: none; font-size: 10.5px; font-weight: 600; color: #c98a1e; }
+    body.guest-mode .panel-foot .guest-only { display: inline; }
+    .panel-foot .guest-only.exhausted { color: #e04444; }
+
+    /* Khối tra cứu của khách (tab Tra cứu): gọn, chỉ ô nhập mã cell. */
+    .guest-hint {
+      font-size: 11.5px; line-height: 1.6; color: var(--text-secondary);
+      background: var(--bg-surface2); border: 1px solid var(--border-color);
+      border-radius: 8px; padding: 8px 10px; margin-bottom: 10px;
+    }
+    .guest-hint i { color: #c98a1e; margin-right: 4px; }
+    .guest-hint b { color: var(--text-primary); }
+    /* Chú thích màu theo công nghệ mạng (đồng bộ RADIO_STYLE trong app.js). */
+    .guest-radio-legend {
+      display: flex; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 10px;
+      font-size: 10.5px; color: var(--text-muted);
+    }
+    .guest-radio-legend .grs { display: inline-flex; align-items: center; gap: 4px; }
+    .guest-radio-legend .grs i {
+      display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+    }
+
+    .guest-disabled { opacity: 0.45 !important; cursor: not-allowed !important; }
+    body.guest-mode .guest-block { filter: grayscale(0.7); }
+
+    #guestGate {
+      display: none; position: fixed; inset: 0; z-index: 1300;
+      align-items: flex-end; justify-content: center; padding: 0 12px 22px;
+      background: linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0.05) 45%, transparent);
+      pointer-events: none;
+    }
+    .guest-gate-card {
+      pointer-events: auto; max-width: 700px; width: 100%;
+      background: var(--bg-surface, #fff); border: 1px solid var(--border-color);
+      border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+      padding: 14px 18px; display: flex; align-items: center;
+      gap: 14px; flex-wrap: wrap; justify-content: space-between;
+    }
+    .guest-gate-card .gg-text { font-size: 13px; color: var(--text-secondary); line-height: 1.6; flex: 1 1 320px; }
+    .guest-gate-card .gg-text b { color: var(--text-primary); }
+    .guest-gate-card .gg-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .guest-gate-card .gg-actions a {
+      text-decoration: none; border-radius: 9px; padding: 8px 16px; font-size: 13px; font-weight: 700;
+      border: 1px solid var(--border-color); color: var(--text-primary); background: var(--bg-surface2);
+    }
+    .guest-gate-card .gg-actions a.gg-primary { background: var(--bg-btn-primary, #4f7cff); border-color: transparent; color: #fff; }
+    .guest-gate-card.exhausted { border-color: rgba(224,68,68,0.6); }
+    .guest-gate-close {
+      border: none; background: transparent; color: var(--text-faint);
+      font-size: 16px; cursor: pointer; padding: 2px 6px; border-radius: 6px;
+    }
+    .guest-gate-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    /* ===== Highlight cell trên bản đồ (click dòng kết quả) ===== */
+    .cell-hl-ring {
+      animation: cellPulse 1.4s ease-out infinite;
+      transform-origin: center;
+    }
+    @keyframes cellPulse {
+      0%   { stroke-opacity: 1;   stroke-width: 3; }
+      70%  { stroke-opacity: 0.15; stroke-width: 6; }
+      100% { stroke-opacity: 1;   stroke-width: 3; }
+    }
+
+    /* ===== Banner phiên làm việc đang giữ (F5 không mất) ===== */
+    .call-session-banner {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 8px; margin: 6px 0;
+      font-size: 11px; line-height: 1.4;
+      border: 1px solid rgba(79,124,255,0.45);
+      background: rgba(79,124,255,0.10);
+      border-radius: 8px; color: var(--text-secondary);
+    }
+    .call-session-banner i { color: #4f7cff; }
+    .call-session-banner span { flex: 1; }
+
+    /* ===== Thanh tổng kết nhanh tab Xem rút list ===== */
+    .call-log-summary {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      padding: 6px 8px; margin: 6px 0;
+      font-size: 11px; border-radius: 8px;
+      background: var(--bg-surface2); border: 1px solid var(--border-color);
+    }
+    .call-log-summary b { color: var(--text-primary); }
+    .call-log-summary .cls-ok { color: #22aa44; }
+    .call-log-summary .cls-miss { color: #dd8800; }
+
+    /* Dòng kết quả tra cứu click được → có phản hồi hover */
+    #cellList > div[onclick]:hover { background: var(--bg-hover); }
   </style>
 </head>
 <body>
@@ -626,6 +826,24 @@
 
   <!-- Header -->
   <div class="header"></div>
+
+  <!-- Overlay mời đăng ký (chỉ hiện với khách) -->
+  <div id="guestGate">
+    <div class="guest-gate-card">
+      <div class="gg-text">
+        <b><i class="fas fa-user-shield"></i> Bạn đang xem ở chế độ khách.</b>
+        Tra cứu thử <b>1 cell</b> từ dữ liệu nội bộ — miễn phí. Đăng ký tài khoản để dùng
+        bản đồ, lịch sử tra cứu, tải call log và tra cứu thêm nguồn OpenCellID.
+      </div>
+      <div class="gg-actions">
+        <a class="gg-primary" href="#" onclick="event.preventDefault();AuthPopup.open('register')"><i class="fas fa-user-plus"></i> Đăng ký miễn phí</a>
+        <a href="#" onclick="event.preventDefault();AuthPopup.open('login')"><i class="fas fa-sign-in-alt"></i> Đăng nhập</a>
+      </div>
+      <button class="guest-gate-close" title="Ẩn" onclick="document.getElementById('guestGate').style.display='none'">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  </div>
 
   <!-- Sidebar Toggle Button -->
   <button class="sidebar-toggle show" id="sidebarToggleBtn" onclick="toggleSidebar()">
@@ -679,41 +897,62 @@
 
         <div class="cell-lookup-result" id="callLogUploadResult"></div>
 
-        <div style="border-top:1px solid var(--border-color);margin:8px 0;padding-top:8px">
-          <div class="form-group">
-            <label data-i18n="subscribers.actionFilter">Lọc Loại</label>
-            <select id="actionFilter" onchange="applyCallLogFilters()">
-              <option value="all" data-i18n="filter.all">Tất Cả</option>
-              <option value="CALL_IN" data-i18n="filter.callIn">Gọi Đến</option>
-              <option value="CALL_OUT" data-i18n="filter.callOut">Gọi Đi</option>
-              <option value="SMS_IN" data-i18n="filter.smsIn">SMS Đến</option>
-              <option value="SMS_OUT" data-i18n="filter.smsOut">SMS Đi</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label data-i18n="subscribers.from">Từ</label>
-            <input type="datetime-local" id="dateFrom">
-          </div>
-          <div class="form-group">
-            <label data-i18n="subscribers.to">Đến</label>
-            <input type="datetime-local" id="dateTo">
-          </div>
-          <div class="form-row">
-            <button class="btn btn-sm btn-primary compact-section" style="flex:1" onclick="applyCallLogFilters()"><i class="fas fa-map-marker-alt"></i> Hiển Thị Bản Đồ</button>
-            <button class="btn btn-sm btn-success compact-section" id="playBtn" onclick="playCallLogs()" style="display:none;flex:1"><i class="fas fa-route"></i> <span id="playBtnLabel" data-i18n="play.viewHistory">Xem lịch sử</span></button>
-          </div>
-          <div id="playNav" style="display:none;gap:6px;margin-top:6px" class="compact-section">
-            <button class="btn btn-sm" id="playPrevBtn" onclick="playStep(-1)"><i class="fas fa-chevron-left"></i></button>
-            <button class="btn btn-sm btn-block" id="playToggleBtn" onclick="playToggle()"><i class="fas fa-stop"></i> <span id="playToggleLabel" data-i18n="play.stop">Dừng lại</span></button>
-            <button class="btn btn-sm" id="playNextBtn" onclick="playStep(1)"><i class="fas fa-chevron-right"></i></button>
-          </div>
+        <div id="callSessionBanner" class="call-session-banner" style="display:none">
+          <i class="fas fa-clock-rotate-left"></i>
+          <span id="callSessionBannerText"></span>
+          <button class="btn btn-sm" id="callSessionResetBtn" onclick="resetCallSession()">
+            <i class="fas fa-trash-can"></i> <span data-i18n="calllogs.resetSession">Xoá phiên</span>
+          </button>
         </div>
+
+        <div id="callLogSummaryBar" class="call-log-summary" style="display:none"></div>
+
+        <!-- Phiên đang xem: tên file + nút xoá cả phiên (luôn hiện khi có dữ liệu). -->
+        <div id="clCurrentSession" class="cl-cur-session" style="display:none"></div>
 
         <div style="border-top:1px solid var(--border-color);margin:8px 0 0;padding-top:8px;flex:1;display:flex;flex-direction:column;min-height:0">
           <div class="form-group">
-            <label>Tìm Kiếm</label>
+            <label data-i18n="cells.search">Tìm Kiếm</label>
             <input type="text" id="logSearchInput" placeholder="SĐT, mạng, loại, cell..." oninput="searchCallLogs()">
           </div>
+
+          <!-- Bộ lọc phụ: thu gọn mặc định để danh sách có thêm chỗ. -->
+          <button type="button" class="btn btn-sm btn-block cl-filter-toggle" id="clFilterToggle"
+                  onclick="toggleCallLogFilters()" aria-expanded="false" aria-controls="callLogFilterPanel">
+            <i class="fas fa-filter"></i> <span data-i18n="calllogs.filters">Bộ lọc</span>
+            <span class="cl-badge" id="clFilterBadge"></span>
+            <i class="fas fa-chevron-down cl-caret" id="clFilterCaret"></i>
+          </button>
+
+          <div id="callLogFilterPanel" class="cl-filter-panel hidden">
+            <div class="cl-filter-chips" id="clActionChips">
+              <button type="button" class="cl-chip active" data-action="all" data-i18n-title="filter.all" title="Tất Cả"><i class="fas fa-list"></i></button>
+              <button type="button" class="cl-chip" data-action="CALL_IN" data-i18n-title="filter.callIn" title="Gọi Đến"><i class="fas fa-phone-arrow-down-left"></i></button>
+              <button type="button" class="cl-chip" data-action="CALL_OUT" data-i18n-title="filter.callOut" title="Gọi Đi"><i class="fas fa-phone-arrow-up-right"></i></button>
+              <button type="button" class="cl-chip" data-action="SMS_IN" data-i18n-title="filter.smsIn" title="SMS Đến"><i class="fas fa-envelope-arrow-down"></i></button>
+              <button type="button" class="cl-chip" data-action="SMS_OUT" data-i18n-title="filter.smsOut" title="SMS Đi"><i class="fas fa-envelope-arrow-up"></i></button>
+            </div>
+            <div class="form-row filter-datetime">
+              <div class="form-group">
+                <label data-i18n="subscribers.from">Từ</label>
+                <input type="datetime-local" id="dateFrom" onchange="applyCallLogFilters()">
+              </div>
+              <div class="form-group">
+                <label data-i18n="subscribers.to">Đến</label>
+                <input type="datetime-local" id="dateTo" onchange="applyCallLogFilters()">
+              </div>
+            </div>
+            <div class="form-row">
+              <button class="btn btn-sm btn-primary compact-section" style="flex:1" onclick="applyCallLogFilters()"><i class="fas fa-map-marker-alt"></i> Hiển Thị Bản Đồ</button>
+              <button class="btn btn-sm btn-success compact-section" id="playBtn" onclick="playCallLogs()" style="display:none;flex:1"><i class="fas fa-route"></i> <span id="playBtnLabel" data-i18n="play.viewHistory">Xem lịch sử</span></button>
+            </div>
+            <div id="playNav" style="display:none;gap:6px;margin-top:6px" class="compact-section">
+              <button class="btn btn-sm" id="playPrevBtn" onclick="playStep(-1)"><i class="fas fa-chevron-left"></i></button>
+              <button class="btn btn-sm btn-block" id="playToggleBtn" onclick="playToggle()"><i class="fas fa-stop"></i> <span id="playToggleLabel" data-i18n="play.stop">Dừng lại</span></button>
+              <button class="btn btn-sm" id="playNextBtn" onclick="playStep(1)"><i class="fas fa-chevron-right"></i></button>
+            </div>
+          </div>
+
           <div id="logRecordList" style="font-size:11px;flex:1;min-height:0;overflow-y:auto"></div>
           <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
             <button class="btn btn-sm" id="logPrevBtn" onclick="logPage(-1)"><i class="fas fa-chevron-left"></i></button>
@@ -725,6 +964,76 @@
 
       <!-- Tab 2: Cell DB -->
       <div class="tab-content active" id="tab-cells">
+        <!-- Khách: chỉ có tab Tra cứu + ô nhập mã cell; các tab cần đăng nhập bị ẩn. -->
+        <div class="guest-only guest-block" id="guestLookupMode">
+          <div class="guest-hint">
+            <i class="fas fa-user-shield"></i>
+            Chế độ khách — tra cứu thử cell từ <b>CSDL nội bộ</b>.
+          </div>
+          <div class="guest-radio-legend">
+            <span class="grs"><i style="background:#e8a33d"></i>2G</span>
+            <span class="grs"><i style="background:#2fa8c9"></i>3G</span>
+            <span class="grs"><i style="background:#3d7ce0"></i>4G</span>
+            <span class="grs"><i style="background:#d64545"></i>5G</span>
+            <span class="grs"><i style="background:#3fae7a"></i>NB-IoT</span>
+            <span class="grs"><i style="background:#8e6fd8"></i>CDMA</span>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>MCC</label>
+              <input type="text" inputmode="numeric" id="guestMcc" placeholder="452" value="452"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();guestLookupFromForm();}">
+            </div>
+            <div class="form-group">
+              <label>MNC</label>
+              <select id="guestMnc" onkeydown="if(event.key==='Enter'){event.preventDefault();guestLookupFromForm();}">
+                <option value="04">Viettel (04)</option>
+                <option value="01">Mobifone (01)</option>
+                <option value="02">Vinaphone (02)</option>
+                <option value="05">Vietnamobile (05)</option>
+                <option value="07">Gmobile (07)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>LAC</label>
+              <input type="text" inputmode="numeric" id="guestLac" placeholder="VD: 5001"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();guestLookupFromForm();}">
+            </div>
+            <div class="form-group">
+              <label>CellID</label>
+              <input type="text" inputmode="numeric" id="guestCellid" placeholder="VD: 12345"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();guestLookupFromForm();}">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label data-i18n="cells.sector">Sector</label>
+              <input type="text" inputmode="numeric" id="guestSector" placeholder="0-255"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();guestLookupFromForm();}">
+            </div>
+            <div class="form-group">
+              <label data-i18n="cells.radio">Công nghệ mạng</label>
+              <select id="guestRadio" onkeydown="if(event.key==='Enter'){event.preventDefault();guestLookupFromForm();}">
+                <option value="" data-i18n="cells.radioAuto">Tự động (đề xuất)</option>
+                <option value="LTE">4G / LTE</option>
+                <option value="GSM">2G / GSM</option>
+                <option value="UMTS">3G / UMTS</option>
+                <option value="NR">5G / NR</option>
+              </select>
+            </div>
+          </div>
+          <div class="btn-group compact-section">
+            <button class="btn btn-sm btn-primary btn-block" onclick="guestLookupFromForm()">
+              <i class="fas fa-search"></i> <span data-i18n="cells.lookup">Tra Cứu</span>
+            </button>
+          </div>
+          <div class="cell-lookup-result" id="guestLookupResult"></div>
+        </div>
+
+        <!-- Người dùng đã đăng nhập: tra cứu đầy đủ. -->
+        <div class="member-only">
         <div class="form-group">
           <label data-i18n="cells.lookupTitle">Tra Cứu Cell ID</label>
         </div>
@@ -759,6 +1068,16 @@
             <label data-i18n="cells.sector">Sector</label>
             <input type="number" id="cellSector" min="0" max="255" placeholder="0-255">
           </div>
+          <div class="form-group">
+            <label data-i18n="cells.radio">Công nghệ mạng</label>
+            <select id="cellRadio">
+              <option value="" data-i18n="cells.radioAuto">Tự động (đề xuất)</option>
+              <option value="LTE">4G / LTE</option>
+              <option value="GSM">2G / GSM</option>
+              <option value="UMTS">3G / UMTS</option>
+              <option value="NR">5G / NR</option>
+            </select>
+          </div>
         </div>
         <div class="btn-group compact-section">
           <button class="btn btn-sm btn-primary btn-block" onclick="lookupCell()">
@@ -771,7 +1090,7 @@
           <div class="form-group">
             <label data-i18n="cells.search">Tìm Kiếm Cell</label>
             <div style="position:relative">
-              <input type="text" id="cellSearch" placeholder="MCC,MNC,LAC,CellID" onkeydown="if(event.key==='Enter'){event.preventDefault();searchCells();}">
+              <input type="text" id="cellSearch" placeholder="MCC-MNC-LAC-CellID" onkeydown="if(event.key==='Enter'){event.preventDefault();searchCells();}">
               <i class="fas fa-search" onclick="searchCells()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--text-muted)"></i>
             </div>
           </div>
@@ -779,6 +1098,7 @@
             <span data-i18n="cells.typeToSearch">Gõ để tìm kiếm...</span>
           </div>
         </div>
+        </div><!-- /member-only -->
       </div>
 
       <!-- Tab 3: Lookup History -->
@@ -807,6 +1127,18 @@
           <label class="hist-selectall"><input type="checkbox" id="histSelectAll" onchange="histToggleAll(this.checked)"> <span data-i18n="hist.selectAll">Chọn tất cả</span></label>
           <span class="hist-count" id="histCount"></span>
         </div>
+        <!-- Phiên rút list (mỗi lần upload Excel = 1 dòng). Xem lại / xoá ở đây. -->
+        <details class="cl-sessions" id="clSessionsBox" open>
+          <summary>
+            <i class="fas fa-file-import"></i>
+            <span data-i18n="hist.clSessions">Phiên rút list</span>
+            <span class="cl-count" id="clSessionsCount"></span>
+          </summary>
+          <div id="clSessionsList" class="cl-sessions-list">
+            <span data-i18n="hist.loading">Đang tải...</span>
+          </div>
+        </details>
+
         <div class="hist-list" id="lookupHistoryList">
           <span data-i18n="hist.loading">Đang tải...</span>
         </div>
@@ -818,7 +1150,17 @@
       </div>
 
     </div>
+    <!-- Chân left bar: số phiên bản, góc dưới-phải. Hiện ở CẢ khách lẫn
+         người dùng đã đăng nhập — không phải liên kết (chỉ là nhãn). -->
+    <div class="panel-foot" id="guestPanelFoot">
+      <span class="panel-foot-row">
+        <span class="panel-foot-trial guest-only" id="cellPanelTrial" hidden></span>
+        <span class="panel-foot-ver" id="cellPanelVer" title="Phiên bản">v?</span>
+      </span>
+      <span class="panel-foot-note" id="cellPanelVerNote"></span>
+    </div>
   </div>
+
 
   <!-- Legend Toggle -->
   <div class="legend-toggle">
@@ -898,5 +1240,27 @@
   </div>
 
   <script src="/app.js"></script>
+  <script>
+    // Mở popup theo hash: #login / #register / #verify / #reset&email=..&code=..
+    // Cũng xử lý redirect sau khi kích hoạt thành công (#verified=1 → xoá hash).
+    (function () {
+      function handle() {
+        if (window.AuthPopup) {
+          if (!AuthPopup.autoOpen() && location.hash === '#verified=1') {
+            // Đã kích hoạt qua link email; popup đăng nhập để vào hệ thống.
+            AuthPopup.open('login');
+          }
+        }
+        // Đã đăng nhập thì ẩn overlay mời đăng ký (guest gate).
+        if (window.Auth && Auth.isLoggedIn()) {
+          var g = document.getElementById('guestGate');
+          if (g) g.style.display = 'none';
+        }
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', handle);
+      else handle();
+      window.addEventListener('hashchange', handle);
+    })();
+  </script>
 </body>
 </html>

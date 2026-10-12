@@ -14,8 +14,38 @@ const Auth = {
     localStorage.removeItem(this.TOKEN_KEY);
   },
 
+  /**
+   * Giải mã payload JWT (không verify chữ ký — chỉ đọc `exp`).
+   * @returns {object|null} payload, hoặc null nếu token không phải JWT hợp lệ.
+   */
+  decodeToken(token) {
+    try {
+      const part = String(token || '').split('.')[1];
+      if (!part) return null;
+      const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+      const json = decodeURIComponent(
+        atob(b64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+      );
+      return JSON.parse(json);
+    } catch (e) {
+      return null;
+    }
+  },
+
+  /**
+   * Token còn hạn không. Token KHÔNG parse được (không phải JWT) → coi là còn
+   * hạn để không chặn nhầm; server vẫn là nơi quyết định cuối cùng (401).
+   */
+  isTokenExpired() {
+    const token = this.getToken();
+    if (!token) return true;
+    const payload = this.decodeToken(token);
+    if (!payload || !payload.exp) return false;
+    return Date.now() >= payload.exp * 1000;
+  },
+
   isLoggedIn() {
-    return !!this.getToken();
+    return !this.isTokenExpired();
   },
 
   getUser() {
@@ -49,10 +79,17 @@ const Auth = {
     if (typeof window.updateCreditBadge === 'function') window.updateCreditBadge(user.credit_balance);
   },
 
-  logout() {
+  /** Chỉ xoá token + user, KHÔNG điều hướng. Dùng cho nhánh 401. */
+  clearSession() {
     this.clearToken();
     this.clearUser();
-    window.location.href = '/login.html';
+  },
+
+  /** Người dùng bấm "Đăng xuất": xoá session rồi về trang chủ. */
+  logout() {
+    this.clearSession();
+    // Luôn quay về trang chủ (trang chủ tự mở popup đăng nhập cho khách).
+    this.goLogin();
   },
 
   async login(username, password) {
@@ -62,39 +99,53 @@ const Auth = {
       body: JSON.stringify({ username, password })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Login failed');
+    if (!res.ok) {
+      // Ném kèm dữ liệu để UI biết đây là "chưa kích hoạt email" (mở màn nhập mã).
+      const err = new Error(data.error || 'Login failed');
+      err.data = data;
+      throw err;
+    }
     this.setToken(data.token);
     this.setUser(data.user);
     return data;
   },
 
-  async register(username, password) {
+  async register(payload) {
+    // payload: { username, password, email, captchaId, captcha, acceptTerms }
+    const body = (typeof payload === 'string')
+      ? { username: arguments[0], password: arguments[1] }
+      : payload;
     const res = await fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify(body)
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Registration failed');
+    if (!res.ok) {
+      const err = new Error(data.error || 'Registration failed');
+      err.data = data;
+      throw err;
+    }
     return data;
   },
 
   async checkSession() {
     const token = this.getToken();
     if (!token) return null;
+    if (this.isTokenExpired()) { this.clearToken(); this.clearUser(); return null; }
     try {
       const res = await fetch('/api/me', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) {
-        this.logout();
+        this.clearSession();
         return null;
       }
       const user = await res.json();
       this.setUser(user);
       return user;
     } catch (e) {
-      this.logout();
+      this.clearSession();
       return null;
     }
   },
@@ -113,29 +164,50 @@ const Auth = {
     if (token) opts.headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(url, opts);
     if (res.status === 401) {
-      this.logout();
+      // Hết phiên giữa chừng: xoá session nhưng KHÔNG tự điều hướng (tránh
+      // reload/nhảy trang khi người dùng đang thao tác). UI gọi __onSessionExpired.
+      this.clearSession();
+      if (typeof window.__onSessionExpired === 'function') window.__onSessionExpired();
       throw new Error('Session expired');
     }
     return res;
   }
 };
 
+// `const` ở top-level không tự tạo property trên `window` — các file khác
+// (auth-popup.js, index.html) kiểm tra `window.Auth`, nên phải gán tường minh.
+// Thiếu dòng này, finishLogin() bỏ qua việc lưu token và login "thành công"
+// nhưng người dùng vẫn ở chế độ khách sau khi tải lại trang.
+window.Auth = Auth;
+
+// Điều hướng về trang chủ và mở popup đăng nhập. Đang ở trang chủ thì phải NẠP LẠI
+// trang (chỉ đổi hash không chạy lại app.js → UI vẫn ở trạng thái cũ).
+Auth.goLogin = function () {
+  if (/\/index\.html$/.test(window.location.pathname) || window.location.pathname === '/') {
+    window.location.hash = 'login';
+    window.location.reload();
+  } else {
+    window.location.href = '/index.html#login';
+  }
+};
+
 // Redirect to login if not authenticated
 Auth.requireAuth = async function() {
+  const goLogin = () => Auth.goLogin();
   if (!this.isLoggedIn()) {
-    window.location.href = '/login.html';
+    goLogin();
     return false;
   }
   try {
     const user = await this.checkSession();
     if (!user) {
-      window.location.href = '/login.html';
+      goLogin();
       return false;
     }
     return true;
   } catch (e) {
     console.error('Session check failed:', e);
-    window.location.href = '/login.html';
+    goLogin();
     return false;
   }
 };
@@ -146,8 +218,9 @@ Auth.initNavbar = function() {
   let header = document.querySelector('.header') || document.querySelector('.topbar') || document.querySelector('.navbar');
   if (!header) return;
 
-  const user = this.getUser() || { username: 'guest', role: 'user' };
-  const isAdmin = this.isAdmin();
+  const loggedIn = this.isLoggedIn();
+  const user = this.getUser() || null;
+  const isAdmin = loggedIn && this.isAdmin();
   
   // Detect current path to highlight active nav
   const path = window.location.pathname;
@@ -164,6 +237,11 @@ Auth.initNavbar = function() {
   const logoutTxt = isEn ? 'Logout' : 'Đăng xuất';
   const changePassTxt = isEn ? 'Change Password' : 'Đổi mật khẩu';
   const myDataTxt = isEn ? 'My Data' : 'Dữ liệu của tôi';
+  const loginTxt = isEn ? 'Login' : 'Đăng nhập';
+  const registerTxt = isEn ? 'Register' : 'Đăng ký';
+  const versionTxt = isEn ? 'Version history' : 'Lịch sử phiên bản';
+  const guestHintTxt = isEn ? '1 free lookup' : '1 lượt tra cứu miễn phí';
+  const ipTrackerGuestTxt = isEn ? 'IP Tracker (login required)' : 'IP Tracker (cần đăng nhập)';
 
   // Apply common style dynamically to head if not present
   if (!document.getElementById('common-navbar-style')) {
@@ -326,6 +404,41 @@ Auth.initNavbar = function() {
         color: #e04444 !important;
       }
       .credit-badge-common.low:hover { background: rgba(255, 100, 100, 0.28) !important; }
+
+      /* Version badge */
+      .ver-badge-common {
+        display: inline-flex !important;
+        align-items: center !important;
+        padding: 2px 8px !important;
+        border-radius: 10px !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.3px !important;
+        border: 1px solid var(--border-color, rgba(0,0,0,0.1)) !important;
+        background: var(--bg-surface2, rgba(0,0,0,0.04)) !important;
+        color: var(--text-faint, #8a92a6) !important;
+        text-decoration: none !important;
+        line-height: 1.6 !important;
+        white-space: nowrap !important;
+      }
+      .ver-badge-common:hover { color: var(--text-primary, #1a1a2e) !important; background: var(--bg-hover, rgba(0,0,0,0.07)) !important; }
+
+      /* Nhắc guest còn lượt dùng thử */
+      .guest-hint-common {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        padding: 4px 10px !important;
+        border-radius: 14px !important;
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        border: 1px solid rgba(255, 170, 60, 0.45) !important;
+        background: rgba(255, 170, 60, 0.15) !important;
+        color: #c98a1e !important;
+        height: 30px !important;
+        box-sizing: border-box !important;
+        line-height: normal !important;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -347,11 +460,18 @@ Auth.initNavbar = function() {
         <button class="btn-header-common" onclick="Auth.toggleToolsDropdownCommon(event)"><i class="fas fa-wrench"></i> ${toolsTxt} <i class="fas fa-chevron-down" style="font-size: 8px; margin-left: 2px;"></i></button>
         <div class="tools-dropdown-menu-common" id="toolsDropdownCommon">
           <a class="tools-dropdown-item-common" href="/tools/port-check.html" style="${path.includes('/port-check.html') ? 'background: var(--bg-hover, rgba(0,0,0,0.06)); font-weight: bold;' : ''}"><i class="fas fa-search"></i> ${portTxt}</a>
-          <a class="tools-dropdown-item-common" href="/tools/ip-tracker.html" style="${path.includes('/ip-tracker.html') ? 'background: var(--bg-hover, rgba(0,0,0,0.06)); font-weight: bold;' : ''}"><i class="fas fa-crosshairs"></i> ${ipTxt}</a>
+          ${loggedIn ? `<a class="tools-dropdown-item-common" href="/tools/ip-tracker.html" style="${path.includes('/ip-tracker.html') ? 'background: var(--bg-hover, rgba(0,0,0,0.06)); font-weight: bold;' : ''}"><i class="fas fa-crosshairs"></i> ${ipTxt}</a>` : `<span class="tools-dropdown-item-common" style="opacity:.55; cursor:not-allowed;" title="${loginTxt}"><i class="fas fa-lock"></i> ${ipTrackerGuestTxt}</span>`}
           <a class="tools-dropdown-item-common" href="/tools/ebn-eci.html" style="${path.includes('/ebn-eci.html') ? 'background: var(--bg-hover, rgba(0,0,0,0.06)); font-weight: bold;' : ''}"><i class="fas fa-exchange-alt"></i> ${enbEciTxt}</a>
+          <div class="user-dropdown-divider-common"></div>
+          ${isAdmin ? `<a class="tools-dropdown-item-common" href="/version.html" style="${path.includes('/version.html') ? 'background: var(--bg-hover, rgba(0,0,0,0.06)); font-weight: bold;' : ''}"><i class="fas fa-code-branch"></i> ${versionTxt}</a>` : ''}
         </div>
       </div>
 
+      ${!loggedIn ? `
+        <span class="guest-hint-common" title="Đăng ký để tra cứu không giới hạn"><i class="fas fa-gift"></i> ${guestHintTxt}</span>
+        <a class="btn-header-common" href="/index.html#login" onclick="if(window.AuthPopup){event.preventDefault();AuthPopup.open('login');}"><i class="fas fa-sign-in-alt"></i> ${loginTxt}</a>
+        <a class="btn-header-common" href="/index.html#register" onclick="if(window.AuthPopup){event.preventDefault();AuthPopup.open('register');}" style="border-color: var(--border-focus, #4444cc) !important; font-weight: bold;"><i class="fas fa-user-plus"></i> ${registerTxt}</a>
+      ` : `
       ${isAdmin ? `<a class="btn-header-common" href="/admin.html" style="${path.includes('/admin.html') ? 'border-color: var(--border-focus, #4444cc) !important; font-weight: bold;' : ''}"><i class="fas fa-cog"></i> ${adminTxt}</a>` : ''}
       
       <!-- Credit badge -->
@@ -371,6 +491,7 @@ Auth.initNavbar = function() {
           <button class="user-dropdown-item-common" onclick="Auth.logout()"><i class="fas fa-sign-out-alt"></i> ${logoutTxt}</button>
         </div>
       </div>
+      `}
     </div>
   `;
 
@@ -387,8 +508,14 @@ Auth.initNavbar = function() {
   });
 
   // Số dư điểm: hiện cache trước (không nhấp nháy), rồi làm mới từ server.
-  window.updateCreditBadge(this.getCreditBalance());
-  this.refreshCreditBalance();
+  // Guest không có badge điểm → bỏ qua hẳn.
+  if (loggedIn) {
+    window.updateCreditBadge(this.getCreditBalance());
+    this.refreshCreditBalance();
+  }
+
+  // Chân panel trái (chỉ tab tra cứu): version + số lượt thử còn lại (khách).
+  if (window.AppVersion) window.AppVersion.renderPanelVersion();
 };
 
 // Vẽ số dư lên badge navbar. `null` → chưa biết (chưa đăng nhập).

@@ -198,11 +198,11 @@ function getUser() {
 getToken();
 const user = getUser();
 if (!authToken || !user) {
-  // Redirect to login
-  window.location.href = '/login.html';
+  // Về trang chủ (mở popup đăng nhập) — không còn dùng /login.html.
+  Auth.goLogin();
+} else {
+  currentUserId = user.id;
 }
-
-currentUserId = user.id;
 
 document.addEventListener('DOMContentLoaded', () => {
   Auth.initNavbar();

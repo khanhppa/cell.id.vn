@@ -21,13 +21,98 @@ function switchSection(name) {
   activeSection = name;
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
-  document.getElementById('section-' + name).classList.add('active');
-  document.querySelector(`.sidebar-item[data-section="${name}"]`).classList.add('active');
+
+  // 'cells' là nhóm cha có menu con: KHÔNG có `#section-cells` (đã thay bằng
+  // #sub-sources / #sub-local / #sub-audit, bật qua switchCellSub()). Trước đây
+  // đoạn dưới deref thẳng `.getElementById('section-cells').classList` → TypeError
+  // → onclick đứt giữa đường → không section nào active → trang trắng.
+  const section = document.getElementById('section-' + name);
+  if (section) section.classList.add('active');
+  else if (name !== 'cells') console.warn('[admin] thiếu section cho menu:', name);
+
+  const item = document.querySelector(`.sidebar-item[data-section="${name}"]`);
+  if (item) item.classList.add('active');
+
+  // Mở/gập menu con: chỉ nhóm Cell ID Database có menu con.
+  document.querySelectorAll('.sidebar-sub').forEach(sub => {
+    sub.classList.toggle('open', sub.dataset.parent === name);
+  });
+  // Rời nhóm Cell ID Database → bỏ tô sáng mục con, tránh 2 chỗ sáng cùng lúc.
+  if (name !== 'cells') {
+    document.querySelectorAll('.sidebar-sub-item').forEach(i => i.classList.remove('active'));
+  }
 
   if (name === 'dashboard') loadDashboard();
   if (name === 'users') { loadCreditUsers(); loadCreditTx(); }
   if (name === 'settings') loadSettings();
-  if (name === 'cells') { cdbLoadMeta(); cdbSearch(); cdbLoadAudit(1); }
+  if (name === 'payments') loadPayments();
+
+  if (name === 'cells') switchCellSub('local');
+  if (name === 'version' && window.AppVersion) window.AppVersion.renderChangelog('verAdminList', { currentOnly: true });
+}
+
+// ========================
+// Cell ID Database — menu con
+// ========================
+// 3 mục: sources (nguồn Online) / local (dữ liệu Local) / audit (lịch sử chỉnh sửa).
+// Mỗi mục là 1 `<div id="sub-X" class="section">`; sidebar-sub-item active tương ứng.
+function switchCellSub(sub) {
+  // Đảm bảo nhóm cha đang mở + sidebar-item "cells" sáng.
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  document.querySelectorAll('.sidebar-sub-item').forEach(i => i.classList.remove('active'));
+
+  const section = document.getElementById('sub-' + sub);
+  if (section) section.classList.add('active');
+  else console.warn('[admin] thiếu section cho menu con:', sub);
+  const parent = document.querySelector(`.sidebar-item[data-section="cells"]`);
+  if (parent) parent.classList.add('active');
+  const subItem = document.querySelector(`.sidebar-sub-item[data-sub="${sub}"]`);
+  if (subItem) subItem.classList.add('active');
+  const group = document.querySelector('.sidebar-sub[data-parent="cells"]');
+  if (group) group.classList.add('open');
+
+  if (sub === 'sources') { loadSources(); loadSyncJobs(); }
+  if (sub === 'local') { cdbLoadMeta(); cdbSearch(); initClfZone(); }
+  if (sub === 'audit') cdbLoadAudit(1);
+}
+
+// ========================
+// Quản lý dữ liệu Local — tab con
+// ========================
+// Mỗi bảng nằm trong 1 `.tab-pane#localtab-<name>`; nút tương ứng
+// `.tab-btn[data-localtab="<name>"]`. Khác `.tabs` của #sub-sources: đây là tab
+// trong nội dung, KHÔNG đụng sidebar.
+let localTab_ = 'cells';
+
+function switchLocalTab(name) {
+  const pane = document.getElementById('localtab-' + name);
+  if (!pane) { console.warn('[admin] thiếu tab Local:', name); return; }
+  localTab_ = name;
+  document.querySelectorAll('#localTabs .tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.localtab === name);
+  });
+  document.querySelectorAll('#sub-local .tab-pane').forEach(p => p.classList.remove('active'));
+  pane.classList.add('active');
+}
+
+// ========================
+// Settings — tab nhóm (Chung / Điểm / payOS / Quy đổi & nạp / SMTP)
+// ========================
+// Mỗi nhóm nằm trong `.tab-pane#settingstab-<name>`; nút ứng dụng
+// `.tab-btn[data-settingstab="<name>"]`. Khác `.tabs` của #localTabs: selector
+// bị giới hạn trong #section-settings nên KHÔNG đụng tab Local hay sidebar.
+let settingsTab_ = 'general';
+
+function switchSettingsTab(name) {
+  const pane = document.getElementById('settingstab-' + name);
+  if (!pane) { console.warn('[admin] thiếu tab Cấu hình:', name); return; }
+  settingsTab_ = name;
+  document.querySelectorAll('#settingsTabs .tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.settingstab === name);
+  });
+  document.querySelectorAll('#section-settings .tab-pane').forEach(p => p.classList.remove('active'));
+  pane.classList.add('active');
 }
 
 // ========================
@@ -47,7 +132,145 @@ function loadSettings() {
     if (cc) cc.value = s.credit_cost_per_lookup != null ? s.credit_cost_per_lookup : '';
     if (cb) cb.value = s.credit_signup_bonus != null ? s.credit_signup_bonus : '';
     if (cn) cn.checked = String(s.credit_allow_negative) === '1';
+
+    // payOS: secret nhận về bản che (••••1234). Ô input để TRỐNG — placeholder
+    // hiển thị bản che để admin biết đã cấu hình, gõ đè thì mới đổi.
+    const pe = document.getElementById('setPayosEnabled');
+    const pt = document.getElementById('setPayosTestMode');
+    const pc = document.getElementById('setPayosClientId');
+    const pak = document.getElementById('setPayosApiKey');
+    const pck = document.getElementById('setPayosChecksumKey');
+    const pbu = document.getElementById('setPayosBaseUrl');
+    const pwu = document.getElementById('setPayosWebhookUrl');
+    const pbase = document.getElementById('setPublicBaseUrl');
+    const vpc = document.getElementById('setVndPerCredit');
+    const tmin = document.getElementById('setTopupMin');
+    const tmax = document.getElementById('setTopupMax');
+    if (pe) pe.checked = String(s.payos_enabled) === '1';
+    if (pt) pt.checked = String(s.payos_test_mode) === '1';
+    payIsTestMode = String(s.payos_test_mode) === '1';
+    if (pc) pc.value = s.payos_client_id || '';
+    if (pak) { pak.value = ''; pak.placeholder = s.payos_api_key_set ? s.payos_api_key : 'Chưa cấu hình'; }
+    if (pck) { pck.value = ''; pck.placeholder = s.payos_checksum_key_set ? s.payos_checksum_key : 'Chưa cấu hình'; }
+    if (pbu) pbu.value = s.payos_base_url || '';
+    if (pwu) pwu.value = s.payos_webhook_url || '';
+    if (pbase) pbase.value = s.public_base_url || '';
+    if (vpc) vpc.value = s.topup_vnd_per_credit ?? '';
+    if (tmin) tmin.value = s.topup_min_vnd ?? '';
+    if (tmax) tmax.value = s.topup_max_vnd ?? '';
+
+    // SMTP — gửi email kích hoạt/quên mật khẩu. smtp_pass là secret → bản che, ô trống = giữ nguyên.
+    const se = document.getElementById('setSmtpEnabled');
+    const sh = document.getElementById('setSmtpHost');
+    const sp = document.getElementById('setSmtpPort');
+    const ss = document.getElementById('setSmtpSecure');
+    const su = document.getElementById('setSmtpUser');
+    const spw = document.getElementById('setSmtpPass');
+    const sf = document.getElementById('setSmtpFrom');
+    const sfn = document.getElementById('setSmtpFromName');
+    const sst = document.getElementById('setSmtpStatus');
+    if (se) se.checked = String(s.smtp_enabled) === '1';
+    if (sh) sh.value = s.smtp_host || '';
+    if (sp) sp.value = s.smtp_port ?? '';
+    if (ss) ss.checked = String(s.smtp_secure) === '1';
+    if (su) su.value = s.smtp_user || '';
+    if (spw) { spw.value = ''; spw.placeholder = s.smtp_pass_set ? s.smtp_pass : 'Chưa cấu hình'; }
+    if (sf) sf.value = s.smtp_from || '';
+    if (sfn) sfn.value = s.smtp_from_name || '';
+    if (sst) {
+      sst.textContent = String(s.smtp_enabled) === '1'
+        ? 'SMTP đang BẬT — email kích hoạt/quên mật khẩu sẽ được gửi thật.'
+        : 'SMTP đang TẮT — mã kích hoạt được ghi ra console server và admin copy link ở cột thao tác.';
+    }
+    syncSmtpTlsHint();
   }).catch(e => showToast('Không tải được cấu hình: ' + e.message, 'error'));
+}
+
+/**
+ * Nhận diện nhà cung cấp SMTP (bản gọn phía client, khớp mailer.detectProvider).
+ * Chỉ để HIỂN THỊ gợi ý cho admin — không tự đổi giá trị form.
+ */
+function smtpProviderInfo(host) {
+  const h = String(host || '').trim().toLowerCase();
+  const gen = { name: 'SMTP tùy chỉnh', userHint: 'tài khoản SMTP', passHint: 'mật khẩu ứng dụng do nhà cung cấp cấp' };
+  if (!h) return gen;
+  if (/(^|\.)gmail\.com$/.test(h) || /googlemail\.com$/.test(h)) {
+    return { name: 'Gmail', userHint: 'địa chỉ Gmail đầy đủ', passHint: 'App Password 16 ký tự (bật 2FA)' };
+  }
+  const zoho = /(?:^|\.)(smtp|smtppro)\.zoho\.(com|eu|in|jp|ca|com\.au)$/.exec(h);
+  if (zoho) {
+    const paid = zoho[1] === 'smtppro';
+    const dc = { com: 'US', eu: 'EU', in: 'Ấn Độ', jp: 'Nhật', ca: 'Canada', 'com.au': 'Úc' }[zoho[2]] || zoho[2];
+    return { name: `Zoho Mail (${paid ? 'Paid Org' : 'Free Org'}, DC ${dc})`,
+      userHint: `địa chỉ email đầy đủ đúng DC ${dc}`,
+      passHint: 'App Password (accounts.zoho.com → Security)',
+      warn: paid
+        ? `Đang dùng smtppro.zoho.${zoho[2]} — máy chủ này CHỈ hoạt động với gói Zoho Mail TRẢ PHÍ. Gói Free Organization phải đổi sang smtp.zoho.${zoho[2]}, nếu không sẽ bị "554 5.7.8 Access Restricted".`
+        : '' };
+  }
+  if (/(^|\.)zoho\.(com|eu|in|jp|ca|com\.au)$/.test(h)) {
+    return { name: 'Zoho Mail', userHint: 'địa chỉ Zoho đầy đủ', passHint: 'App Password (accounts.zoho.com → Security)' };
+  }
+  if (/outlook\.com$|office365\.com$|hotmail\.com$|live\.com$/.test(h)) {
+    return { name: 'Outlook / Microsoft 365', userHint: 'địa chỉ email đầy đủ', passHint: 'mật khẩu ứng dụng nếu bật MFA' };
+  }
+  if (/(^|\.)yahoo\.com$/.test(h)) {
+    return { name: 'Yahoo Mail', userHint: 'địa chỉ Yahoo đầy đủ', passHint: 'App Password 16 ký tự' };
+  }
+  if (/smtp-relay\.brevo\.com$|smtp-relay\.sendinblue\.com$/.test(h)) {
+    return { name: 'Brevo', userHint: 'email đăng nhập Brevo', passHint: 'SMTP Key' };
+  }
+  if (/smtp\.resend\.com$/.test(h)) return { name: 'Resend', userHint: 'resend', passHint: 'API Key (re_...)' };
+  if (/smtp\.mailgun\.org$/.test(h)) return { name: 'Mailgun', userHint: 'postmaster@<domain>', passHint: 'SMTP password' };
+  if (/smtp\.sendgrid\.net$/.test(h)) return { name: 'SendGrid', userHint: 'apikey', passHint: 'API Key (SG....)' };
+  if (/email-smtp\.[a-z0-9-]+\.amazonaws\.com$/.test(h)) {
+    return { name: 'Amazon SES', userHint: 'SMTP Credential', passHint: 'SMTP Password do SES cấp' };
+  }
+  if (/mail\.gmx\.(com|net)$/.test(h)) return { name: 'GMX', userHint: 'địa chỉ GMX đầy đủ', passHint: 'mật khẩu GMX' };
+  return gen;
+}
+
+/**
+ * Cảnh báo sớm khi (port, secure) mâu thuẫn — nguyên nhân của lỗi TLS
+ * "wrong version number" khi gửi mail thử. Server cũng tự sửa (mailer.normalizeTls)
+ * nhưng báo ở đây để admin biết mà đặt đúng. Đồng thời hiện gợi ý theo nhà cung
+ * cấp (Zoho/Brevo/Resend…) để cấu hình đúng ngay từ đầu.
+ */
+function syncSmtpTlsHint() {
+  const el = document.getElementById('setSmtpTlsHint');
+  const pEl = document.getElementById('setSmtpProviderHint');
+  const hostEl = document.getElementById('setSmtpHost');
+  const portEl = document.getElementById('setSmtpPort');
+  const secEl = document.getElementById('setSmtpSecure');
+
+  if (pEl) {
+    const info = smtpProviderInfo(hostEl && hostEl.value);
+    const hasHost = !!(hostEl && hostEl.value.trim());
+    pEl.textContent = hasHost
+      ? `Nhận diện: ${info.name}. Tài khoản: ${info.userHint}. Mật khẩu: ${info.passHint}.` + (info.warn ? ` ⚠ ${info.warn}` : '')
+      : '';
+    pEl.style.color = info.warn ? '#e0ab4a' : '#8aa0b8';
+  }
+
+  if (!el) return;
+  const port = parseInt(portEl && portEl.value, 10) || 0;
+  const secure = !!(secEl && secEl.checked);
+  let msg = '', color = '';
+  if (port === 465 && !secure) {
+    msg = '⚠ Cổng 465 cần "TLS ngay" — hãy tick ô trên (hoặc đổi cổng 587).';
+    color = '#e0ab4a';
+  } else if (port && port !== 465 && secure) {
+    msg = `⚠ Cổng ${port} dùng STARTTLS, KHÔNG bật "TLS ngay" — hãy bỏ tick (hoặc đổi cổng 465).`;
+    color = '#e0ab4a';
+  } else if (port === 465) {
+    msg = '✓ Cổng 465 + TLS ngay (implicit TLS).';
+    color = '#45c07d';
+  } else if (port) {
+    msg = `✓ Cổng ${port} + STARTTLS (tự nâng cấp sau khi kết nối).`;
+    color = '#45c07d';
+  }
+  el.textContent = msg;
+  el.style.color = color;
 }
 
 function saveSettings() {
@@ -69,6 +292,7 @@ function saveSettings() {
   };
   if (creditCost !== '') settings.credit_cost_per_lookup = creditCost;
   if (creditBonus !== '') settings.credit_signup_bonus = creditBonus;
+  collectPayosSettings(settings);
   Object.keys(settings).forEach(k => { if (settings[k] === '') delete settings[k]; });
 
   Auth.fetch('/api/settings', {
@@ -90,8 +314,402 @@ function saveSettings() {
       if (creditNeg) creditNeg.checked = String(d.settings.credit_allow_negative) === '1';
     }
     const on = String(d.settings && d.settings.credit_enabled) === '1';
+    // Nạp lại toàn bộ form từ giá trị server đã chuẩn hoá (gồm cả payOS: secret
+    // quay về bản che), tránh UI lệch trạng thái thật trong DB sau khi lưu.
+    loadSettings();
     showToast('Đã lưu cấu hình — tính điểm tra cứu: ' + (on ? 'BẬT' : 'TẮT'), 'success');
   }).catch(e => { showToast(e.message, 'error'); loadSettings(); });
+}
+
+// Thu thập field payOS từ form vào object settings. Tách riêng để saveSettings
+// gọn và không lệch cấu trúc khi thêm field mới.
+// Secret: chỉ gửi khi admin gõ nội dung — ô trống = giữ nguyên (server cũng bỏ
+// qua bản che ••••). Toggle luôn gửi để bật/tắt được.
+function collectPayosSettings(settings) {
+  const get = id => document.getElementById(id);
+  const pe = get('setPayosEnabled'), pt = get('setPayosTestMode');
+  const pc = get('setPayosClientId'), pak = get('setPayosApiKey'), pck = get('setPayosChecksumKey');
+  const pbu = get('setPayosBaseUrl'), pwu = get('setPayosWebhookUrl'), pbase = get('setPublicBaseUrl');
+  const vpc = get('setVndPerCredit'), tmin = get('setTopupMin'), tmax = get('setTopupMax');
+
+  if (pe) settings.payos_enabled = pe.checked ? '1' : '0';
+  if (pt) settings.payos_test_mode = pt.checked ? '1' : '0';
+  if (pc) settings.payos_client_id = pc.value.trim();
+  if (pbu) settings.payos_base_url = pbu.value.trim();
+  if (pwu) settings.payos_webhook_url = pwu.value.trim();
+  if (pbase) settings.public_base_url = pbase.value.trim();
+  const pushIfSet = (el, key) => { if (el && el.value.trim() !== '') settings[key] = el.value.trim(); };
+  pushIfSet(pak, 'payos_api_key');
+  pushIfSet(pck, 'payos_checksum_key');
+  pushIfSet(vpc, 'topup_vnd_per_credit');
+  pushIfSet(tmin, 'topup_min_vnd');
+  pushIfSet(tmax, 'topup_max_vnd');
+
+  // SMTP: toggle + field chuỗi luôn gửi; port gửi khi có; pass chỉ gửi khi admin gõ.
+  const sen = get('setSmtpEnabled'), sh = get('setSmtpHost'), sp2 = get('setSmtpPort');
+  const ssc = get('setSmtpSecure'), su = get('setSmtpUser'), spw = get('setSmtpPass');
+  const sf = get('setSmtpFrom'), sfn = get('setSmtpFromName');
+  if (sen) settings.smtp_enabled = sen.checked ? '1' : '0';
+  if (ssc) settings.smtp_secure = ssc.checked ? '1' : '0';
+  if (sh) settings.smtp_host = sh.value.trim();
+  if (su) settings.smtp_user = su.value.trim();
+  if (sf) settings.smtp_from = sf.value.trim();
+  if (sfn) settings.smtp_from_name = sfn.value.trim();
+  pushIfSet(sp2, 'smtp_port');
+  pushIfSet(spw, 'smtp_pass');
+}
+
+// Gửi email thử để admin kiểm tra cấu hình SMTP (server đọc config trực tiếp).
+function sendSmtpTest() {
+  const el = document.getElementById('smtpTestTo');
+  const to = el ? el.value.trim() : '';
+  if (!to) { showToast('Nhập email nhận thử trước', 'error'); return; }
+  Auth.fetch('/api/admin/smtp/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to })
+  }).then(async r => {
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'Gửi thử thất bại');
+    showToast('Đã gửi email thử tới ' + to, 'success');
+  }).catch(e => showToast(e.message, 'error'));
+}
+
+// ========================
+// Nạp điểm (payOS)
+// ========================
+let payPg = 1, payTotalPages = 1, payIsTestMode = false;
+const PAY_STATUS_LABELS = {
+  PENDING: 'Chờ thanh toán', PAID: 'Đã thanh toán', CANCELLED: 'Đã huỷ',
+  EXPIRED: 'Hết hạn', UNDERPAID: 'Trả thiếu', FAILED: 'Thất bại'
+};
+
+function fmtVnd(n) {
+  return Number(n || 0).toLocaleString('vi-VN') + 'đ';
+}
+function fmtNum(n) {
+  const v = Number(n || 0);
+  return Number.isInteger(v) ? v.toLocaleString('vi-VN') : v.toFixed(2);
+}
+function escAttr(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function loadPayments() {
+  loadPayStats();
+  loadPackages();
+  loadPayOrders(1);
+  loadPayosStatus();
+}
+
+async function loadPayStats() {
+  try {
+    const r = await Auth.fetch('/api/admin/payments/stats?days=30');
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Lỗi thống kê');
+    const t = d.topup || {}, u = d.usage || {}, sys = d.system || {};
+    document.getElementById('payRevenue').textContent = fmtVnd(t.revenue_vnd);
+    document.getElementById('payCreditsGranted').textContent = fmtNum(t.credits_granted);
+    document.getElementById('payPaidOrders').textContent = fmtNum(t.paid_orders);
+    document.getElementById('payPendingOrders').textContent = fmtNum(t.pending_orders);
+    document.getElementById('payConversion').textContent = fmtNum(t.conversion_rate) + '%';
+    document.getElementById('payCreditsUsed').textContent = fmtNum(u.credits_used);
+    document.getElementById('payLookups').textContent = fmtNum(u.lookups);
+    document.getElementById('payRemaining').textContent = fmtNum(sys.credits_remaining);
+
+    const daily = d.revenue_daily || [];
+    const dailyEl = document.getElementById('payDaily');
+    if (!daily.length) { dailyEl.classList.remove('loading'); dailyEl.innerHTML = '<span class="muted-text">Chưa có doanh thu trong 30 ngày qua.</span>'; }
+    else {
+      const max = Math.max.apply(null, daily.map(x => Number(x.vnd) || 0)) || 1;
+      dailyEl.classList.remove('loading');
+      dailyEl.innerHTML = daily.map(x => {
+        const pct = Math.round(((Number(x.vnd) || 0) / max) * 100);
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px">
+          <span class="muted-text" style="width:86px;flex:none">${escAttr(x.day)}</span>
+          <span style="flex:1;background:var(--bg-page,#f1f3f9);border-radius:4px;height:14px;overflow:hidden">
+            <span style="display:block;height:100%;width:${pct}%;background:#3b82f6"></span>
+          </span>
+          <span style="width:110px;text-align:right;flex:none">${fmtVnd(x.vnd)}</span>
+          <span class="muted-text" style="width:70px;text-align:right;flex:none">${fmtNum(x.orders)} đơn</span>
+        </div>`;
+      }).join('');
+    }
+
+    const topTopup = d.top_topup_users || [], topUsage = d.top_usage_users || [];
+    const topEl = document.getElementById('payTop');
+    topEl.classList.remove('loading');
+    const renderTop = (rows, valueKey, label) => rows.length
+      ? rows.map((r, i) => `<tr><td>${i + 1}</td><td>${escAttr(r.username || ('#' + r.user_id))}</td><td>${fmtNum(r[valueKey])} ${label}</td><td>${fmtNum(r.orders || r.lookups)}</td></tr>`).join('')
+      : `<tr><td colspan="4" class="muted-text">Chưa có dữ liệu.</td></tr>`;
+    topEl.innerHTML = `
+      <div style="display:flex;gap:20px;flex-wrap:wrap">
+        <div style="flex:1;min-width:260px">
+          <b style="font-size:13px">Nạp nhiều nhất</b>
+          <table class="table-sm" style="width:100%;margin-top:6px"><thead><tr><th>#</th><th>User</th><th>Điểm nạp</th><th>Đơn</th></tr></thead>
+          <tbody>${renderTop(topTopup, 'credits', 'điểm')}</tbody></table>
+        </div>
+        <div style="flex:1;min-width:260px">
+          <b style="font-size:13px">Dùng nhiều nhất</b>
+          <table class="table-sm" style="width:100%;margin-top:6px"><thead><tr><th>#</th><th>User</th><th>Điểm dùng</th><th>Lượt</th></tr></thead>
+          <tbody>${renderTop(topUsage, 'credits_used', 'điểm')}</tbody></table>
+        </div>
+      </div>`;
+  } catch (e) {
+    document.getElementById('payDaily').innerHTML = '<span class="muted-text">Lỗi: ' + escAttr(e.message) + '</span>';
+  }
+}
+
+async function loadPayosStatus() {
+  try {
+    const r = await Auth.fetch('/api/admin/payos/webhook-url');
+    const d = await r.json();
+    const el = document.getElementById('setPayosWebhookHint');
+    if (el) el.innerHTML = d.webhook_url ? `URL webhook hiện tại: <b>${escAttr(d.webhook_url)}</b>` : 'Chưa xác định được URL webhook.';
+  } catch (e) { /* không chặn UI */ }
+}
+
+// ========================
+// Gói nạp (admin CRUD)
+// ========================
+async function loadPackages() {
+  const el = document.getElementById('pkgList');
+  try {
+    const r = await Auth.fetch('/api/admin/topup/packages');
+    const rows = await r.json();
+    if (!r.ok) throw new Error(rows.error || 'Lỗi tải gói nạp');
+    el.classList.remove('loading');
+    window.__pkgs = rows;
+    if (!rows.length) { el.innerHTML = '<span class="muted-text">Chưa có gói nạp nào.</span>'; return; }
+    el.innerHTML = `<div style="overflow-x:auto"><table class="table-sm" style="width:100%">
+      <thead><tr><th>Nhãn</th><th>Số tiền</th><th>Điểm</th><th>Thứ tự</th><th>Trạng thái</th><th>Đơn đã dùng</th><th></th></tr></thead>
+      <tbody>${rows.map(p => `<tr>
+        <td>${escAttr(p.label || '(không nhãn)')}</td>
+        <td>${fmtVnd(p.amount_vnd)}</td>
+        <td>${fmtNum(p.credits)}</td>
+        <td>${fmtNum(p.sort_order)}</td>
+        <td><span class="badge ${p.active ? 'badge-active' : 'badge-admin'}">${p.active ? 'Đang bật' : 'Đã tắt'}</span></td>
+        <td>${fmtNum(p.order_count)}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-sm" onclick="pkgOpenEdit(${p.id})" title="Sửa"><i class="fas fa-pen"></i></button>
+          <button class="btn btn-sm" onclick="pkgToggle(${p.id}, ${p.active ? 0 : 1})" title="${p.active ? 'Tắt' : 'Bật'}"><i class="fas fa-power-off"></i></button>
+          <button class="btn btn-sm btn-danger" onclick="pkgDelete(${p.id})" title="Xoá"><i class="fas fa-trash"></i></button>
+        </td>
+      </tr>`).join('')}</tbody></table></div>`;
+  } catch (e) { el.classList.remove('loading'); el.innerHTML = '<span class="muted-text">Lỗi: ' + escAttr(e.message) + '</span>'; }
+}
+
+function pkgPromptForm(pkg) {
+  const label = prompt('Nhãn gói nạp (vd: Gói 50.000đ):', pkg ? (pkg.label || '') : '');
+  if (label === null) return null;
+  const amount = prompt('Số tiền (VND):', pkg ? String(pkg.amount_vnd) : '50000');
+  if (amount === null) return null;
+  const creditsStr = prompt('Số điểm nhận được:', pkg ? String(pkg.credits) : '50');
+  if (creditsStr === null) return null;
+  const sort = prompt('Thứ tự hiển thị (số nhỏ hiện trước):', pkg ? String(pkg.sort_order) : '10');
+  if (sort === null) return null;
+  return { label, amount_vnd: amount, credits: creditsStr, sort_order: sort, active: pkg ? pkg.active : 1 };
+}
+
+function pkgOpenCreate() {
+  const body = pkgPromptForm(null);
+  if (!body) return;
+  Auth.fetch('/api/admin/topup/packages', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  }).then(async r => {
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'Lỗi thêm gói');
+    showToast('Đã thêm gói nạp', 'success');
+    loadPackages();
+  }).catch(e => showToast(e.message, 'error'));
+}
+
+function pkgOpenEdit(id) {
+  const pkg = (window.__pkgs || []).find(p => p.id === id);
+  if (!pkg) return;
+  const body = pkgPromptForm(pkg);
+  if (!body) return;
+  Auth.fetch('/api/admin/topup/packages/' + id, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  }).then(async r => {
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'Lỗi sửa gói');
+    showToast('Đã cập nhật gói nạp', 'success');
+    loadPackages();
+  }).catch(e => showToast(e.message, 'error'));
+}
+
+function pkgToggle(id, active) {
+  const pkg = (window.__pkgs || []).find(p => p.id === id);
+  if (!pkg) return;
+  Auth.fetch('/api/admin/topup/packages/' + id, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      label: pkg.label, amount_vnd: pkg.amount_vnd, credits: pkg.credits,
+      sort_order: pkg.sort_order, active
+    })
+  }).then(async r => {
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'Lỗi đổi trạng thái');
+    showToast(active ? 'Đã bật gói nạp' : 'Đã tắt gói nạp', 'success');
+    loadPackages();
+  }).catch(e => showToast(e.message, 'error'));
+}
+
+function pkgDelete(id) {
+  if (!confirm('Xoá gói nạp này? Gói đã có đơn sẽ chỉ bị tắt thay vì xoá hẳn.')) return;
+  Auth.fetch('/api/admin/topup/packages/' + id, { method: 'DELETE' })
+    .then(async r => {
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Lỗi xoá gói');
+      showToast(d.soft ? 'Gói đã có đơn → chuyển sang trạng thái tắt' : 'Đã xoá gói nạp', 'success');
+      loadPackages();
+    }).catch(e => showToast(e.message, 'error'));
+}
+
+// ========================
+// Đơn nạp (admin)
+// ========================
+const PAY_PAGE_SIZE = 50;
+
+async function loadPayOrders(page) {
+  page = Math.max(1, parseInt(page, 10) || 1);
+  payPg = page;
+  const loading = document.getElementById('payLoading');
+  const table = document.getElementById('payTable');
+  const empty = document.getElementById('payEmpty');
+  loading.hidden = false;
+  try {
+    const p = new URLSearchParams();
+    p.set('limit', PAY_PAGE_SIZE);
+    p.set('offset', (page - 1) * PAY_PAGE_SIZE);
+    const st = document.getElementById('payStatus').value;
+    const q = document.getElementById('payQ').value.trim();
+    const from = document.getElementById('payFrom').value;
+    const to = document.getElementById('payTo').value;
+    if (st) p.set('status', st);
+    if (q) p.set('q', q);
+    if (from) p.set('from', from);
+    if (to) p.set('to', to + ' 23:59:59');
+
+    const r = await Auth.fetch('/api/admin/payments?' + p.toString());
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Lỗi tải đơn nạp');
+    const rows = d.data || [];
+    payTotalPages = d.totalPages || 1;
+
+    loading.hidden = true;
+    if (!rows.length) { table.hidden = true; empty.hidden = false; document.getElementById('payPagerActions').hidden = true; return; }
+    table.hidden = false; empty.hidden = true;
+
+    document.getElementById('payBody').innerHTML = rows.map(o => {
+      const pill = o.status === 'PAID' ? 'badge-active' : (o.status === 'PENDING' ? 'badge-pending' : 'badge-admin');
+      const actions = [];
+      if (o.status === 'PENDING') {
+        actions.push(`<button class="btn btn-sm" onclick="paySync(${o.order_code})" title="Đồng bộ từ payOS"><i class="fas fa-rotate"></i></button>`);
+        actions.push(`<button class="btn btn-sm btn-danger" onclick="payCancel(${o.order_code})" title="Huỷ đơn"><i class="fas fa-ban"></i></button>`);
+        if (payIsTestMode) actions.push(`<button class="btn btn-sm btn-primary" onclick="payMockPaid(${o.order_code})" title="Giả lập đã trả tiền (test mode)"><i class="fas fa-flask"></i></button>`);
+      }
+      return `<tr>
+        <td style="font-family:monospace">${o.order_code}</td>
+        <td>${escAttr(o.username || ('#' + o.user_id))}</td>
+        <td>${fmtVnd(o.amount_vnd)}</td>
+        <td>${fmtNum(o.credits)}</td>
+        <td><span class="badge ${pill}">${PAY_STATUS_LABELS[o.status] || o.status}</span></td>
+        <td class="muted-text" style="white-space:nowrap">${fmtAdminDate(o.created_at)}</td>
+        <td class="muted-text" style="white-space:nowrap">${o.paid_at ? fmtAdminDate(o.paid_at) : '—'}</td>
+        <td style="white-space:nowrap">${actions.join(' ')}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('payPagerActions').hidden = false;
+    document.getElementById('payPrev').disabled = page <= 1;
+    document.getElementById('payNext').disabled = page >= payTotalPages;
+    document.getElementById('payPageInfo').textContent = `Trang ${page}/${payTotalPages} · ${d.total} đơn`;
+  } catch (e) {
+    loading.hidden = true;
+    empty.hidden = false;
+    empty.textContent = 'Lỗi: ' + e.message;
+  }
+}
+
+/** SQLite CURRENT_TIMESTAMP là UTC → hiển thị theo giờ máy. */
+function fmtAdminDate(s) {
+  if (!s) return '—';
+  const d = new Date(String(s).replace(' ', 'T') + 'Z');
+  if (isNaN(d)) return s;
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function paySync(code) {
+  Auth.fetch(`/api/admin/payments/${code}/sync`, { method: 'POST' })
+    .then(async r => {
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Đồng bộ thất bại');
+      showToast(`Đồng bộ xong — trạng thái: ${PAY_STATUS_LABELS[d.status] || d.status}`, 'success');
+      loadPayments();
+    }).catch(e => showToast(e.message, 'error'));
+}
+
+function payCancel(code) {
+  const reason = prompt('Lý do huỷ đơn #' + code + ':', 'Admin huỷ');
+  if (reason === null) return;
+  Auth.fetch(`/api/admin/payments/${code}/cancel`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason })
+  }).then(async r => {
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'Huỷ thất bại');
+    showToast('Đã huỷ đơn nạp', 'success');
+    loadPayments();
+  }).catch(e => showToast(e.message, 'error'));
+}
+
+function payMockPaid(code) {
+  if (!confirm('Giả lập đơn #' + code + ' đã được thanh toán và cộng điểm? (chỉ dùng ở chế độ test)')) return;
+  Auth.fetch(`/api/admin/payments/${code}/mock-paid`, { method: 'POST' })
+    .then(async r => {
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Giả lập thất bại');
+      showToast('Đã giả lập thanh toán — đơn chuyển sang PAID', 'success');
+      loadPayments();
+    }).catch(e => showToast(e.message, 'error'));
+}
+
+// ========================
+// payOS — kiểm tra & đăng ký webhook
+// ========================
+function turnupCheckWebhook() {
+  Auth.fetch('/api/admin/payos/webhook-url')
+    .then(r => r.json())
+    .then(d => {
+      const el = document.getElementById('setPayosStatus');
+      el.innerHTML = d.error
+        ? 'Lỗi: ' + escAttr(d.error)
+        : `Webhook URL: <b>${escAttr(d.webhook_url || '(chưa xác định)')}</b><br>Base URL: ${escAttr(d.base_url || '(chưa xác định)')}`;
+    }).catch(e => showToast(e.message, 'error'));
+}
+
+function turnupConfirmWebhook() {
+  Auth.fetch('/api/admin/payos/confirm-webhook', { method: 'POST' })
+    .then(async r => {
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Đăng ký webhook thất bại');
+      document.getElementById('setPayosStatus').innerHTML = `Đã đăng ký webhook: <b>${escAttr(d.webhook_url)}</b>`;
+      showToast('Đăng ký webhook thành công', 'success');
+    }).catch(e => showToast(e.message, 'error'));
+}
+
+function turnupTestConnection() {
+  Auth.fetch('/api/admin/payos/test', { method: 'POST' })
+    .then(async r => {
+      const d = await r.json().catch(() => ({}));
+      const el = document.getElementById('setPayosStatus');
+      const ok = !!d.ok;
+      el.innerHTML = `${ok ? 'Kết nối OK' : 'Kết nối thất bại'} · base URL: <b>${escAttr(d.base_url || '')}</b>`
+        + `${d.test_mode ? ' · chế độ test' : ''}${d.message ? ' · ' + escAttr(d.message) : ''}${d.error ? ' · ' + escAttr(d.error) : ''}`;
+      showToast(ok ? 'Kết nối payOS OK' : ('Kết nối payOS thất bại' + (d.error ? ': ' + d.error : '')), ok ? 'success' : 'error');
+    }).catch(e => showToast(e.message, 'error'));
 }
 
 function loadDashboard() {
@@ -110,34 +728,14 @@ function loadDashboard() {
 }
 
 // ========================
-// Sub-page navigation (Cells section)
+// Sub-page navigation (Cells section) — legacy shims
 // ========================
-function showSourcePage() {
-  activeSection = 'sources';
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.getElementById('sub-sources').classList.add('active');
-  loadSources();
-  loadSyncJobs();
-}
-
-function showBulkPage() {
-  activeSection = 'bulk';
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.getElementById('sub-bulk').classList.add('active');
-}
-
-function goBackToCells() {
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.getElementById('section-cells').classList.add('active');
-  document.querySelector('.sidebar-item[data-section="cells"]').classList.add('active');
-}
-
-function showClfPage() {
-  activeSection = 'clf';
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.getElementById('sub-clf').classList.add('active');
-  initClfZone();
-}
+// Từ khi Cell ID Database có menu con trên sidebar, các hàm này chỉ còn là
+// lối tắt (deep-link JS console / bookmarklet). Giữ lại để không vỡ code cũ.
+function showSourcePage() { switchCellSub('sources'); }
+function showBulkPage() { switchCellSub('local'); }
+function showClfPage() { switchCellSub('local'); initClfZone(); }
+function goBackToCells() { switchSection('cells'); }
 
 // ========================
 // CLF V4.1 converter (G-MoN Pro) <-> OpenCellID CSV
@@ -885,7 +1483,7 @@ let _creditUsers = [];
 async function loadCreditUsers() {
   const body = document.getElementById('userTableBody');
   if (!body) return;
-  body.innerHTML = '<tr><td colspan="8" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải...</td></tr>';
+  body.innerHTML = '<tr><td colspan="9" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải...</td></tr>';
   try {
     const res = await Auth.fetch('/api/admin/credits/users');
     const users = await res.json();
@@ -893,7 +1491,7 @@ async function loadCreditUsers() {
     _creditUsers = users;
     renderUsersTable();
   } catch (e) {
-    body.innerHTML = `<tr><td colspan="8" class="muted-text">Error: ${esc(e.message)}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="9" class="muted-text">Error: ${esc(e.message)}</td></tr>`;
   }
 }
 
@@ -903,7 +1501,7 @@ function renderUsersTable() {
   const q = (document.getElementById('creditUserFilter')?.value || '').trim().toLowerCase();
   const list = q ? _creditUsers.filter(u => String(u.username).toLowerCase().includes(q)) : _creditUsers;
   if (!list.length) {
-    body.innerHTML = '<tr><td colspan="8" class="muted-text">Không có user nào</td></tr>';
+    body.innerHTML = '<tr><td colspan="9" class="muted-text">Không có user nào</td></tr>';
     return;
   }
   body.innerHTML = list.map(u => {
@@ -911,9 +1509,19 @@ function renderUsersTable() {
     const used = Number(u.used) || 0;
     const fmt = n => Number.isInteger(n) ? n : n.toFixed(2);
     const status = u.status || 'active';
+    const verified = Number(u.email_verified) ? true : false;
+    const emailCell = u.email
+      ? `${esc(u.email)} <span class="badge ${verified ? 'badge-active' : 'badge-pending'}">${verified ? 'đã xác thực' : 'chưa xác thực'}</span>`
+      : '<span class="muted-text">—</span>';
+    const verifyBtn = (!verified && u.email)
+      ? `<button class="btn btn-sm" title="Gửi lại mã kích hoạt" onclick="resendVerification(${u.id})"><i class="fas fa-envelope"></i></button>`
+        + `<button class="btn btn-sm btn-success" title="Kích hoạt tay" onclick="verifyUserNow(${u.id})"><i class="fas fa-check"></i></button>`
+        + `<button class="btn btn-sm" title="Tạo link kích hoạt để copy" onclick="copyVerificationLink(${u.id})"><i class="fas fa-link"></i></button>`
+      : '';
     return `<tr>
       <td>${u.id}</td>
       <td>${esc(u.username)}</td>
+      <td>${emailCell}</td>
       <td><span class="badge ${u.role === 'admin' ? 'badge-admin' : 'badge-user'}">${esc(u.role)}</span></td>
       <td><span class="badge ${status === 'active' ? 'badge-active' : 'badge-pending'}">${esc(status)}</span></td>
       <td style="text-align:right"><b style="color:${bal > 0 ? '#45c07d' : '#ff6b6b'}">${fmt(bal)}</b></td>
@@ -921,11 +1529,50 @@ function renderUsersTable() {
       <td style="white-space:nowrap">${esc(u.created_at || '')}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="btn btn-sm btn-success" title="Nạp điểm" onclick="openCreditModal(${u.id}, '${escAttr(u.username)}')"><i class="fas fa-plus"></i> Nạp điểm</button>
+        ${verifyBtn}
         <button class="btn btn-sm" title="Sửa user" onclick="editUser(${u.id}, '${escAttr(u.username)}', '${escAttr(u.role)}', '${escAttr(status)}')"><i class="fas fa-pen"></i></button>
         ${u.role !== 'admin' ? `<button class="btn btn-danger btn-sm" title="Xoá user" onclick="deleteUser(${u.id})"><i class="fas fa-trash"></i></button>` : ''}
       </td>
     </tr>`;
   }).join('');
+}
+
+// Gửi lại mã kích hoạt cho user (SMTP chưa cấu hình thì trả link để admin copy).
+async function resendVerification(id) {
+  try {
+    const res = await Auth.fetch(`/api/admin/users/${id}/resend-verification`, { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || 'Không gửi được');
+    if (d.sent) showToast('Đã gửi lại mã kích hoạt', 'success');
+    else if (d.dev_link) showToast('SMTP chưa cấu hình. Link: ' + d.dev_link, 'info');
+    else showToast('Đã xử lý', 'success');
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function verifyUserNow(id) {
+  try {
+    const res = await Auth.fetch(`/api/admin/users/${id}/verify`, { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || 'Không kích hoạt được');
+    showToast('Đã kích hoạt tài khoản', 'success');
+    loadCreditUsers();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+// Tạo link kích hoạt rồi copy vào clipboard (dùng khi không gửi được email).
+async function copyVerificationLink(id) {
+  try {
+    const res = await Auth.fetch(`/api/admin/users/${id}/verification-link`);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || 'Không tạo được link');
+    const text = d.link || '';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      showToast('Đã copy link kích hoạt (mã ' + (d.code || '') + ')', 'success');
+    } else {
+      window.prompt('Link kích hoạt (mã ' + (d.code || '') + '):', text);
+    }
+  } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function loadCreditTx() {
@@ -1361,9 +2008,14 @@ async function cdbLoadAudit(page) {
 // module / bundler.
 Object.assign(window, {
   // Navigation
-  switchSection,
+  switchSection, switchCellSub, switchLocalTab, switchSettingsTab,
   // Settings
   loadSettings, saveSettings,
+  // Nạp điểm payOS
+  loadPayments, loadPayStats, loadPackages, loadPayOrders, loadPayosStatus,
+  pkgOpenCreate, pkgOpenEdit, pkgToggle, pkgDelete,
+  paySync, payCancel, payMockPaid,
+  turnupCheckWebhook, turnupConfirmWebhook, turnupTestConnection,
   // Cells sub-pages + CLF converter
   showSourcePage, showBulkPage, goBackToCells, showClfPage,
   setClfDirection, handleClfFile, convertClf, convertClfDefault, resetClfForm,

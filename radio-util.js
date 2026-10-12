@@ -35,6 +35,19 @@ function inferRadio(cellid, sector, radioHint) {
   }
 }
 
+// Cho biết RAT có suy ra được CHẮC CHẮN hay không (không đoán bừa).
+// true  = biết chắc: có radioHint nguồn/DB, hoặc có sector (log tách eNB+sector ⇒ LTE),
+//         hoặc cellid nằm trong dải ECI (>2^20 và <=2^28) ⇒ LTE, hoặc >2^28 ⇒ GSM.
+// false = mơ hồ: cellid ngắn (<=2^20) mà không có sector/radioHint → có thể là GSM
+//         Cell ID *hoặc* LTE eNB ID. UI nên cảnh báo "RAT suy luận, có thể sai".
+function radioConfident(cellid, sector, radioHint) {
+  if (normalizeRadio(radioHint)) return true;
+  if (sector !== undefined && sector !== null && String(sector).trim() !== '') return true;
+  const n = parseInt(cellid, 10);
+  if (!Number.isFinite(n) || n < 0) return false;
+  return n > cellId.SHORT_THRESHOLD; // > 2^20 ⇒ LTE (≤2^28) hoặc GSM (>2^28), cả hai đều chắc
+}
+
 // Alias → nhãn chuẩn. Giá trị nguồn có thể là 'LTE', '4G', 'lte-a', 'NB-IoT'...
 const RADIO_ALIASES = {
   'GSM': 'GSM', '2G': 'GSM',
@@ -53,4 +66,4 @@ function normalizeRadio(radio) {
   return RADIO_ALIASES[k] || '';
 }
 
-module.exports = { inferRadio, normalizeRadio, RADIO_ALIASES };
+module.exports = { inferRadio, normalizeRadio, radioConfident, RADIO_ALIASES };

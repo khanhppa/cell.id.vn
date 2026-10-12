@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Điều khoản sử dụng — Cell.id.vn</title>
+  <script src="/auth.js"></script>
+  <script src="/auth-popup.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh; color: #dfe3ee; padding: 28px 16px 60px;
+    }
+    .wrap { max-width: 780px; margin: 0 auto; }
+    .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 12px; flex-wrap: wrap; }
+    .brand { font-size: 20px; font-weight: 800; color: #e8ecf7; }
+    .top-actions { display: flex; gap: 8px; align-items: center; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px; padding: 9px 15px; border-radius: 9px;
+      border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: #e8ecf7;
+      cursor: pointer; font-size: 13px; font-weight: 600; text-decoration: none;
+    }
+    .btn-primary { background: #0ea5e9; border-color: #0ea5e9; color: #fff; }
+    .card {
+      background: rgba(255,255,255,.07); backdrop-filter: blur(14px);
+      border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 28px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.35);
+    }
+    h1 { font-size: 23px; margin-bottom: 6px; color: #f3f6ff; }
+    .updated { font-size: 12.5px; color: #93a0bd; margin-bottom: 20px; }
+    h2 { font-size: 16px; margin: 22px 0 8px; color: #8ecdf7; }
+    p, li { font-size: 14px; line-height: 1.72; color: #ccd4e6; }
+    ul { margin: 8px 0 0 20px; }
+    li { margin-bottom: 5px; }
+    a { color: #6cbdf5; }
+    .note {
+      margin-top: 22px; padding: 14px 16px; border-radius: 10px;
+      background: rgba(120,180,255,.12); border: 1px dashed rgba(80,140,220,.5); font-size: 13px;
+    }
+    .foot { text-align: center; margin-top: 22px; font-size: 13px; color: #93a0bd; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">Cell.id.vn</div>
+      <div class="top-actions">
+        <a class="btn" href="/index.html">Về trang chủ</a>
+        <a class="btn btn-primary" href="/index.html#register" onclick="if(window.AuthPopup){event.preventDefault();location.href='/index.html';setTimeout(function(){AuthPopup.open('register');},250);}">Đăng ký</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h1>Điều khoản sử dụng</h1>
+      <div class="updated">Cập nhật lần cuối: 10/10/2026</div>
+
+      <p>
+        Bằng việc tạo tài khoản và sử dụng Cell.id.vn ("Dịch vụ"), bạn đồng ý với các điều khoản
+        dưới đây. Nếu không đồng ý, vui lòng không sử dụng Dịch vụ.
+      </p>
+
+      <h2>1. Tài khoản</h2>
+      <ul>
+        <li>Bạn cần cung cấp <b>email hợp lệ</b> khi đăng ký và xác nhận qua mã kích hoạt gửi tới email đó.</li>
+        <li>Bạn chịu trách nhiệm bảo mật mật khẩu và mọi hoạt động phát sinh từ tài khoản của mình.</li>
+        <li>Mỗi người dùng nên dùng một tài khoản; không chia sẻ, mua bán hoặc cho thuê tài khoản.</li>
+        <li>Chúng tôi có thể tạm khoá hoặc xoá tài khoản vi phạm điều khoản.</li>
+      </ul>
+
+      <h2>2. Phạm vi dữ liệu</h2>
+      <ul>
+        <li>Dữ liệu trạm gốc (cell) hiển thị có nguồn từ cơ sở dữ liệu nội bộ và/hoặc nguồn công khai (ví dụ OpenCellID).</li>
+        <li>Toạ độ có thể gần đúng và <b>không bảo đảm chính xác tuyệt đối</b>. Không dùng cho mục đích pháp lý, an ninh, cứu hộ hoặc bất kỳ quyết định quan trọng nào.</li>
+        <li>Dữ liệu tải lên (call log, file Excel…) do bạn tự chịu trách nhiệm về tính hợp pháp của nội dung.</li>
+      </ul>
+
+      <h2>3. Hành vi bị cấm</h2>
+      <ul>
+        <li>Thu thập, xâm phạm dữ liệu cá nhân của người khác trái pháp luật.</li>
+        <li>Tấn công, dò quét, khai thác lỗ hổng, hoặc gây quá tải hệ thống (spam, scrap tự động, brute-force).</li>
+        <li>Thu thập hàng loạt dữ liệu rồi bán lại dưới bất kỳ hình thức nào khi chưa được phép bằng văn bản.</li>
+        <li>Sử dụng Dịch vụ cho mục đích trái pháp luật Việt Nam.</li>
+      </ul>
+
+      <h2>4. Điểm tra cứu &amp; thanh toán</h2>
+      <ul>
+        <li>Điểm tra cứu được cấp qua gói nạp hoặc điểm thưởng; không quy đổi ngược ra tiền mặt.</li>
+        <li>Giao dịch nạp điểm qua cổng thanh toán được xử lý bởi bên thứ ba; chúng tôi không lưu thông tin thẻ ngân hàng.</li>
+        <li>Trường hợp giao dịch đã trừ tiền nhưng chưa cộng điểm, vui lòng liên hệ để được đối soát.</li>
+      </ul>
+
+      <h2>5. Giới hạn trách nhiệm</h2>
+      <p>
+        Dịch vụ được cung cấp "nguyên trạng". Chúng tôi không bảo đảm Dịch vụ hoạt động liên tục,
+        không lỗi, hay mọi kết quả tra cứu đều chính xác. Trong phạm vi pháp luật cho phép, chúng tôi
+        không chịu trách nhiệm cho thiệt hại gián tiếp, mất dữ liệu, hoặc mất lợi nhuận phát sinh từ
+        việc sử dụng Dịch vụ.
+      </p>
+
+      <h2>6. Thay đổi điều khoản</h2>
+      <p>
+        Chúng tôi có thể cập nhật điều khoản này theo thời gian. Bản mới có hiệu lực ngay khi đăng tải
+        trên trang này. Việc tiếp tục sử dụng Dịch vụ sau khi cập nhật nghĩa là bạn chấp nhận nội dung mới.
+      </p>
+
+      <h2>7. Liên hệ</h2>
+      <p>
+        Câu hỏi về điều khoản hoặc tài khoản, vui lòng liên hệ qua email hỗ trợ hiển thị trong tài khoản
+        của bạn.
+      </p>
+
+      <div class="note">
+        <b>Ghi chú về quyền riêng tư:</b> email của bạn chỉ dùng để kích hoạt tài khoản, gửi mã đặt lại
+        mật khẩu và thông báo liên quan tới tài khoản. Mật khẩu được lưu dưới dạng băm (bcrypt), không
+        lưu bản rõ.
+      </div>
+    </div>
+
+    <div class="foot">© 2026 Cell.id.vn</div>
+  </div>
+</body>
+</html>

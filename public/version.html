@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lịch sử phiên bản — Cell.id.vn</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #f4f6fb; --bg-card: #ffffff; --border-color: #e2e6ef;
+    --text-primary: #1c2333; --text-secondary: #5a6478; --text-faint: #98a1b5;
+    --accent: #4f7cff; --ok: #1f9e5a; --danger: #e04444;
+    --bg-hover: rgba(0,0,0,0.05); --bg-surface2: #eef1f7;
+    /* Biến dùng bởi navbar chung (auth.js) — thiếu thì navbar không theo dark mode. */
+    --bg-surface: #ffffff; --bg-btn-primary: #4f7cff;
+    --border-focus: #4f7cff; --header-bg: #ffffff;
+  }
+  [data-theme="dark"] {
+    --bg-page: #14171f; --bg-card: #1c2029; --border-color: #2b3140;
+    --text-primary: #e7ebf3; --text-secondary: #a4adc0; --text-faint: #6d7689;
+    --accent: #6b93ff; --ok: #45c07d; --danger: #ff6b6b;
+    --bg-hover: rgba(255,255,255,0.07); --bg-surface2: #232833;
+    --bg-surface: #1c2029; --bg-btn-primary: #6b93ff;
+    --border-focus: #6b93ff; --header-bg: #1c2029;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg-page); color: var(--text-primary); font-size: 14px;
+  }
+  .container { max-width: 860px; margin: 0 auto; padding: 64px 18px 60px; }
+  h1 { font-size: 20px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+  h1 i { color: var(--accent); }
+  .sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 20px; }
+  .muted { color: var(--text-faint); }
+  .btn {
+    border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);
+    border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; font-family: inherit;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { background: var(--bg-hover); }
+  .ver-head {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    background: var(--bg-card); border: 1px solid var(--border-color);
+    border-radius: 12px; padding: 16px 18px; margin-bottom: 18px;
+  }
+  .ver-num {
+    font-size: 20px; font-weight: 800; color: var(--accent);
+    background: var(--bg-surface2); border-radius: 8px; padding: 6px 12px; white-space: nowrap;
+  }
+  .ver-meta { font-size: 13px; line-height: 1.7; }
+  .ver-entry {
+    background: var(--bg-card); border: 1px solid var(--border-color);
+    border-radius: 12px; padding: 16px 18px; margin-bottom: 14px;
+  }
+  .ver-entry.latest { border-color: var(--accent); }
+  .ver-entry-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .ver-tag {
+    font-size: 14px; font-weight: 800; color: var(--text-primary);
+    background: var(--bg-surface2); border-radius: 6px; padding: 3px 10px;
+  }
+  .ver-chip {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+    color: #fff; background: var(--accent); border-radius: 10px; padding: 2px 9px;
+  }
+  .ver-section { margin: 10px 0 0; }
+  .ver-section-title {
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+    color: var(--text-secondary); margin-bottom: 5px;
+  }
+  .ver-section ul { margin: 0; padding-left: 20px; }
+  .ver-section li { line-height: 1.7; color: var(--text-primary); }
+  .ver-section li::marker { color: var(--accent); }
+  .foot { margin-top: 22px; color: var(--text-faint); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<nav class="navbar"></nav>
+<div class="container">
+  <h1><i class="fas fa-code-branch"></i> Lịch sử phiên bản</h1>
+  <div class="sub">
+    Nhật ký thay đổi của Cell.id.vn (chỉ quản trị viên). Phiên bản hiện tại lấy trực tiếp từ
+    <code>package.json</code>, lịch sử từ <code>CHANGELOG.md</code> của máy chủ.
+  </div>
+
+  <div id="verList"><div class="muted">Đang tải…</div></div>
+
+  <div class="foot">
+    <a class="btn" href="/index.html"><i class="fas fa-arrow-left"></i> Về trang chủ</a>
+  </div>
+</div>
+
+<script src="/auth.js"></script>
+<script src="/version.js"></script>
+<script>
+  (function () {
+    // Trang nội bộ: chỉ quản trị viên. Chưa đăng nhập / không phải admin → về trang chủ
+    // (trang chủ mở popup đăng nhập cho khách) — không còn dùng /login.html.
+    if (typeof Auth === 'undefined' || !Auth.isLoggedIn() || !Auth.isAdmin()) {
+      if (typeof Auth !== 'undefined' && Auth.goLogin) Auth.goLogin();
+      else window.location.replace('/index.html');
+      return;
+    }
+    if (Auth.initNavbar) Auth.initNavbar();
+    if (typeof window.loadTheme === 'function') window.loadTheme();
+    if (window.AppVersion) window.AppVersion.renderChangelog('verList');
+  })();
+</script>
+</body>
+</html>

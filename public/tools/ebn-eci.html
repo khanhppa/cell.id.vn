@@ -6,6 +6,7 @@
   <title>Đổi eNB ID ↔ ECI</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <script src="/auth.js"></script>
+  <script src="/version.js"></script>
   <style>
     :root {
       --bg-body: #f0f2f5;
@@ -161,9 +162,8 @@
 
   <script>
     // ========== Auth check ==========
+    // Công cụ công khai: khách dùng được, chỉ navbar rút gọn.
     (() => {
-      const user = Auth.getUser();
-      if (!user) { window.location.href = '/login.html'; return; }
       Auth.initNavbar();
     })();
 

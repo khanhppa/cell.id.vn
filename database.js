@@ -63,6 +63,17 @@ db.serialize(() => {
     found_count INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+  // Một lần upload Excel rút list (call log) = 1 phiên. Chỉ giữ metadata
+  // (tên file, mạng, số bản ghi) — KHÔNG lưu nội dung file. Bản ghi đã nằm
+  // trong call_logs (gắn batch_id) nên xem lại được mà không cần file gốc.
+  db.run(`CREATE TABLE IF NOT EXISTS call_log_batches (
+    batch_id TEXT PRIMARY KEY,
+    user_id INTEGER,
+    file_name TEXT,
+    network TEXT,
+    row_count INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
   // ==========================================================================
   // Credit system — mỗi lần tra cứu THÀNH CÔNG trừ `credit_cost_per_lookup`.
   // Số dư nằm ở users.credit_balance (cache); `credit_transactions` là ledger
@@ -91,6 +102,130 @@ db.serialize(() => {
   // Partial index: các bút toán không có ref vẫn được ghi nhiều lần.
   db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_tx_idem
     ON credit_transactions(user_id, type, ref) WHERE ref IS NOT NULL`);
+
+  // ==========================================================================
+  // payOS top-up — gói nạp điểm (admin cấu hình) + đơn thanh toán.
+  // `payment_orders` là bản ghi NGOẠI LAI (đối chiếu với payOS), KHÔNG phải
+  // ledger điểm: việc cộng điểm thật vẫn đi qua credit_transactions với
+  // type='payment' + ref='payos:<orderCode>'. Idempotent nhờ unique index
+  // idx_credit_tx_idem, nên webhook retry không cộng 2 lần.
+  // `topup_packages` soft-delete (active=0) để giữ được lịch sử đơn cũ.
+  // ==========================================================================
+  db.run(`CREATE TABLE IF NOT EXISTS topup_packages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    label TEXT,
+    amount_vnd INTEGER NOT NULL,
+    credits REAL NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS payment_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_code INTEGER UNIQUE NOT NULL,
+    user_id INTEGER NOT NULL,
+    package_id INTEGER,
+    amount_vnd INTEGER NOT NULL,
+    credits REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    payment_link_id TEXT,
+    checkout_url TEXT,
+    qr_code TEXT,
+    description TEXT,
+    paid_at DATETIME,
+    transaction_ref TEXT,
+    client_ip TEXT,
+    user_agent TEXT,
+    raw_webhook TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_payment_orders_user ON payment_orders(user_id, created_at DESC)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_payment_orders_status ON payment_orders(status, created_at DESC)`);
+  // Hạn thanh toán (payOS trả khi tạo link; fallback created_at + 15 phút). Dùng để
+  // đếm ngược trên trang nạp và tự đánh dấu EXPIRED khi quá hạn.
+  db.run(`ALTER TABLE payment_orders ADD COLUMN expires_at DATETIME`, (err) => {
+    if (err && !err.message.includes('duplicate column')) console.error('payment_orders.expires_at column:', err.message);
+  });
+
+  // ==========================================================================
+  // Email + kích hoạt tài khoản.
+  //  - users.email: đăng nhập/quên mật khẩu nhận link về đây. Partial unique
+  //    index (WHERE email IS NOT NULL) vì user cũ chưa có email — nhiều NULL
+  //    vẫn hợp lệ trong SQLite.
+  //  - users.status: 'pending' (chờ kích hoạt email) / 'active' / 'disabled'.
+  //  - users.email_verified: 0/1. User cũ được backfill = 1 để KHÔNG bị chặn
+  //    đăng nhập sau khi nâng cấp (họ chưa từng có bước xác thực email).
+  // ==========================================================================
+  for (const [col, ddl] of [
+    ['email', 'TEXT'],
+    ['email_verified', 'INTEGER DEFAULT 0'],
+    ['terms_accepted_at', 'DATETIME'],
+  ]) {
+    db.run(`ALTER TABLE users ADD COLUMN ${col} ${ddl}`, (err) => {
+      if (err && !err.message.includes('duplicate column')) console.error(`users.${col} column:`, err.message);
+    });
+  }
+  // users.status đã có từ schema gốc; thêm lại cho DB tạo trước khi có cột này.
+  db.run(`ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'`, (err) => {
+    if (err && !err.message.includes('duplicate column')) console.error('users.status column:', err.message);
+  });
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL`);
+  // Backfill 1 lần: mọi user hiện có coi như đã xác thực (không có email để gửi).
+  db.run(`UPDATE users SET email_verified = 1 WHERE email_verified IS NULL OR (email IS NULL AND email_verified = 0)`, (err) => {
+    if (err) console.error('users.email_verified backfill:', err.message);
+  });
+
+  // Mã xác nhận (6 số) + token dùng cho link trong email. Gộp 2 mục đích:
+  //  - purpose='verify': kích hoạt tài khoản sau khi đăng ký.
+  //  - purpose='reset' : đặt lại mật khẩu khi quên.
+  // One-shot: dùng xong set used_at; quá hạn hoặc sai quá 5 lần thì huỷ.
+  db.run(`CREATE TABLE IF NOT EXISTS email_verifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    email TEXT,
+    purpose TEXT NOT NULL DEFAULT 'verify',
+    code TEXT NOT NULL,
+    token TEXT UNIQUE NOT NULL,
+    expires_at DATETIME NOT NULL,
+    attempts INTEGER DEFAULT 0,
+    used_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_email_verif_user ON email_verifications(user_id, purpose)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_email_verif_token ON email_verifications(token)`);
+
+  // Guest trial — 1 lượt tra cứu miễn phí (dữ liệu nội bộ) cho người chưa có tài khoản.
+  // Định danh bằng fingerprint(ip + user-agent) vì guest không có token.
+  // Không FK tới users: đây là dữ liệu marketing/upsell, không phải ledger điểm.
+  db.run(`CREATE TABLE IF NOT EXISTS guest_trials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guest_key TEXT UNIQUE NOT NULL,
+    ip TEXT,
+    user_agent TEXT,
+    used_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    mcc TEXT, mnc TEXT, lac TEXT, cellid TEXT, sector TEXT,
+    found INTEGER DEFAULT 0
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_guest_trials_key ON guest_trials(guest_key)`);
+  // Phương án A — khoá kép chống lách incognito / đổi User-Agent:
+  //  - guest_net_key: sha256(ipPrefix + uaFamily) → bản ghi thứ 2 khi khách xoá cookie.
+  //  - client_id: id do server phát (cookie HttpOnly, ký HMAC) — client không tự chế được.
+  //  - expires_at: hết hạn sau 30 ngày để IP dùng chung (NAT/4G) không bị khoá vĩnh viễn.
+  for (const [col, ddl] of [
+    ['guest_net_key', 'TEXT'],
+    ['client_id', 'TEXT'],
+    ['ua_family', 'TEXT'],
+    ['expires_at', 'DATETIME'],
+  ]) {
+    db.run(`ALTER TABLE guest_trials ADD COLUMN ${col} ${ddl}`, (err) => {
+      if (err && !err.message.includes('duplicate column')) console.error(`guest_trials.${col} column:`, err.message);
+    });
+  }
+  db.run(`CREATE INDEX IF NOT EXISTS idx_guest_trials_net ON guest_trials(guest_net_key)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_guest_trials_client ON guest_trials(client_id)`);
 
   // User-drawn map annotations (polygon / rectangle / marker / distance polyline).
   db.run(`CREATE TABLE IF NOT EXISTS annotations (
@@ -257,6 +392,14 @@ db.serialize(() => {
     }
   });
 
+  // Fix: add batch_id column — mỗi lần upload Excel = 1 batch_id, để user xoá
+  // theo từng lần upload (nút xoá nhóm) thay vì chỉ xoá được toàn bộ.
+  db.run(`ALTER TABLE call_logs ADD COLUMN batch_id TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column')) {
+      console.error('Error adding call_logs batch_id column:', err.message);
+    }
+  });
+
   // Fix: add og columns if missing on existing DB
   db.run(`ALTER TABLE ip_tracker ADD COLUMN og_title TEXT DEFAULT ''`, (err) => {
     if (err && !err.message.includes('duplicate column')) {
@@ -286,12 +429,22 @@ db.serialize(() => {
   });
   db.run(`CREATE INDEX IF NOT EXISTS idx_cells_lookup_nonunique ON cells(lat)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_call_logs_user ON call_logs(user_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_call_logs_batch ON call_logs(user_id, batch_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_ip_tracker_token ON ip_tracker(token)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_ip_tracker_user ON ip_tracker(user_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_ip_tracker_logs_tracker ON ip_tracker_logs(tracker_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_lookup_history_user ON lookup_history(user_id, created_at DESC)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_lookup_history_batch ON lookup_history(batch_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_lookup_batches_user ON lookup_batches(user_id, created_at DESC)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_call_log_batches_user ON call_log_batches(user_id, created_at DESC)`);
+  // Backfill metadata cho các phiên upload rút list ghi trước khi có bảng
+  // call_log_batches (idempotent nhờ INSERT OR IGNORE — chạy lại vẫn an toàn).
+  db.run(`INSERT OR IGNORE INTO call_log_batches
+      (batch_id, user_id, file_name, network, row_count, created_at)
+    SELECT batch_id, user_id, NULL, MAX(network), COUNT(*), MIN(created_at)
+    FROM call_logs
+    WHERE batch_id IS NOT NULL AND batch_id <> ''
+    GROUP BY batch_id, user_id`);
   // Backfill metadata cho các batch đã ghi trước khi có bảng lookup_batches
   // (idempotent nhờ INSERT OR IGNORE — chạy lại mỗi lần khởi động vẫn an toàn).
   db.run(`INSERT OR IGNORE INTO lookup_batches
@@ -317,6 +470,29 @@ db.serialize(() => {
   db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('credit_cost_per_lookup', '1')`);
   db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('credit_signup_bonus', '5')`);
   db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('credit_allow_negative', '0')`);
+
+  // payOS gateway settings. TẮT mặc định — admin nhập credential rồi bật.
+  // `payos_base_url` cho phép trỏ sang môi trường sandbox của payOS khi test.
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('payos_enabled', '0')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('payos_client_id', '')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('payos_api_key', '')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('payos_checksum_key', '')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('payos_base_url', '')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('payos_webhook_url', '')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('payos_test_mode', '0')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('public_base_url', '')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('topup_min_vnd', '10000')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('topup_max_vnd', '5000000')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('topup_vnd_per_credit', '1000')`);
+
+  // Seed 3 gói nạp mặc định khi bảng còn rỗng (1000đ = 1 điểm).
+  db.get(`SELECT COUNT(*) AS c FROM topup_packages`, [], (err, row) => {
+    if (err || (row && row.c > 0)) return;
+    db.run(`INSERT INTO topup_packages (label, amount_vnd, credits, sort_order, active) VALUES
+      ('Gói 10.000đ', 10000, 10, 10, 1),
+      ('Gói 20.000đ', 20000, 20, 20, 1),
+      ('Gói 50.000đ', 50000, 50, 30, 1)`);
+  });
   // Mọi user tạo trước khi có cột credit_balance đều bắt đầu từ 0 (không hồi tố bonus).
   db.run(`UPDATE users SET credit_balance = 0 WHERE credit_balance IS NULL`);
 

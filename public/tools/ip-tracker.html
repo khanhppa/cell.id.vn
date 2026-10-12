@@ -14,6 +14,12 @@
     }
     [data-theme="light"] {
       --bg: #f0f2f5;
+      /* Biến navbar chung (auth.js) — thiếu thì navbar không theo dark mode. */
+      --bg-surface: #ffffff;
+      --bg-surface2: #f5f6fa;
+      --bg-btn-primary: #2563eb;
+      --border-focus: #2563eb;
+      --header-bg: #ffffff;
       --card: #ffffff;
       --border: rgba(0,0,0,0.1);
       --text: #1a1a2e;
@@ -38,6 +44,12 @@
     }
     [data-theme="dark"] {
       --bg: #0f172a;
+      /* Biến navbar chung (auth.js). */
+      --bg-surface: #1e293b;
+      --bg-surface2: #253345;
+      --bg-btn-primary: #3b82f6;
+      --border-focus: #3b82f6;
+      --header-bg: #1e293b;
       --card: #1e293b;
       --border: #334155;
       --text: #f1f5f9;
@@ -320,7 +332,15 @@
 </div>
 
 <script src="/auth.js"></script>
+<script src="/version.js"></script>
 <script src="ip-tracker.js"></script>
+<script>
+  // IP Tracker yêu cầu đăng nhập (khác 2 công cụ public còn lại).
+  (function () {
+    if (!Auth.isLoggedIn()) { Auth.goLogin(); return; }
+    Auth.initNavbar();
+  })();
+</script>
 </body>
 </html>
 </｜｜DSML｜｜_task_progress>

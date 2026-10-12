@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nạp điểm — Cell Tracker</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #f4f6fb; --bg-card: #ffffff; --border-color: #e2e6ef;
+    --text-primary: #1c2333; --text-secondary: #5a6478; --text-faint: #98a1b5;
+    --accent: #4f7cff; --ok: #1f9e5a; --danger: #e04444;
+    --bg-hover: rgba(0,0,0,0.05);
+    /* Biến dùng bởi navbar chung (auth.js). Thiếu các biến này navbar rơi vào
+       fallback hardcode màu sáng → không đổi theo dark mode. */
+    --bg-surface: #ffffff;
+    --bg-surface2: #eef1f7;
+    --bg-btn-primary: #4f7cff;
+    --border-focus: #4f7cff;
+    --header-bg: #ffffff;
+  }
+  [data-theme="dark"] {
+    --bg-page: #14171f; --bg-card: #1c2029; --border-color: #2b3140;
+    --text-primary: #e7ebf3; --text-secondary: #a4adc0; --text-faint: #6d7689;
+    --accent: #6b93ff; --ok: #45c07d; --danger: #ff6b6b;
+    --bg-hover: rgba(255,255,255,0.07);
+    --bg-surface: #1c2029;
+    --bg-surface2: #232833;
+    --bg-btn-primary: #6b93ff;
+    --border-focus: #6b93ff;
+    --header-bg: #1c2029;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg-page); color: var(--text-primary); font-size: 14px;
+  }
+  .container { max-width: 760px; margin: 0 auto; padding: 64px 18px 60px; }
+  h1 { font-size: 20px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+  h1 i { color: var(--accent); }
+  .sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 20px; }
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border-color);
+    border-radius: 12px; padding: 18px; margin-bottom: 18px;
+  }
+  .btn {
+    border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);
+    border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+  }
+  .btn:hover { background: var(--bg-hover); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .error { color: var(--danger); font-size: 13px; }
+  .success { color: var(--ok); font-size: 13px; }
+  .muted { color: var(--text-faint); }
+  .mono { font-family: monospace; }
+  .link-btn {
+    border: none; background: none; color: var(--accent); cursor: pointer;
+    font-size: 12px; font-family: inherit; padding: 0 4px;
+  }
+  .link-btn:hover { text-decoration: underline; }
+  .link-btn.danger { color: var(--danger); }
+  .pkg-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  .pkg-grid.is-disabled { opacity: .5; pointer-events: none; }
+  .pkg-item {
+    border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;
+    background: var(--bg-page); cursor: pointer; text-align: center;
+    transition: border-color .15s, transform .15s; position: relative;
+  }
+  .pkg-item:hover { border-color: var(--accent, #3b82f6); transform: translateY(-2px); }
+  .pkg-item.loading { opacity: .6; pointer-events: none; }
+  .pkg-item .pkg-vnd { font-size: 16px; font-weight: 700; }
+  .pkg-item .pkg-credits { font-size: 12px; margin-top: 4px; color: var(--text-faint); }
+  .pkg-item .pkg-label { font-size: 11px; margin-top: 6px; color: var(--text-faint); }
+  .pkg-item .pkg-spin {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.06); border-radius: 10px; font-size: 20px; color: var(--accent);
+  }
+  .pkg-item.loading .pkg-spin { display: flex; }
+  .banner {
+    display: flex; align-items: flex-start; gap: 8px; font-size: 13px;
+    padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; line-height: 1.5;
+  }
+  .banner i { margin-top: 2px; }
+  .banner-warn {
+    background: rgba(255,170,60,0.14); color: #b47d13;
+    border: 1px solid rgba(255,170,60,0.4);
+  }
+  [data-theme="dark"] .banner-warn { color: #e0ab4a; }
+  .banner-ok {
+    background: rgba(31,158,90,0.12); color: var(--ok);
+    border: 1px solid rgba(31,158,90,0.35);
+  }
+  .copy-btn {
+    border: none; background: transparent; color: var(--text-faint); cursor: pointer;
+    padding: 2px 5px; border-radius: 5px; font-size: 11px; margin-left: 4px;
+  }
+  .copy-btn:hover { background: var(--bg-hover); color: var(--accent); }
+  .copy-btn.done { color: var(--ok); }
+  .pay-row { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; flex-wrap: wrap; }
+  .countdown {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+    padding: 2px 8px; border-radius: 10px; background: var(--bg-hover); color: var(--text-secondary);
+  }
+  .countdown.late { background: rgba(224,68,68,.14); color: var(--danger); }
+  .quick-amt { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .quick-amt .btn { padding: 4px 10px; font-size: 12px; }
+  /* Thanh tiến trình wizard 5 bước:
+     (1) Số tiền (2) Số tiền tự chọn (3) Đơn nạp (4) Thanh toán (5) Hoàn tất. */
+  .wz-steps {
+    display: flex; align-items: flex-start; gap: 0;
+    margin: 0 0 18px; padding: 0 0 4px;
+  }
+  .wz-step {
+    flex: 1; display: flex; flex-direction: column; align-items: center; position: relative;
+    background: none; border: none; font-family: inherit; color: inherit; padding: 0;
+  }
+  .wz-step[data-go] { cursor: pointer; }
+  .wz-dot {
+    width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 13px; font-weight: 700; z-index: 1;
+    background: var(--bg-page); color: var(--text-faint);
+    border: 2px solid var(--border-color);
+  }
+  .wz-label { margin-top: 6px; font-size: 11.5px; color: var(--text-faint); text-align: center; }
+  .wz-step.active .wz-dot { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .wz-step.active .wz-label { color: var(--accent); font-weight: 600; }
+  .wz-step.done .wz-dot { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .wz-step.done .wz-label { color: var(--ok); }
+  /* Đường nối giữa 2 mốc — vẽ bằng ::after trên mốc (trừ mốc cuối). */
+  .wz-step:not(:last-child)::after {
+    content: ''; position: absolute; top: 15px; left: 50%; width: 100%;
+    height: 2px; background: var(--border-color);
+  }
+  .wz-step.done:not(:last-child)::after { background: var(--ok); }
+  .wz-step > * { position: relative; z-index: 1; }
+  .wz-confirm { border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-page); padding: 14px; }
+  .wz-confirm .row {
+    display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 13px;
+    border-bottom: 1px dashed var(--border-color);
+  }
+  .wz-confirm .row:last-child { border-bottom: none; }
+  .wz-confirm .row .k { color: var(--text-secondary); min-width: 130px; }
+  .wz-confirm .row .v { font-weight: 600; }
+  .wz-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  @media (max-width: 560px) {
+    .wz-label { font-size: 10px; }
+    .wz-dot { width: 26px; height: 26px; font-size: 12px; }
+    .wz-step:not(:last-child)::after { top: 13px; }
+    .wz-step { flex: 0 0 auto; min-width: 62px; }
+    .wz-steps { overflow-x: auto; }
+    .quick-amt { display: grid; grid-template-columns: repeat(2, 1fr); }
+    .pay-cols { grid-template-columns: 1fr !important; }
+  }
+  /* Bước 4: QR bên cạnh, cột chữ (số TK / nội dung CK) đứng TRƯỚC trong DOM
+     để trên mobile (1 cột) khách đọc số TK trước khi phải cuộn qua ảnh QR. */
+  .pay-cols { display: grid; grid-template-columns: 1fr 260px; gap: 20px; align-items: start; }
+  .pay-cols .qr-col { text-align: center; }
+  .pay-cols .qr-col[hidden] { display: none; }
+  #payQr {
+    width: 240px; height: 240px; border: 1px solid var(--border-color);
+    border-radius: 10px; background: #fff;
+  }
+  .status-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; white-space: nowrap;
+  }
+  .status-PENDING { background: rgba(255,170,60,.16); color: #c98a1e; border: 1px solid rgba(255,170,60,.4); }
+  .status-PAID { background: rgba(31,158,90,.14); color: var(--ok); border: 1px solid rgba(31,158,90,.35); }
+  .status-CANCELLED, .status-EXPIRED, .status-FAILED, .status-UNDERPAID {
+    background: rgba(224,68,68,.12); color: var(--danger); border: 1px solid rgba(224,68,68,.32);
+  }
+  /* Bước 5: kết quả nạp điểm tại chỗ. */
+  .res-icon {
+    width: 66px; height: 66px; border-radius: 50%; margin: 0 auto 14px;
+    display: flex; align-items: center; justify-content: center; font-size: 28px;
+  }
+  .res-icon.paid { background: rgba(31,158,90,.14); color: var(--ok); }
+  .res-icon.pending { background: rgba(255,170,60,.16); color: #c98a1e; }
+  .res-icon.fail { background: rgba(224,68,68,.13); color: var(--danger); }
+  .res-title { font-size: 19px; font-weight: 800; margin: 0 0 6px; text-align: center; }
+  .res-sub { color: var(--text-secondary); font-size: 13px; line-height: 1.6; margin: 0; text-align: center; }
+  .res-bal { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; }
+  .res-bal .num { font-size: 30px; font-weight: 800; color: var(--ok); line-height: 1; }
+  .res-bal .lbl { color: var(--text-secondary); font-size: 12.5px; }
+  .res-bal[hidden] { display: none; }
+</style>
+</head>
+<body>
+<nav class="navbar"></nav>
+<div class="container">
+  <h1><i class="fas fa-wallet"></i> Nạp điểm</h1>
+  <div class="sub">Chọn số tiền, tạo đơn, quét QR chuyển khoản. Điểm cộng tự động sau khi payOS xác nhận.</div>
+
+  <div class="wz-steps" id="wzSteps">
+    <button class="wz-step active" type="button" data-wz="1"><div class="wz-dot">1</div><div class="wz-label">Số tiền</div></button>
+    <button class="wz-step" type="button" data-wz="2"><div class="wz-dot">2</div><div class="wz-label">Số tiền tự chọn</div></button>
+    <button class="wz-step" type="button" data-wz="3"><div class="wz-dot">3</div><div class="wz-label">Đơn nạp</div></button>
+    <button class="wz-step" type="button" data-wz="4"><div class="wz-dot">4</div><div class="wz-label">Thanh toán</div></button>
+    <button class="wz-step" type="button" data-wz="5"><div class="wz-dot">5</div><div class="wz-label">Hoàn tất</div></button>
+  </div>
+
+  <!-- ===== Bước 1: chọn gói nạp ===== -->
+  <div id="wzStep1">
+    <div class="card" id="topupCard" hidden>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <b style="font-size:14px"><i class="fas fa-gift"></i> Gói nạp</b>
+        <span class="muted" id="topupRate" style="font-size:12px"></span>
+      </div>
+      <div id="topupUnavailable" class="banner banner-warn" hidden>
+        <i class="fas fa-triangle-exclamation"></i>
+        <span>Nạp điểm tạm chưa khả dụng — vui lòng liên hệ admin để bật cổng thanh toán.</span>
+      </div>
+      <div id="pkgGrid" class="pkg-grid"></div>
+      <div class="wz-actions">
+        <button class="btn" onclick="wzGotoStep(2)"><i class="fas fa-keyboard"></i> Tự nhập số tiền khác</button>
+        <button class="btn" onclick="closeTopupFlow()"><i class="fas fa-xmark"></i> Đóng</button>
+      </div>
+      <div id="topupMsg" class="error" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <!-- ===== Bước 2: nhập số tiền tự chọn ===== -->
+  <div id="wzStep2" hidden>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <b style="font-size:14px"><i class="fas fa-keyboard"></i> Số tiền tự chọn</b>
+        <span class="muted" id="customRate" style="font-size:12px"></span>
+      </div>
+      <label style="font-size:12px" class="muted">Nhập số tiền muốn nạp (VND)</label>
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+        <input type="number" id="customVnd" min="0" step="1000" placeholder="50000"
+               style="max-width:200px;padding:8px 10px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-page);color:var(--text-primary)">
+        <button class="btn btn-primary" id="customBtn" onclick="createCustomOrder()">
+          <i class="fas fa-arrow-right"></i> Tạo đơn nạp
+        </button>
+      </div>
+      <div class="quick-amt">
+        <button class="btn" onclick="quickAmt(20000)">+20.000đ</button>
+        <button class="btn" onclick="quickAmt(50000)">+50.000đ</button>
+        <button class="btn" onclick="quickAmt(100000)">+100.000đ</button>
+        <button class="btn" onclick="quickAmt(500000)">+500.000đ</button>
+      </div>
+      <div id="customNote" class="muted" style="font-size:12px;margin-top:6px"></div>
+      <div id="customPreview" class="muted" style="font-size:13px;margin-top:4px"></div>
+      <div class="wz-actions">
+        <button class="btn" onclick="wzGotoStep(1)"><i class="fas fa-arrow-left"></i> Quay lại</button>
+        <button class="btn" onclick="closeTopupFlow()"><i class="fas fa-xmark"></i> Đóng</button>
+      </div>
+      <div id="customMsg" class="error" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <!-- ===== Bước 3: xác nhận đơn nạp ===== -->
+  <div id="wzStep3" hidden>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <b style="font-size:14px"><i class="fas fa-receipt"></i> Xác nhận đơn nạp</b>
+        <span class="countdown" id="wzConfirmCountdown" hidden><i class="fas fa-clock"></i> <span id="wzConfirmCountdownText">--:--</span></span>
+      </div>
+      <div class="wz-confirm">
+        <div class="row"><span class="k">Mã đơn</span><span class="v mono" id="wzOrderCode">—</span></div>
+        <div class="row"><span class="k">Gói nạp</span><span class="v" id="wzPackageLabel">—</span></div>
+        <div class="row"><span class="k">Số tiền</span><span class="v" id="wzAmount">—</span></div>
+        <div class="row"><span class="k">Điểm nhận được</span><span class="v" id="wzCredits">—</span></div>
+        <div class="row"><span class="k">Hạn thanh toán</span><span class="v" id="wzExpires">—</span></div>
+      </div>
+      <div class="wz-actions">
+        <button class="btn" id="wzBackBtn" onclick="confirmOrderBack()"><i class="fas fa-arrow-left"></i> Quay lại</button>
+        <button class="btn btn-primary" id="wzNextBtn" onclick="confirmOrderNext()"><i class="fas fa-credit-card"></i> Tiếp tục thanh toán</button>
+      </div>
+      <div id="wzMsg" class="error" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <!-- ===== Bước 4: thanh toán (QR ngay trên trang, không dialog/khung nhúng) ===== -->
+  <div id="wzStep4" hidden>
+    <div class="card" id="payCard">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+        <b style="font-size:14px">Đơn nạp <span id="payOrderCode" style="font-family:monospace"></span></b>
+        <span class="countdown" id="payCountdown" hidden><i class="fas fa-clock"></i> <span id="payCountdownText">--:--</span></span>
+        <span class="muted" id="payStatusChip" style="font-size:12px;margin-left:auto"></span>
+      </div>
+
+      <div class="pay-cols">
+        <div class="info-col" style="font-size:13px">
+          <div class="pay-row">Số tiền: <b id="payAmount">—</b>
+            <button class="copy-btn" onclick="copyText(document.getElementById('payAmount').textContent.replace(/[^0-9]/g,''), this)" title="Sao chép số tiền"><i class="fas fa-copy"></i></button>
+          </div>
+          <div class="pay-row">Điểm nhận được: <b id="payCredits">—</b></div>
+          <div class="pay-row">Số tài khoản: <b id="payAccNo" class="mono">—</b>
+            <button class="copy-btn" onclick="copyText(document.getElementById('payAccNo').textContent, this)" title="Sao chép số tài khoản"><i class="fas fa-copy"></i></button>
+          </div>
+          <div class="pay-row">Nội dung CK: <b id="payDesc" class="mono">—</b>
+            <button class="copy-btn" onclick="copyText(document.getElementById('payDesc').textContent, this)" title="Sao chép nội dung chuyển khoản"><i class="fas fa-copy"></i></button>
+          </div>
+          <div id="payCopiedHint" class="muted" style="font-size:12px;margin-top:2px"></div>
+          <div class="muted" style="font-size:12px;margin-top:10px">
+            Quét mã QR bằng app ngân hàng. Trang này tự kiểm tra trạng thái mỗi 4 giây.
+          </div>
+        </div>
+        <div class="qr-col" id="payQrBox">
+          <img id="payQr" alt="QR thanh toán">
+        </div>
+      </div>
+
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+        <a class="btn" id="payCheckout" href="#" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Mở trang thanh toán payOS</a>
+        <button class="btn" id="payMockBtn" hidden onclick="mockPaid()"><i class="fas fa-flask"></i> Giả lập đã trả tiền (test)</button>
+        <button class="btn" id="payCancelBtn" onclick="cancelOrder()"><i class="fas fa-ban"></i> Huỷ đơn</button>
+        <button class="btn" onclick="closeTopupFlow()"><i class="fas fa-xmark"></i> Đóng</button>
+      </div>
+      <div id="payMsg" class="error" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <!-- ===== Bước 5: kết quả ===== -->
+  <div id="wzStep5" hidden>
+    <div class="card">
+      <div class="res-icon" id="resIcon"><i class="fas fa-circle-notch"></i></div>
+      <h2 class="res-title" id="resTitle">—</h2>
+      <p class="res-sub" id="resSub"></p>
+
+      <div class="res-bal" id="resBal" hidden>
+        <i class="fas fa-gem" style="color:var(--ok)"></i>
+        <span class="num" id="resBalance">—</span>
+        <span class="lbl">điểm hiện có</span>
+      </div>
+
+      <div class="wz-confirm" style="margin-top:18px">
+        <div class="row"><span class="k">Mã đơn</span><span class="v mono" id="resOrder">—</span></div>
+        <div class="row"><span class="k">Trạng thái</span><span class="v" id="resStatus">—</span></div>
+        <div class="row"><span class="k">Số tiền</span><span class="v" id="resAmount">—</span></div>
+        <div class="row"><span class="k">Điểm nạp</span><span class="v" id="resCredits">—</span></div>
+      </div>
+
+      <div class="wz-actions" style="justify-content:center;margin-top:20px">
+        <button class="btn btn-primary" onclick="restartTopup()"><i class="fas fa-plus"></i> Nạp đơn khác</button>
+        <a class="btn" href="/credits.html"><i class="fas fa-gem"></i> Về trang điểm</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script src="version.js"></script>
+<script>
+// ============================================================================
+// Trang nạp điểm (/topup.html) — wizard 5 bước:
+//   (1) Số tiền → (2) Số tiền tự chọn → (3) Đơn nạp → (4) Thanh toán → (5) Hoàn tất
+// Điều hướng: nút Quay lại/Tiếp tục ở mỗi bước, hoặc bấm mốc trên thanh tiến
+// trình (chỉ cho 1–3; bước 4 phải vào qua nút Tiếp tục thanh toán).
+// payOS KHÔNG cho ẩn tên chủ tài khoản nhận tiền (CreatePaymentLinkRequest không
+// có tham số đó) → trang này KHÔNG dùng khung nhúng/dialog của payOS; chỉ hiển
+// thị QR VietQR + số TK + nội dung CK do server trả về (không có tên chủ TK).
+// ============================================================================
+const TOTAL_STEPS = 5;
+const ORDER_KEY = 'ct_topup_order';     // sessionStorage: khôi phục đơn sau F5
+
+let wzStep = 1;
+let topupCfg = null;    // { available, vnd_per_credit, min_vnd, max_vnd, packages }
+let payPoll = null;     // setInterval id khi đang chờ thanh toán
+let activeOrder = null; // đơn đang xem
+let cdTimer = null;
+let orderPaid = false;  // đơn hiện tại đã PAID → khoá thanh bước
+
+function fmtVnd(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; }
+
+function fmtDate(s) {
+  if (!s) return '—';
+  // SQLite CURRENT_TIMESTAMP là UTC → hiển thị theo giờ máy.
+  const d = new Date(String(s).replace(' ', 'T') + 'Z');
+  if (isNaN(d)) return s;
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/** Ghi thông báo vào 1 ô (mặc định #topupMsg). */
+function showMsg(id, msg, isError) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg || '';
+  el.className = isError ? 'error' : 'success';
+}
+
+/** Sao chép vào clipboard, có fallback cho môi trường không có Clipboard API. */
+async function copyText(text, btn) {
+  const value = String(text || '').trim();
+  if (!value || value === '—') return;
+  let done = false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(value);
+      done = true;
+    }
+  } catch (e) { /* rơi xuống fallback */ }
+  if (!done) done = fallbackCopy(value);
+  if (!done) { showMsg('payMsg', 'Không sao chép được — hãy chọn và copy thủ công.', true); return; }
+  const hint = document.getElementById('payCopiedHint');
+  if (hint) hint.textContent = 'Đã sao chép: ' + value;
+  if (btn) {
+    const icon = btn.querySelector('i');
+    btn.classList.add('done');
+    if (icon) icon.className = 'fas fa-check';
+    setTimeout(() => {
+      btn.classList.remove('done');
+      if (icon) icon.className = 'fas fa-copy';
+    }, 1500);
+  }
+}
+
+/** Fallback copy bằng textarea ẩn (http://localhost không có clipboard API). */
+function fallbackCopy(value) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = value;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, value.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) { return false; }
+}
+
+// ============================================================================
+// Wizard 5 bước — điều hướng
+// ============================================================================
+/**
+ * Tô thanh tiến trình + ẩn/hiện pane tương ứng bước `step`.
+ * Từ bước 4 đi tiếp lên chỉ khi đơn đã PAID; mốc 1–3 bấm được (quay lại).
+ */
+function renderWizard(step) {
+  wzStep = step;
+  document.querySelectorAll('#wzSteps .wz-step').forEach(el => {
+    const n = Number(el.getAttribute('data-wz'));
+    el.classList.toggle('active', n === step);
+    el.classList.toggle('done', n < step);
+    // Mốc 1–3 là lối tắt quay lại (khi đang ở bước 4/5 hoặc trong 1–3).
+    // Mốc 4 chỉ bấm được khi đơn đã PAID; mốc 5 không cho bấm tay.
+    const clickable = n <= 3 ? n !== step : (n === 4 && orderPaid);
+    if (clickable) el.setAttribute('data-go', String(n));
+    else el.removeAttribute('data-go');
+  });
+  for (let s = 1; s <= TOTAL_STEPS; s++) {
+    const pane = document.getElementById('wzStep' + s);
+    if (pane) pane.hidden = s !== step;
+  }
+}
+
+/** Đi tới bước `step` (bấm mốc 1–3 hoặc mốc 4 khi đã trả tiền). */
+function wzGotoStep(step) {
+  if (step === 4 && !activeOrder) { showMsg('wzMsg', 'Chưa có đơn nạp hợp lệ.', true); return; }
+  renderWizard(step);
+  if (step === 4) startCountdown(activeOrder && activeOrder.expires_at);
+  else stopCountdown();
+  // Đồng bộ ?step= để F5/back/forward mở đúng bước (bỏ khi đã hoàn tất).
+  if (step < TOTAL_STEPS) {
+    try {
+      const url = new URL(location.href);
+      url.searchParams.set('step', String(step));
+      history.replaceState({}, '', url.toString());
+    } catch (e) { /* môi trường không hỗ trợ history — bỏ qua */ }
+  }
+}
+
+/** Bấm mốc trên thanh tiến trình. */
+function onStepClick(el) {
+  const n = Number(el.getAttribute('data-wz'));
+  if (!el.hasAttribute('data-go')) return;
+  if (n === wzStep) return;
+  wzGotoStep(n);
+}
+
+// ============================================================================
+// Bước 1–2: gói nạp + số tiền tự chọn
+// ============================================================================
+async function loadPackages() {
+  let apiFailed = false;
+  try {
+    const r = await Auth.fetch('/api/credits/packages');
+    if (!r.ok) throw new Error('Không tải được gói nạp');
+    topupCfg = await r.json();
+  } catch (e) { topupCfg = null; apiFailed = true; }
+
+  const card = document.getElementById('topupCard');
+  // Lỗi mạng/API → không hiển thị khối nạp (tránh form chết).
+  if (apiFailed || !topupCfg) {
+    card.hidden = true;
+    showMsg('topupMsg', 'Không tải được thông tin nạp điểm. Kiểm tra kết nối rồi tải lại trang.', true);
+    return;
+  }
+  card.hidden = false;
+
+  const avail = !!topupCfg.available;
+  document.getElementById('topupUnavailable').hidden = avail;
+  document.getElementById('pkgGrid').classList.toggle('is-disabled', !avail);
+  const customVnd = document.getElementById('customVnd');
+  const customBtn = document.getElementById('customBtn');
+  customVnd.disabled = !avail;
+  customBtn.disabled = !avail;
+  document.querySelectorAll('.quick-amt .btn').forEach(b => { b.disabled = !avail; });
+
+  const rateTxt = `1 điểm = ${fmtVnd(topupCfg.vnd_per_credit)} · tối thiểu ${fmtVnd(topupCfg.min_vnd)}`;
+  document.getElementById('topupRate').textContent = rateTxt;
+  const cr = document.getElementById('customRate');
+  if (cr) cr.textContent = rateTxt;
+  document.getElementById('customNote').textContent =
+    `Nạp từ ${fmtVnd(topupCfg.min_vnd)} đến ${fmtVnd(topupCfg.max_vnd)}.`;
+
+  const grid = document.getElementById('pkgGrid');
+  const pkgs = topupCfg.packages || [];
+  grid.innerHTML = pkgs.length ? pkgs.map(p => `
+    <div class="pkg-item" data-id="${p.id}" onclick="createOrder(${p.id})">
+      <div class="pkg-vnd">${fmtVnd(p.amount_vnd)}</div>
+      <div class="pkg-credits">+${p.credits} điểm</div>
+      <div class="pkg-label">${escapeHtml(p.label || '')}</div>
+      <div class="pkg-spin"><i class="fas fa-spinner fa-spin"></i></div>
+    </div>`).join('')
+    : '<div class="muted" style="font-size:13px">Chưa có gói nạp nào — dùng ô nhập số tiền tự chọn.</div>';
+
+  renderCustomPreview();
+}
+
+/** Xem trước số điểm theo số tiền đang nhập. */
+function renderCustomPreview() {
+  const el = document.getElementById('customPreview');
+  if (!el || !topupCfg) return;
+  const v = Number(document.getElementById('customVnd').value);
+  if (!Number.isFinite(v) || v <= 0) { el.textContent = ''; el.className = 'muted'; return; }
+  const per = Number(topupCfg.vnd_per_credit) || 1000;
+  const credits = Math.round((v / per) * 10000) / 10000;
+  if (v < topupCfg.min_vnd || v > topupCfg.max_vnd) {
+    el.className = 'error';
+    el.textContent = `Số tiền ngoài khoảng cho phép (${fmtVnd(topupCfg.min_vnd)} – ${fmtVnd(topupCfg.max_vnd)}).`;
+    return;
+  }
+  el.className = 'muted';
+  el.textContent = `≈ ${credits} điểm`;
+}
+
+/** Nút số tiền nhanh: ghi vào ô nhập rồi cập nhật xem trước. */
+function quickAmt(amount) {
+  const input = document.getElementById('customVnd');
+  if (!topupCfg) return;
+  const cur = Number(input.value) || 0;
+  const max = Number(topupCfg.max_vnd) || 0;
+  input.value = Math.min(cur + amount, max || (cur + amount));
+  renderCustomPreview();
+}
+
+function setPkgLoading(id, on) {
+  const el = document.querySelector(`.pkg-item[data-id="${id}"]`);
+  if (el) el.classList.toggle('loading', !!on);
+}
+
+/** Nhớ đơn đang chờ vào sessionStorage để F5 giữa chừng vẫn khôi phục được. */
+function rememberOrder(d) {
+  try { sessionStorage.setItem(ORDER_KEY, String(d.order_code)); } catch (e) { /* private mode */ }
+}
+function forgetOrder() {
+  try { sessionStorage.removeItem(ORDER_KEY); } catch (e) { /* private mode */ }
+}
+
+// ============================================================================
+// Bước 3: xác nhận đơn nạp
+// ============================================================================
+/** Đổ dữ liệu đơn vào bảng xác nhận ở bước 3. */
+function fillConfirmStep(d) {
+  document.getElementById('wzOrderCode').textContent = '#' + d.order_code;
+  document.getElementById('wzPackageLabel').textContent = d.package_label || 'Số tiền tự chọn';
+  document.getElementById('wzAmount').textContent = fmtVnd(d.amount_vnd);
+  document.getElementById('wzCredits').textContent = d.credits + ' điểm';
+  const ex = document.getElementById('wzExpires');
+  ex.textContent = d.expires_at ? fmtDate(d.expires_at) : '—';
+}
+
+async function createOrder(packageId) {
+  showMsg('topupMsg', '');
+  setPkgLoading(packageId, true);
+  try {
+    const r = await Auth.fetch('/api/credits/topup/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ package_id: packageId })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'Không tạo được đơn nạp');
+    activeOrder = d;          // bước 3–4 cần đơn này (và để huỷ khi Quay lại)
+    rememberOrder(d);
+    fillConfirmStep(d);
+    wzGotoStep(3);
+  } catch (e) { showMsg('topupMsg', e.message, true); }
+  finally { setPkgLoading(packageId, false); }
+}
+
+async function createCustomOrder() {
+  showMsg('customMsg', '');
+  const v = Number(document.getElementById('customVnd').value);
+  if (!Number.isFinite(v) || v <= 0) { showMsg('customMsg', 'Nhập số tiền hợp lệ', true); return; }
+  const btn = document.getElementById('customBtn');
+  btn.disabled = true;
+  try {
+    const r = await Auth.fetch('/api/credits/topup/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount_vnd: Math.round(v) })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'Không tạo được đơn nạp');
+    activeOrder = d;          // bước 3–4 cần đơn này (và để huỷ khi Quay lại)
+    rememberOrder(d);
+    fillConfirmStep(d);
+    wzGotoStep(3);
+  } catch (e) { showMsg('customMsg', e.message, true); }
+  finally { btn.disabled = false; }
+}
+
+/** Bước 3 → huỷ đơn vừa tạo rồi quay lại bước chọn số tiền (không để đơn treo). */
+async function confirmOrderBack() {
+  const btn = document.getElementById('wzBackBtn');
+  const msg = document.getElementById('wzMsg');
+  if (msg) msg.textContent = '';
+  if (btn) btn.disabled = true;
+  try {
+    if (activeOrder && activeOrder.order_code) {
+      await Auth.fetch(`/api/credits/topup/${activeOrder.order_code}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Người dùng quay lại bước chọn số tiền' })
+      }).catch(() => { /* mạng lỗi vẫn cho quay lại, đơn sẽ tự hết hạn */ });
+    }
+    activeOrder = null;
+    forgetOrder();
+    stopCountdown();
+    showMsg('topupMsg', 'Đã huỷ đơn tạm. Chọn lại số tiền để nạp.', false);
+    wzGotoStep(1);
+  } finally { if (btn) btn.disabled = false; }
+}
+
+/** Bước 3 → sang bước 4 (thẻ QR + thông tin chuyển khoản). */
+function confirmOrderNext() {
+  // activeOrder được set ngay khi tạo đơn ở bước 1–2 (createOrder/createCustomOrder).
+  // Nếu thiếu nghĩa là state lệch → báo rõ thay vì thoát im lặng.
+  if (!activeOrder) {
+    console.warn('confirmOrderNext: activeOrder rỗng — chưa có đơn để thanh toán');
+    showMsg('wzMsg', 'Chưa có đơn nạp hợp lệ. Hãy chọn lại số tiền.', true);
+    return;
+  }
+  showPayCard(activeOrder);
+}
+
+// ============================================================================
+// Bước 4: thanh toán (QR ngay trên trang)
+// ============================================================================
+function showPayCard(d) {
+  activeOrder = d;
+  document.getElementById('payCard').hidden = false;
+  document.getElementById('payOrderCode').textContent = '#' + d.order_code;
+  document.getElementById('payAmount').textContent = fmtVnd(d.amount_vnd);
+  document.getElementById('payCredits').textContent = d.credits + ' điểm';
+  // Tên chủ tài khoản nhận tiền KHÔNG hiển thị (chủ đích — xem CHANGELOG).
+  document.getElementById('payAccNo').textContent = d.account_number || '—';
+  document.getElementById('payDesc').textContent = d.description || '—';
+  const hint = document.getElementById('payCopiedHint');
+  if (hint) hint.textContent = '';
+  const qr = document.getElementById('payQr');
+  // payOS trả chuỗi VietQR (ảnh); test mode trả URL nội bộ → ẩn QR.
+  const isImg = /^https?:\/\//i.test(d.qr_code || '') && !/\.html(\?|$)/i.test(d.qr_code || '');
+  if (isImg) { qr.src = d.qr_code; qr.parentElement.hidden = false; }
+  else { qr.removeAttribute('src'); qr.parentElement.hidden = true; }
+  document.getElementById('payCheckout').href = d.checkout_url || '#';
+  document.getElementById('payMockBtn').hidden = !d.test_mode;
+  setPayStatus('PENDING');
+  wzGotoStep(4);
+  document.getElementById('payCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  startPolling(d.order_code);
+}
+
+const PAY_STATUS_TEXT = {
+  PENDING: 'Chờ thanh toán', PAID: 'Đã thanh toán', CANCELLED: 'Đã huỷ',
+  EXPIRED: 'Hết hạn', UNDERPAID: 'Trả thiếu', FAILED: 'Thất bại'
+};
+
+// Ẩn/hiện nút huỷ theo trạng thái đơn.
+function updatePayActions(status) {
+  const cancelBtn = document.getElementById('payCancelBtn');
+  if (cancelBtn) cancelBtn.hidden = status !== 'PENDING';
+}
+
+function setPayStatus(status) {
+  const el = document.getElementById('payStatusChip');
+  el.textContent = PAY_STATUS_TEXT[status] || status;
+  el.className = status === 'PAID' ? 'success' : 'muted';
+  el.style.fontSize = '12px';
+  updatePayActions(status);
+}
+
+// ---- Đếm ngược hạn thanh toán ----
+function startCountdown(expiresAt) {
+  stopCountdown();
+  const box = document.getElementById('payCountdown');
+  const txt = document.getElementById('payCountdownText');
+  const cBox = document.getElementById('wzConfirmCountdown');
+  const cTxt = document.getElementById('wzConfirmCountdownText');
+  if (!expiresAt) { box.hidden = true; if (cBox) cBox.hidden = true; return; }
+  const end = new Date(expiresAt).getTime();
+  if (!Number.isFinite(end)) { box.hidden = true; if (cBox) cBox.hidden = true; return; }
+  box.hidden = false;
+  if (cBox) cBox.hidden = false;
+
+  const tick = () => {
+    const left = end - Date.now();
+    if (left <= 0) {
+      txt.textContent = 'Hết hạn';
+      if (cTxt) cTxt.textContent = 'Hết hạn';
+      box.classList.add('late');
+      if (cBox) cBox.classList.add('late');
+      stopCountdown();
+      setPayStatus('EXPIRED');
+      stopPolling();
+      return;
+    }
+    box.classList.remove('late');
+    if (cBox) cBox.classList.remove('late');
+    const m = Math.floor(left / 60000);
+    const s = Math.floor((left % 60000) / 1000);
+    const label = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    txt.textContent = label;
+    if (cTxt) cTxt.textContent = label;
+  };
+  tick();
+  cdTimer = setInterval(tick, 1000);
+}
+
+function stopCountdown() {
+  if (cdTimer) { clearInterval(cdTimer); cdTimer = null; }
+  const box = document.getElementById('payCountdown');
+  if (box) { box.hidden = true; box.classList.remove('late'); }
+  const cBox = document.getElementById('wzConfirmCountdown');
+  if (cBox) { cBox.hidden = true; cBox.classList.remove('late'); }
+}
+
+// ============================================================================
+// Poll trạng thái đơn (mỗi 4 giây) → PAID thì sang bước 5
+// ============================================================================
+function startPolling(orderCode) {
+  stopPolling();
+  // Không poll khi tab ẩn — tránh spam API khi user để tab nền lâu.
+  if (document.hidden) return;
+  payPoll = setInterval(async () => {
+    try {
+      const r = await Auth.fetch('/api/credits/topup/' + orderCode);
+      if (!r.ok) return;
+      const d = await r.json();
+      setPayStatus(d.status);
+      if (d.status === 'PAID') {
+        stopPolling();
+        stopCountdown();
+        orderPaid = true;
+        showResult({
+          order_code: orderCode, status: 'PAID', amount_vnd: d.amount_vnd, credits: d.credits
+        });
+      } else if (['CANCELLED', 'EXPIRED', 'UNDERPAID', 'FAILED'].includes(d.status)) {
+        stopPolling();
+        if (d.status === 'EXPIRED') stopCountdown();
+      }
+    } catch (e) { /* im lặng, thử lại vòng sau */ }
+  }, 4000);
+}
+
+function stopPolling() {
+  if (payPoll) { clearInterval(payPoll); payPoll = null; }
+}
+
+// Tab hiện lại → kiểm tra đơn ngay, thay vì chờ tới nhịp poll kế tiếp.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  if (activeOrder && activeOrder.order_code) startPolling(activeOrder.order_code);
+});
+
+// ============================================================================
+// Bước 5: kết quả nạp điểm
+// ============================================================================
+const RES_STATUS_TEXT = {
+  PENDING: 'Chờ thanh toán', PAID: 'Đã thanh toán', CANCELLED: 'Đã huỷ',
+  EXPIRED: 'Hết hạn', UNDERPAID: 'Trả thiếu', FAILED: 'Thất bại'
+};
+
+async function showResult(o) {
+  const st = o.status || 'PENDING';
+  stopPolling();
+  stopCountdown();
+  const icon = document.getElementById('resIcon');
+  const title = document.getElementById('resTitle');
+  const sub = document.getElementById('resSub');
+  const bal = document.getElementById('resBal');
+
+  if (st === 'PAID') {
+    orderPaid = true;
+    icon.className = 'res-icon paid';
+    icon.innerHTML = '<i class="fas fa-circle-check"></i>';
+    title.textContent = 'Nạp điểm thành công';
+    sub.textContent = 'Điểm đã được cộng vào tài khoản của bạn.';
+    bal.hidden = false;
+    try {
+      const r = await Auth.fetch('/api/credits/balance');
+      if (r.ok) {
+        const b = await r.json();
+        document.getElementById('resBalance').textContent = b.balance;
+        if (Auth.setCreditBalance) Auth.setCreditBalance(b.balance);
+      }
+    } catch (e) { /* số dư là thông tin phụ */ }
+    forgetOrder();
+  } else if (st === 'PENDING') {
+    icon.className = 'res-icon pending';
+    icon.innerHTML = '<i class="fas fa-clock"></i>';
+    title.textContent = 'Đang chờ thanh toán';
+    sub.textContent = 'Chưa nhận được xác nhận từ payOS. Điểm sẽ được cộng ngay khi thanh toán xong.';
+    bal.hidden = true;
+  } else {
+    const isCancel = st === 'CANCELLED';
+    icon.className = 'res-icon fail';
+    icon.innerHTML = isCancel ? '<i class="fas fa-ban"></i>' : '<i class="fas fa-circle-xmark"></i>';
+    title.textContent = isCancel ? 'Đơn đã huỷ' : (st === 'EXPIRED' ? 'Đơn hết hạn' : 'Thanh toán thất bại');
+    sub.textContent = isCancel
+      ? 'Bạn (hoặc payOS) đã huỷ đơn nạp này. Chưa có khoản tiền nào bị trừ.'
+      : 'Đơn nạp không hoàn tất. Chưa có điểm nào được cộng — bạn có thể tạo đơn mới.';
+    bal.hidden = true;
+    forgetOrder();
+  }
+
+  document.getElementById('resOrder').textContent = '#' + o.order_code;
+  document.getElementById('resStatus').innerHTML =
+    `<span class="status-badge status-${st}">${RES_STATUS_TEXT[st] || st}</span>`;
+  document.getElementById('resAmount').textContent = fmtVnd(o.amount_vnd);
+  document.getElementById('resCredits').textContent = (st === 'PAID' ? '+' : '') + o.credits + ' điểm';
+
+  renderWizard(5);
+  // Bước 5 là trạng thái cuối → gỡ ?step= để lần mở lại bắt đầu từ bước 1.
+  try {
+    const url = new URL(location.href);
+    url.searchParams.delete('step');
+    url.searchParams.delete('order');
+    url.searchParams.delete('mock');
+    history.replaceState({}, '', url.toString());
+  } catch (e) { /* bỏ qua */ }
+}
+
+// ============================================================================
+// Huỷ đơn · test mode · đóng luồng · nạp đơn khác
+// ============================================================================
+/** User tự huỷ đơn đang chờ thanh toán. */
+async function cancelOrder() {
+  if (!activeOrder) return;
+  if (!confirm('Huỷ đơn nạp #' + activeOrder.order_code + '?')) return;
+  const btn = document.getElementById('payCancelBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await Auth.fetch(`/api/credits/topup/${activeOrder.order_code}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Người dùng huỷ' })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'Không huỷ được đơn');
+    setPayStatus('CANCELLED');
+    stopPolling();
+    stopCountdown();
+    showResult({
+      order_code: activeOrder.order_code, status: 'CANCELLED',
+      amount_vnd: activeOrder.amount_vnd, credits: activeOrder.credits
+    });
+  } catch (e) { showMsg('payMsg', e.message, true); }
+  finally { if (btn) btn.disabled = false; }
+}
+
+// Test mode: cần token admin; user thường nhận 403 → báo lỗi rõ.
+function mockPaid() {
+  if (!activeOrder) return;
+  Auth.fetch(`/api/credits/topup/${activeOrder.order_code}/mock-paid`, { method: 'POST' })
+    .then(async r => {
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Giả lập thất bại');
+      setPayStatus('PAID');
+      stopPolling();
+      stopCountdown();
+      showResult({
+        order_code: activeOrder.order_code, status: 'PAID',
+        amount_vnd: activeOrder.amount_vnd, credits: activeOrder.credits
+      });
+    }).catch(e => showMsg('payMsg', e.message, true));
+}
+
+/** Đóng luồng nạp giữa chừng: dọn poll/countdown và gỡ ?order=/?step= trên URL. */
+function closeTopupFlow() {
+  stopPolling();
+  stopCountdown();
+  activeOrder = null;
+  forgetOrder();
+  try {
+    const url = new URL(location.href);
+    url.searchParams.delete('order');
+    url.searchParams.delete('step');
+    url.searchParams.delete('mock');
+    history.replaceState({}, '', url.toString());
+  } catch (e) { /* bỏ qua */ }
+  location.href = '/credits.html';
+}
+
+/** Bước 5 → nạp đơn khác: reset về bước 1. */
+function restartTopup() {
+  activeOrder = null;
+  orderPaid = false;
+  forgetOrder();
+  const cv = document.getElementById('customVnd');
+  if (cv) cv.value = '';
+  renderCustomPreview();
+  wzGotoStep(1);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ============================================================================
+// Khôi phục đơn (deep-link ?order= / F5) + bootstrap
+// ============================================================================
+/** Mở lại đơn theo mã (payOS redirect về, deep-link `?order=`, sessionStorage). */
+async function resumeOrder(orderCode) {
+  try {
+    const r = await Auth.fetch('/api/credits/topup/' + orderCode);
+    if (!r.ok) return false;
+    const o = await r.json();
+    if (o.status === 'PAID' || o.status === 'CANCELLED' || o.status === 'EXPIRED'
+      || o.status === 'UNDERPAID' || o.status === 'FAILED') {
+      showResult({
+        order_code: o.order_code, status: o.status, amount_vnd: o.amount_vnd, credits: o.credits
+      });
+      return true;
+    }
+    showPayCard({
+      order_code: o.order_code,
+      amount_vnd: o.amount_vnd,
+      credits: o.credits,
+      checkout_url: o.checkout_url,
+      qr_code: o.qr_code,
+      account_number: o.account_number || '',
+      description: o.description || '',
+      expires_at: o.expires_at,
+      test_mode: !!new URLSearchParams(location.search).get('mock')
+    });
+    setPayStatus(o.status);
+    return true;
+  } catch (e) { return false; }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof Auth !== 'undefined' && Auth.initNavbar) Auth.initNavbar();
+  if (typeof window.loadTheme === 'function') window.loadTheme();
+  if (typeof Auth === 'undefined' || !Auth.isLoggedIn()) {
+    if (typeof Auth !== 'undefined' && Auth.goLogin) Auth.goLogin();
+    else location.href = 'index.html';
+    return;
+  }
+
+  // Mốc wizard bấm được → điều hướng.
+  document.querySelectorAll('#wzSteps .wz-step').forEach(el => {
+    el.addEventListener('click', () => onStepClick(el));
+  });
+  // Xem trước số điểm khi gõ số tiền tự chọn.
+  const cv = document.getElementById('customVnd');
+  if (cv) cv.addEventListener('input', renderCustomPreview);
+
+  const params = new URLSearchParams(location.search);
+  const code = parseInt(params.get('order'), 10);
+  const wantStep = parseInt(params.get('step'), 10);
+
+  loadPackages().then(async () => {
+    if (Number.isFinite(code)) { await resumeOrder(code); return; }
+    // Không có ?order= → thử khôi phục đơn đang dở trong session (F5 giữa chừng).
+    let saved = null;
+    try { saved = sessionStorage.getItem(ORDER_KEY); } catch (e) { /* private mode */ }
+    if (saved && Number.isFinite(parseInt(saved, 10))) {
+      const ok = await resumeOrder(parseInt(saved, 10));
+      if (ok) return;
+    }
+    // ?step=1..3 điều hướng trực tiếp (chỉ khi không có đơn để khôi phục).
+    if (Number.isFinite(wantStep) && wantStep >= 1 && wantStep <= 3) wzGotoStep(wantStep);
+    else renderWizard(1);
+  });
+});
+</script>
+</body>
+</html>

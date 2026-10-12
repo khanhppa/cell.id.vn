@@ -283,9 +283,9 @@ async function main() {
   ok('batch charge theo foundCount', /chargeLookup\(userId, foundCount, batchId/.test(srvSrc));
   ok('foundCount = số cell found', /const foundCount = historyItems\.filter\(h => h\.found\)\.length/.test(srvSrc));
 
-  ok('register cấp signup bonus', /\/api\/register'[\s\S]{0,1500}grantSignupBonus/.test(srvSrc));
+  ok('register cấp signup bonus', /\/api\/register'[\s\S]{0,3000}grantSignupBonus/.test(srvSrc));
   ok('POST /api/users cấp điểm khởi tạo', /app\.post\('\/api\/users'[\s\S]{0,900}applyUserInitialCredit\(userId, req\)/.test(srvSrc));
-  ok('POST /api/admin/users cấp điểm khởi tạo', /app\.post\('\/api\/admin\/users'[\s\S]{0,900}applyUserInitialCredit\(userId, req\)/.test(srvSrc));
+  ok('POST /api/admin/users cấp điểm khởi tạo', /app\.post\('\/api\/admin\/users'[\s\S]{0,1400}applyUserInitialCredit\(userId, req\)/.test(srvSrc));
   ok('helper applyUserInitialCredit tồn tại', /async function applyUserInitialCredit\(userId, req\)/.test(srvSrc));
   ok('/api/me trả credit_balance', /credit_balance FROM users WHERE id = \?/.test(srvSrc));
 
@@ -340,10 +340,14 @@ async function main() {
   ok('app.js hiện thông báo hết điểm + link credits.html', /e\.code === 402[\s\S]{0,300}credits\.html/.test(appSrc));
 
   const creditsHtml = fs.readFileSync(path.join(__dirname, 'public', 'credits.html'), 'utf8');
+  const topupHtml = fs.readFileSync(path.join(__dirname, 'public', 'topup.html'), 'utf8');
   ok('credits.html nạp auth.js', /<script src="auth\.js"><\/script>/.test(creditsHtml));
   ok('credits.html gọi /api/credits/balance', /\/api\/credits\/balance/.test(creditsHtml));
   ok('credits.html gọi /api/credits/transactions', /\/api\/credits\/transactions/.test(creditsHtml));
-  ok('credits.html chuyển hướng khi chưa login', /login\.html/.test(creditsHtml));
+  // Trang credits là nội dung cần đăng nhập, nhưng redirect KHÔNG còn hard-code
+  // '/login.html' — đi qua Auth.goLogin() (reload ở trang chủ, điều hướng ở nơi khác).
+  ok('credits.html yêu cầu đăng nhập qua Auth.goLogin (không hard-code login.html)',
+    /Auth\.goLogin\(\)/.test(creditsHtml) && !/location\.[a-z]*\s*=\s*['"]\/?login\.html/.test(creditsHtml));
 
   // Regression: credits.html từng dùng <div id="navbar"> nhưng Auth.initNavbar()
   // chỉ query '.header' / '.topbar' / '.navbar' (theo CLASS) → không khớp →
@@ -359,14 +363,167 @@ async function main() {
     /\.container\s*\{[^}]*padding:\s*(\d+)px/.test(creditsHtml) &&
     Number(/\.container\s*\{[^}]*padding:\s*(\d+)px/.exec(creditsHtml)[1]) >= 48);
 
+  // ---- Nạp điểm tách sang trang riêng (topup.html) ----
+  console.log('\n== credits.html: chỉ còn số dư + lịch sử, KHÔNG còn wizard/payOS ==');
+  ok('credits.html có nút mở trang nạp điểm (#topupCta → /topup.html)',
+    /id="topupCta"[^>]*href="\/topup\.html"/.test(creditsHtml));
+  ok('credits.html KHÔNG còn thanh wizard (#wzSteps / .wz-step)',
+    !/id="wzSteps"/.test(creditsHtml) && !/class="wz-step/.test(creditsHtml));
+  ok('credits.html KHÔNG còn pane bước #wzStep1..5',
+    !/id="wzStep[1-5]"/.test(creditsHtml));
+  ok('credits.html KHÔNG còn khung nhúng payOS (#config_root / CDN payos-checkout)',
+    !/id="config_root"/.test(creditsHtml) && !/cdn\.payos\.vn/.test(creditsHtml)
+    && !/PayOSCheckout/.test(creditsHtml));
+  ok('credits.html KHÔNG còn dialog nội bộ (#payDialog)',
+    !/<dialog\s+id="payDialog"/.test(creditsHtml) && !/payDialogQr/.test(creditsHtml));
+  ok('credits.html chỉ còn 2 tab (orders, tx) — bỏ tab nạp điểm',
+    (creditsHtml.match(/data-ctab=/g) || []).length === 2
+    && !/data-ctab="topup"/.test(creditsHtml));
+  ok('credits.html có 2 tab-pane #ctab-orders/#ctab-tx, orders là mặc định',
+    /class="tab-pane active" id="ctab-orders"/.test(creditsHtml)
+    && creditsHtml.includes('id="ctab-tx"')
+    && (creditsHtml.match(/class="tab-pane/g) || []).length === 2);
+  ok('switchCreditTab chỉ nhận orders/tx và lazy-load tương ứng',
+    /CREDIT_TABS\s*=\s*\['orders',\s*'tx'\]/.test(creditsHtml)
+    && /if \(name === 'orders'\) loadOrders\(\)/.test(creditsHtml)
+    && /if \(name === 'tx'\) ensureTxLoaded\(\)/.test(creditsHtml));
+  ok('credits.html KHÔNG còn hàm payOS/wizard (createOrder/showPayCard/resumeOrder)',
+    !/function createOrder\(/.test(creditsHtml) && !/function showPayCard\(/.test(creditsHtml)
+    && !/function resumeOrder\(/.test(creditsHtml) && !/function renderWizard\(/.test(creditsHtml));
+  ok('nút Xem của đơn PENDING trỏ sang topup.html?order=',
+    /function viewOrder\(orderCode\)[\s\S]{0,200}\/topup\.html\?order=/.test(creditsHtml));
+
+  // ---- Trang nạp điểm riêng: topup.html ----
+  console.log('\n== topup.html: wizard 5 bước + QR tại chỗ (không dialog/khung nhúng) ==');
+  ok('topup.html nạp auth.js', /<script src="auth\.js"><\/script>/.test(topupHtml));
+  ok('topup.html gọi Auth.initNavbar()', /Auth\.initNavbar\(\)/.test(topupHtml));
+  ok('topup.html yêu cầu đăng nhập qua Auth.goLogin (không hard-code login.html)',
+    /Auth\.goLogin\(\)/.test(topupHtml) && !/location\.[a-z]*\s*=\s*['"]\/?login\.html/.test(topupHtml));
+  ok('topup.html có element navbar đúng selector của Auth.initNavbar',
+    /<(?:nav|div|header)[^>]*class="[^"]*\b(?:navbar|header|topbar)\b[^"]*"[^>]*>\s*<\/(?:nav|div|header)>/.test(topupHtml));
+  ok('topup.html container chừa chỗ cho navbar fixed (padding-top >= 48px)',
+    /\.container\s*\{[^}]*padding:\s*(\d+)px/.test(topupHtml) &&
+    Number(/\.container\s*\{[^}]*padding:\s*(\d+)px/.exec(topupHtml)[1]) >= 48);
+
+  ok('thanh tiến trình #wzSteps có đúng 5 mốc data-wz 1..5',
+    (() => {
+      const steps = [...topupHtml.matchAll(/data-wz="(\d)"/g)].map(m => m[1]);
+      return steps.length === 5 && steps.join(',') === '1,2,3,4,5';
+    })());
+  ok('5 nhãn mốc đúng thứ tự Số tiền → Số tiền tự chọn → Đơn nạp → Thanh toán → Hoàn tất',
+    (() => {
+      const order = ['Số tiền', 'Số tiền tự chọn', 'Đơn nạp', 'Thanh toán', 'Hoàn tất'];
+      const idx = order.map(l => topupHtml.indexOf('>' + l + '<'));
+      return idx.every(i => i > 0) && idx.every((v, i) => i === 0 || idx[i - 1] < v);
+    })());
+  ok('có đủ 5 pane bước #wzStep1..#wzStep5',
+    ['1', '2', '3', '4', '5'].every(n => topupHtml.includes(`id="wzStep${n}"`)));
+  ok('bước 2..5 mặc định ẩn, bước 1 mặc định hiện',
+    ['2', '3', '4', '5'].every(n => new RegExp(`id="wzStep${n}" hidden`).test(topupHtml))
+    && !/id="wzStep1" hidden/.test(topupHtml));
+  ok('bước 1 chứa #topupCard + #pkgGrid; bước 2 chứa ô số tiền tự chọn (#customVnd)',
+    /id="wzStep1"[\s\S]*?id="pkgGrid"[\s\S]*?id="wzStep2"/.test(topupHtml)
+    && /id="wzStep2"[\s\S]*?id="customVnd"/.test(topupHtml));
+  ok('bước 3 có bảng xác nhận: mã đơn · gói · tiền · điểm · hạn',
+    /id="wzStep3"[\s\S]*?id="wzOrderCode"[\s\S]*?id="wzPackageLabel"[\s\S]*?id="wzAmount"[\s\S]*?id="wzCredits"[\s\S]*?id="wzExpires"/.test(topupHtml));
+  ok('bước 4 chứa #payCard + QR (#payQr) + số TK (#payAccNo) + nội dung CK (#payDesc)',
+    /id="wzStep4"[\s\S]*?id="payCard"[\s\S]*?id="payDesc"[\s\S]*?id="payQr"/.test(topupHtml));
+  ok('bước 5 chứa kết quả (#resOrder/#resStatus/#resAmount/#resCredits)',
+    /id="wzStep5"[\s\S]*?id="resOrder"[\s\S]*?id="resStatus"[\s\S]*?id="resAmount"[\s\S]*?id="resCredits"/.test(topupHtml));
+  ok('KHÔNG hiển thị tên chủ tài khoản nhận tiền (không có nhãn "Chủ tài khoản")',
+    !/payAccName/.test(topupHtml) && !/>\s*Chủ tài khoản/.test(topupHtml));
+  ok('KHÔNG dùng khung nhúng/dialog payOS (không #config_root, CDN payos-checkout, PayOSCheckout)',
+    !/id="config_root"/.test(topupHtml) && !/cdn\.payos\.vn/.test(topupHtml)
+    && !/PayOSCheckout/.test(topupHtml) && !/<dialog\s+id="payDialog"/.test(topupHtml));
+  ok('renderWizard tô active/done + ẩn hiện pane theo bước (TOTAL_STEPS=5)',
+    /function renderWizard\(step\)/.test(topupHtml) &&
+    /classList\.toggle\('active', n === step\)/.test(topupHtml) &&
+    /classList\.toggle\('done', n < step\)/.test(topupHtml) &&
+    /TOTAL_STEPS = 5/.test(topupHtml));
+  ok('createOrder/createCustomOrder gán activeOrder = d rồi qua bước 3',
+    (topupHtml.match(/^\s{4}activeOrder = d;/gm) || []).length === 2 &&
+    (topupHtml.match(/^\s*wzGotoStep\(3\);/gm) || []).length === 2);
+  ok('confirmOrderBack huỷ đơn tạm rồi về bước 1',
+    /async function confirmOrderBack\(\)[\s\S]{0,900}wzGotoStep\(1\)/.test(topupHtml) &&
+    /\/cancel`/.test(topupHtml));
+  ok('confirmOrderNext → showPayCard + guard null báo lỗi rõ',
+    /function confirmOrderNext\(\)[\s\S]{0,400}if \(!activeOrder\)[\s\S]{0,400}showPayCard\(activeOrder\)/.test(topupHtml));
+  ok('startPolling khi PAID → showResult (bước 5)',
+    /d\.status === 'PAID'[\s\S]{0,400}showResult\(/.test(topupHtml));
+  ok('showResult đổ trạng thái PAID/PENDING/CANCELLED',
+    /'PAID'/.test(topupHtml) && /'PENDING'/.test(topupHtml) && /'CANCELLED'/.test(topupHtml));
+  ok('deep-link ?order= vào thẳng bước thanh toán; ?step= cho 1–3',
+    /function resumeOrder\(orderCode\)[\s\S]{0,700}showPayCard\(/.test(topupHtml) &&
+    /params\.get\('step'\)/.test(topupHtml) && /params\.get\('order'\)/.test(topupHtml));
+  ok('CSS wizard đủ .wz-steps/.wz-dot/.wz-label + đường nối + @media thu nhỏ nhãn',
+    /\.wz-steps\s*\{/.test(topupHtml) && /\.wz-dot\s*\{/.test(topupHtml) &&
+    /\.wz-label\s*\{/.test(topupHtml) &&
+    /\.wz-step:not\(:last-child\)::after/.test(topupHtml) &&
+    /@media \(max-width: 560px\)[\s\S]{0,300}\.wz-label \{ font-size: 10px/.test(topupHtml));
+  ok('topup.html KHÔNG còn tự cộng điểm ở client (điểm do webhook cộng)',
+    !/credits\s*\+=/.test(topupHtml));
+  ok('HTML topup.html cân bằng thẻ div',
+    (() => {
+      const body = topupHtml.replace(/<script>[\s\S]*<\/script>/g, '');
+      return (body.match(/<div/g) || []).length === (body.match(/<\/div>/g) || []).length;
+    })());
+
+  // ---- Bảng/lịch sử giữ nguyên trên credits.html ----
+  ok('giữ nguyên id bảng (#ordersTable/#txTable/#txPager) trên credits.html',
+    /id="ordersTable"/.test(creditsHtml) && /id="txTable"/.test(creditsHtml) && /id="txPager"/.test(creditsHtml));
+  ok('HTML credits.html cân bằng thẻ div',
+    (() => {
+      const body = creditsHtml.replace(/<script>[\s\S]*<\/script>/g, '');
+      return (body.match(/<div/g) || []).length === (body.match(/<\/div>/g) || []).length;
+    })());
+
+  // ---- Trang kết quả thanh toán riêng ----
+  const resultHtml = fs.readFileSync(path.join(__dirname, 'public', 'payment-result.html'), 'utf8');
+  ok('payment-result.html nạp auth.js', /<script src="auth\.js"><\/script>/.test(resultHtml));
+  ok('payment-result.html gọi /api/credits/topup/<code>', /\/api\/credits\/topup\/' \+ code/.test(resultHtml));
+  ok('payment-result.html gọi /api/credits/balance khi đã trả tiền', /\/api\/credits\/balance/.test(resultHtml));
+  ok('payment-result.html đọc ?order= từ query', /get\('order'\)/.test(resultHtml));
+  ok('payment-result.html hiển thị đủ số tiền + điểm + trạng thái',
+    /id="resAmount"/.test(resultHtml) && /id="resCredits"/.test(resultHtml) && /id="resStatus"/.test(resultHtml));
+  ok('payment-result.html có trạng thái PAID/PENDING/CANCELLED', /'PAID'/.test(resultHtml) && /'PENDING'/.test(resultHtml) && /'CANCELLED'/.test(resultHtml));
+  ok('payment-result.html tự kiểm tra lại khi còn PENDING', /POLL_MS/.test(resultHtml) && /startPoll\(\)/.test(resultHtml));
+  ok('payment-result.html có nút về trang điểm', /href="credits\.html"/.test(resultHtml));
+  ok('payment-result.html yêu cầu đăng nhập qua Auth.goLogin (không hard-code login.html)',
+    /Auth\.goLogin\(\)/.test(resultHtml) && !/location\.[a-z]*\s*=\s*['"]\/?login\.html/.test(resultHtml));
+  ok('payment-result.html có element navbar đúng selector của Auth.initNavbar',
+    /<(?:nav|div|header)[^>]*class="[^"]*\b(?:navbar|header|topbar)\b[^"]*"[^>]*>\s*<\/(?:nav|div|header)>/.test(resultHtml));
+  ok('payment-result.html container chừa chỗ cho navbar fixed (padding-top >= 48px)',
+    /\.container\s*\{[^}]*padding:\s*(\d+)px/.test(resultHtml) &&
+    Number(/\.container\s*\{[^}]*padding:\s*(\d+)px/.exec(resultHtml)[1]) >= 48);
+
+  // Trang kết quả chỉ ĐỌC trạng thái — không có đường nào để client tự cộng điểm.
+  const resultScripts = [...resultHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
+  ok('payment-result.html KHÔNG gửi request ghi (chỉ GET)',
+    !/method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i.test(resultScripts),
+    (resultScripts.match(/method:\s*['"][A-Z]+['"]/gi) || []).join(','));
+  ok('payment-result.html KHÔNG gọi mock-paid', !/mock-paid/.test(resultHtml));
+  ok('payment-result.html KHÔNG gọi /api/credits/topup/create',
+    !/topup\/create/.test(resultScripts));
+  ok('payment-result.html KHÔNG gọi admin API', !/\/api\/admin\//.test(resultScripts));
+  ok('payment-result.html không nhúng lại thư viện checkout payOS',
+    !/cdn\.payos\.vn/.test(resultHtml) && !/usePayOS/.test(resultHtml));
+
+  const serverSrc = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+  ok('server.js trả returnUrl/cancelUrl về payment-result.html',
+    /returnUrl:\s*`\$\{base\}\/payment-result\.html\?order=\$\{orderCode\}`/.test(serverSrc) &&
+    /cancelUrl:\s*`\$\{base\}\/payment-result\.html\?order=\$\{orderCode\}&status=cancel`/.test(serverSrc));
+  ok('server.js KHÔNG còn redirect về credits.html cho payOS',
+    !/returnUrl:\s*`\$\{base\}\/credits\.html/.test(serverSrc));
+
   const adminHtml = fs.readFileSync(path.join(__dirname, 'public', 'admin.html'), 'utf8');
-  // Gộp menu: credits nằm trong section-users, celldb nằm trong section-cells.
+  // Gộp menu: credits nằm trong section-users; Cell ID Database tách 3 menu con
+  // (sources / local / audit) — không còn section-cells top-level.
   ok('admin.html KHÔNG còn sidebar mục credits riêng', !/data-section="credits"/.test(adminHtml));
   ok('admin.html KHÔNG còn section-credits', !/id="section-credits"/.test(adminHtml));
   ok('admin.html KHÔNG còn sidebar mục celldb riêng', !/data-section="celldb"/.test(adminHtml));
   ok('admin.html KHÔNG còn section-celldb', !/id="section-celldb"/.test(adminHtml));
   ok('admin.html còn section-users', /id="section-users"/.test(adminHtml));
-  ok('admin.html còn section-cells', /id="section-cells"/.test(adminHtml));
+  ok('admin.html còn sidebar mục cells', /data-section="cells"/.test(adminHtml));
   ok('admin.html có bảng user trong section-users', /userTableBody/.test(adminHtml));
   ok('admin.html KHÔNG còn bảng điểm riêng', !/creditUsersBody/.test(adminHtml));
   ok('admin.html có checkbox credit_enabled', /id="setCreditEnabled"/.test(adminHtml));
@@ -375,8 +532,23 @@ async function main() {
   ok('admin.html có ô credit_allow_negative', /id="setCreditAllowNegative"/.test(adminHtml));
   ok('admin.html có modal credit', /id="creditModal"/.test(adminHtml));
   ok('admin.html KHÔNG còn ô điểm ban đầu khi tạo user', !/id="userFormCredit"/.test(adminHtml));
-  ok('admin.html có bảng CSDL cells gộp trong section-cells', /id="cdbBody"/.test(adminHtml));
+  ok('admin.html có bảng CSDL cells trong #sub-local', /id="sub-local"[\s\S]*?id="cdbBody"/.test(adminHtml));
   ok('admin.html có modal sửa cell', /id="cdbEditModal"/.test(adminHtml));
+  // Regression: #sub-local từng có sẵn class "active" → khi switchSection sang mục khác
+  // (users/settings/version) panel Cell ID Database vẫn hiện đè lên nội dung mới.
+  ok('chỉ #section-dashboard mang class "section active" trong HTML gốc',
+    (adminHtml.match(/class="section active"/g) || []).length === 1 &&
+    /id="section-dashboard" class="section active"/.test(adminHtml));
+  ok('#sub-local KHÔNG còn class active cứng trong HTML',
+    !/id="sub-local"[^>]*class="section active"/.test(adminHtml));
+  ok('#sub-audit KHÔNG có class active cứng',
+    !/id="sub-audit"[^>]*class="section active"/.test(adminHtml));
+  ok('#sub-sources KHÔNG có class active cứng',
+    !/id="sub-sources"[^>]*class="section active"/.test(adminHtml));
+  ok('mọi id="sub-*" đều tồn tại cho 3 mục con đã khai báo ở sidebar', (() => {
+    const subs = [...adminHtml.matchAll(/data-sub="([a-z]+)"/g)].map(m => m[1]);
+    return subs.length === 3 && subs.every(s => adminHtml.includes(`id="sub-${s}"`));
+  })());
 
   const adminSrc = fs.readFileSync(path.join(__dirname, 'public', 'admin.js'), 'utf8');
 
@@ -426,9 +598,145 @@ async function main() {
   ok('admin.js KHÔNG còn loadUsers', !/function loadUsers\(/.test(adminSrc));
   ok('loadCreditUsers đổ vào userTableBody', /function loadCreditUsers\(\)[\s\S]{0,400}userTableBody/.test(adminSrc));
   ok('switchSection users nạp cả credits', /name === 'users'\)\s*\{[^}]*loadCreditUsers\(\)[^}]*loadCreditTx\(\)/.test(adminSrc));
-  ok('switchSection cells nạp cả CSDL cells', /name === 'cells'\)\s*\{[^}]*cdbLoadMeta\(\)[^}]*cdbSearch\(\)[^}]*cdbLoadAudit\(1\)/.test(adminSrc));
+  ok('switchSection cells mở switchCellSub(\'local\')',
+    /name === 'cells'\)\s*switchCellSub\('local'\)/.test(adminSrc));
+  ok('switchCellSub local nạp cdbLoadMeta + cdbSearch',
+    /sub === 'local'\)\s*\{[^}]*cdbLoadMeta\(\)[^}]*cdbSearch\(\)/.test(adminSrc));
+  ok('switchCellSub audit nạp cdbLoadAudit',
+    /sub === 'audit'\)\s*cdbLoadAudit\(1\)/.test(adminSrc));
+  ok('switchCellSub sources nạp loadSources + loadSyncJobs',
+    /sub === 'sources'\)\s*\{[^}]*loadSources\(\)[^}]*loadSyncJobs\(\)/.test(adminSrc));
   ok('admin.js KHÔNG còn nhánh celldb riêng', !/name === 'celldb'/.test(adminSrc));
   ok('admin.js KHÔNG còn nhánh credits riêng', !/name === 'credits'/.test(adminSrc));
+
+  // Regression: switchSection từng deref thẳng .getElementById('section-'+name)
+  // .classList — nhưng nhóm 'cells' KHÔNG có #section-cells (chỉ có #sub-sources /
+  // #sub-local / #sub-audit). Click "Cell ID Database" → TypeError giữa handler →
+  // các dòng sau không chạy → không .section nào được bật → TRANG TRẮNG.
+  // Mọi truy cập phần tử theo name phải có guard null.
+  {
+    const switchSectionSrc = adminSrc.slice(adminSrc.indexOf('function switchSection'),
+      adminSrc.indexOf('function switchCellSub'));
+    ok('switchSection KHÔNG deref thẳng #section-<name> (phải guard null)',
+      !/getElementById\('section-'\s*\+\s*name\)\.classList/.test(switchSectionSrc));
+    ok('switchSection gán section có guard `if (section)`',
+      /const section = document\.getElementById\('section-' \+ name\);\s*if \(section\)/.test(switchSectionSrc));
+    ok('switchSection KHÔNG deref thẳng .sidebar-item[data-section]',
+      !/querySelector\(`\.sidebar-item\[data-section="\$\{name\}"\]`\)\.classList/.test(switchSectionSrc));
+    ok('switchSection bỏ qua cảnh báo riêng cho nhóm cha cells (không có #section-cells)',
+      /name !== 'cells'[\s\S]{0,80}console\.warn/.test(switchSectionSrc));
+  }
+  ok('admin.html KHÔNG có #section-cells (thay bằng #sub-*)',
+    !/id="section-cells"/.test(adminHtml));
+  ok('admin.html có đủ 3 panel con#sub-* thay #section-cells',
+    /id="sub-sources"/.test(adminHtml) && /id="sub-local"/.test(adminHtml) && /id="sub-audit"/.test(adminHtml));
+
+  // Quản lý dữ liệu Local: mỗi bảng 1 tab riêng (CSDL Cells / Nhập hàng loạt / CLF).
+  // Yêu cầu: 3 tab-btn + 3 tab-pane khớp data-localtab <-> id="localtab-<name>";
+  // đúng 1 pane mang `active` trong HTML gốc (tab đầu) — nếu không thì hoặc trắng
+  // hoặc đè nhau y như bug #sub-local trước đây.
+  ok('admin.html có container tab Local (#localTabs)', /id="localTabs"/.test(adminHtml));
+  ok('admin.html có 3 tab-btn Local khớp data-localtab',
+    (() => {
+      const t = [...adminHtml.matchAll(/data-localtab="([a-z]+)"/g)].map(m => m[1]);
+      return t.length === 3 && t.join(',') === 'cells,import,clf';
+    })());
+  ok('admin.html có 3 tab-pane#localtab-* khớp tab-btn',
+    (() => {
+      const subs = [...adminHtml.matchAll(/data-localtab="([a-z]+)"/g)].map(m => m[1]);
+      return subs.every(s => adminHtml.includes(`id="localtab-${s}"`))
+        && (adminHtml.match(/id="localtab-[a-z]+"/g) || []).length === 3;
+    })());
+  ok('chỉ 1 tab-pane Local mang active trong HTML gốc (tab cells)',
+    /class="tab-pane active" id="localtab-cells"/.test(adminHtml) &&
+    (adminHtml.match(/class="tab-pane active" id="localtab-/g) || []).length === 1);
+  ok('bảng CSDL Cells + bulk + CLF nằm trong 3 pane khác nhau',
+    /id="localtab-cells"[\s\S]*?id="cdbBody"/.test(adminHtml) &&
+    /id="localtab-import"[\s\S]*?id="bulkZone"/.test(adminHtml) &&
+    /id="localtab-clf"[\s\S]*?id="clfZone"/.test(adminHtml));
+  // #cdbTotal chuyển sang nhãn tab → phải còn đúng 1 node id="cdbTotal".
+  ok('id="cdbTotal" xuất hiện đúng 1 lần (nằm ở nhãn tab)',
+    (adminHtml.match(/id="cdbTotal"/g) || []).length === 1);
+  ok('admin.js có switchLocalTab', /function switchLocalTab\(name\)/.test(adminSrc));
+  ok('switchLocalTab bật pane theo id="localtab-<name>"',
+    /getElementById\('localtab-' \+ name\)/.test(adminSrc));
+  ok('switchLocalTab guard null + warn khi thiếu tab',
+    /if \(!pane\)\s*\{\s*console\.warn/.test(adminSrc));
+  ok('switchLocalTab gỡ active mọi tab-pane trong #sub-local rồi mới bật',
+    /querySelectorAll\('#sub-local \.tab-pane'\)\.forEach\(p => p\.classList\.remove\('active'\)\)/.test(adminSrc));
+  ok('switchLocalTab gỡ active mọi tab-btn trong #localTabs',
+    /querySelectorAll\('#localTabs \.tab-btn'\)/.test(adminSrc));
+  ok('switchLocalTab KHÔNG đụng sidebar (không switchSection/switchCellSub)',
+    (() => {
+      const s = adminSrc.slice(adminSrc.indexOf('function switchLocalTab'),
+        adminSrc.indexOf('function switchLocalTab') + 700);
+      return !/switchSection\(|switchCellSub\(/.test(s);
+    })());
+  ok('switchLocalTab được export lên window (onclick inline)',
+    /Object\.assign\(window,\s*\{[\s\S]*?switchLocalTab/.test(adminSrc));
+
+  // Regression: rời Cell ID Database phải bỏ tô sáng mục con, nếu không thì
+  // "Quản lý dữ liệu Local" vẫn sáng khi đang xem User Management / Phiên bản.
+  ok('switchSection gỡ active khỏi sidebar-sub-item khi rời nhóm cells',
+    /name !== 'cells'[\s\S]{0,160}sidebar-sub-item[\s\S]{0,80}remove\('active'\)/.test(adminSrc));
+  ok('switchCellSub gỡ active khỏi mọi .section trước khi bật',
+    /function switchCellSub[\s\S]{0,320}querySelectorAll\('\.section'\)[\s\S]{0,60}remove\('active'\)/.test(adminSrc));
+  ok('switchCellSub cảnh báo khi thiếu section tương ứng',
+    /if \(section\) section\.classList\.add\('active'\);\s*else console\.warn/.test(adminSrc));
+
+  // ==========================================================================
+  // Cấu hình hệ thống chia tab theo nhóm (Chung/Điểm/payOS/Quy đổi&nạp/SMTP).
+  // id field KHÔNG đổi nên loadSettings/saveSettings/collectPayosSettings vẫn
+  // đọc đúng; chỉ cần đúng 1 pane active và mọi field cũ còn nguyên.
+  console.log('\n== Cấu hình: tab nhóm ==');
+  ok('admin.html có container tab Cấu hình (#settingsTabs)', /id="settingsTabs"/.test(adminHtml));
+  ok('admin.html có 5 tab-btn khớp data-settingstab',
+    (() => {
+      const t = [...adminHtml.matchAll(/data-settingstab="([a-z]+)"/g)].map(m => m[1]);
+      return t.length === 5 && t.join(',') === 'general,credit,payos,topup,smtp';
+    })());
+  ok('admin.html có 5 tab-pane#settingstab-* khớp tab-btn',
+    (() => {
+      const subs = [...adminHtml.matchAll(/data-settingstab="([a-z]+)"/g)].map(m => m[1]);
+      return subs.every(s => adminHtml.includes(`id="settingstab-${s}"`))
+        && (adminHtml.match(/id="settingstab-[a-z]+"/g) || []).length === 5;
+    })());
+  ok('chỉ 1 tab-pane Cấu hình mang active trong HTML gốc (tab general)',
+    /class="tab-pane active" id="settingstab-general"/.test(adminHtml) &&
+    (adminHtml.match(/class="tab-pane active" id="settingstab-/g) || []).length === 1);
+  // Mỗi field phải nằm trong pane đúng nhóm (không sót ra ngoài → vẫn hiện dù
+  // pane chưa active, hoặc biến mất khi pane khác active).
+  ok('field nhóm Chung nằm trong pane general',
+    /id="settingstab-general"[\s\S]*?id="setMaxOnline"[\s\S]*?id="setRetention"[\s\S]*?\/settingstab-general/.test(adminHtml));
+  ok('field nhóm Điểm nằm trong pane credit',
+    /id="settingstab-credit"[\s\S]*?id="setCreditEnabled"[\s\S]*?id="setCreditAllowNegative"[\s\S]*?\/settingstab-credit/.test(adminHtml));
+  ok('field nhóm payOS nằm trong pane payos',
+    /id="settingstab-payos"[\s\S]*?id="setPayosEnabled"[\s\S]*?id="setPayosStatus"[\s\S]*?\/settingstab-payos/.test(adminHtml));
+  ok('field nhóm Quy đổi & nạp nằm trong pane topup',
+    /id="settingstab-topup"[\s\S]*?id="setVndPerCredit"[\s\S]*?id="setTopupMax"[\s\S]*?\/settingstab-topup/.test(adminHtml));
+  ok('field nhóm SMTP nằm trong pane smtp',
+    /id="settingstab-smtp"[\s\S]*?id="setSmtpHost"[\s\S]*?id="smtpTestTo"[\s\S]*?\/settingstab-smtp/.test(adminHtml));
+  // Nút Lưu dùng CHUNG 1 lần cho cả form → phải nằm NGOÀI mọi pane (không thì
+  // khi pane khác active nút biến mất).
+  ok('nút Lưu cấu hình nằm ngoài mọi tab-pane (sau /settingstab-smtp)',
+    /\/settingstab-smtp\s*-->[\s\S]{0,200}onclick="saveSettings\(\)"/.test(adminHtml));
+  ok('admin.js có switchSettingsTab', /function switchSettingsTab\(name\)/.test(adminSrc));
+  ok('switchSettingsTab bật pane theo id="settingstab-<name>"',
+    /getElementById\('settingstab-' \+ name\)/.test(adminSrc));
+  ok('switchSettingsTab guard null + warn khi thiếu tab',
+    /if \(!pane\)\s*\{\s*console\.warn/.test(adminSrc));
+  ok('switchSettingsTab gỡ active mọi tab-pane trong #section-settings rồi mới bật',
+    /querySelectorAll\('#section-settings \.tab-pane'\)\.forEach\(p => p\.classList\.remove\('active'\)\)/.test(adminSrc));
+  ok('switchSettingsTab gỡ active mọi tab-btn trong #settingsTabs',
+    /querySelectorAll\('#settingsTabs \.tab-btn'\)/.test(adminSrc));
+  ok('switchSettingsTab KHÔNG đụng sidebar/tab Local (không switchSection/switchCellSub/switchLocalTab)',
+    (() => {
+      const i = adminSrc.indexOf('function switchSettingsTab');
+      const s = adminSrc.slice(i, i + 800);
+      return !/switchSection\(|switchCellSub\(|switchLocalTab\(/.test(s);
+    })());
+  ok('switchSettingsTab được export lên window (onclick inline)',
+    /Object\.assign\(window,\s*\{[\s\S]*?switchSettingsTab/.test(adminSrc));
 
   // ==========================================================================
   console.log(`\n${pass} passed, ${fail} failed\n`);

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kết quả thanh toán — Cell Tracker</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #f4f6fb; --bg-card: #ffffff; --border-color: #e2e6ef;
+    --text-primary: #1c2333; --text-secondary: #5a6478; --text-faint: #98a1b5;
+    --accent: #4f7cff; --ok: #1f9e5a; --danger: #e04444; --warn: #c98a1e;
+    --bg-hover: rgba(0,0,0,0.05);
+    /* Biến navbar chung (auth.js) — thiếu là navbar rơi vào fallback màu sáng. */
+    --bg-surface: #ffffff;
+    --bg-surface2: #eef1f7;
+    --bg-btn-primary: #4f7cff;
+    --border-focus: #4f7cff;
+    --header-bg: #ffffff;
+  }
+  [data-theme="dark"] {
+    --bg-page: #14171f; --bg-card: #1c2029; --border-color: #2b3140;
+    --text-primary: #e7ebf3; --text-secondary: #a4adc0; --text-faint: #6d7689;
+    --accent: #6b93ff; --ok: #45c07d; --danger: #ff6b6b; --warn: #e0ab4a;
+    --bg-hover: rgba(255,255,255,0.07);
+    --bg-surface: #1c2029;
+    --bg-surface2: #232833;
+    --bg-btn-primary: #6b93ff;
+    --border-focus: #6b93ff;
+    --header-bg: #1c2029;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg-page); color: var(--text-primary); font-size: 14px;
+  }
+  .container { max-width: 640px; margin: 0 auto; padding: 64px 18px 60px; }
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border-color);
+    border-radius: 12px; padding: 26px 22px; text-align: center;
+  }
+  .res-icon {
+    width: 68px; height: 68px; border-radius: 50%; margin: 0 auto 14px;
+    display: flex; align-items: center; justify-content: center; font-size: 30px;
+  }
+  .res-icon.paid { background: rgba(31,158,90,.14); color: var(--ok); }
+  .res-icon.pending { background: rgba(255,170,60,.16); color: var(--warn); }
+  .res-icon.fail { background: rgba(224,68,68,.13); color: var(--danger); }
+  .res-title { font-size: 20px; font-weight: 800; margin: 0 0 6px; }
+  .res-sub { color: var(--text-secondary); font-size: 13px; line-height: 1.6; margin: 0; }
+  .rows { text-align: left; margin: 20px 0 0; border-top: 1px solid var(--border-color); }
+  .row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 2px;
+    border-bottom: 1px solid var(--border-color); font-size: 13px;
+  }
+  .row .k { color: var(--text-secondary); }
+  .row .v { margin-left: auto; font-weight: 700; text-align: right; word-break: break-all; }
+  .row .v.mono { font-family: monospace; font-weight: 600; }
+  .bal-line { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 18px; }
+  .bal-num { font-size: 30px; font-weight: 800; color: var(--ok); line-height: 1; }
+  .bal-label { color: var(--text-secondary); font-size: 12.5px; }
+  .status-badge { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 11.5px; white-space: nowrap; }
+  .status-PENDING { background: rgba(255,170,60,.16); color: var(--warn); border: 1px solid rgba(255,170,60,.4); }
+  .status-PAID { background: rgba(31,158,90,.14); color: var(--ok); border: 1px solid rgba(31,158,90,.35); }
+  .status-CANCELLED, .status-EXPIRED, .status-FAILED, .status-UNDERPAID {
+    background: rgba(224,68,68,.12); color: var(--danger); border: 1px solid rgba(224,68,68,.32);
+  }
+  .btn {
+    border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);
+    border-radius: 8px; padding: 9px 16px; font-size: 13px; cursor: pointer; font-family: inherit;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 7px;
+  }
+  .btn:hover { background: var(--bg-hover); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 22px; }
+  .muted { color: var(--text-faint); }
+  .error { color: var(--danger); }
+  #loading { color: var(--text-faint); text-align: center; padding: 40px 0; }
+  .hint { font-size: 12.5px; color: var(--text-secondary); margin-top: 12px; line-height: 1.6; }
+  @media (max-width: 480px) { .bal-num { font-size: 26px; } }
+</style>
+</head>
+<body>
+<nav class="navbar"></nav>
+<div class="container">
+  <div class="card">
+    <div id="loading"><i class="fas fa-spinner fa-spin"></i> Đang kiểm tra kết quả thanh toán…</div>
+    <div id="result" hidden>
+      <div class="res-icon" id="resIcon"><i class="fas fa-circle-notch"></i></div>
+      <h1 class="res-title" id="resTitle">—</h1>
+      <p class="res-sub" id="resSub"></p>
+
+      <div class="bal-line" id="balLine" hidden>
+        <i class="fas fa-gem" style="color:var(--ok)"></i>
+        <span class="bal-num" id="resBalance">—</span>
+        <span class="bal-label">điểm hiện có</span>
+      </div>
+
+      <div class="rows">
+        <div class="row"><span class="k">Mã đơn</span><span class="v mono" id="resOrder">—</span></div>
+        <div class="row"><span class="k">Trạng thái</span><span class="v" id="resStatus">—</span></div>
+        <div class="row"><span class="k">Số tiền</span><span class="v" id="resAmount">—</span></div>
+        <div class="row"><span class="k">Điểm nạp</span><span class="v" id="resCredits">—</span></div>
+        <div class="row" id="resTimeRow"><span class="k">Thời gian trả tiền</span><span class="v" id="resTime">—</span></div>
+      </div>
+
+      <p class="hint" id="resHint"></p>
+
+      <div class="actions">
+        <a class="btn" href="topup.html"><i class="fas fa-wallet"></i> Nạp đơn khác</a>
+        <a class="btn primary" href="credits.html"><i class="fas fa-gem"></i> Về trang điểm</a>
+        <button class="btn" id="retryBtn" hidden onclick="loadResult()"><i class="fas fa-rotate"></i> Kiểm tra lại</button>
+        <a class="btn" id="detailBtn" href="topup.html"><i class="fas fa-receipt"></i> Xem chi tiết đơn</a>
+      </div>
+    </div>
+    <div id="fatal" class="error" hidden></div>
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script src="version.js"></script>
+<script>
+// ============================================================================
+// Trang kết quả thanh toán payOS (/payment-result.html?order=<code>&status=...)
+// payOS redirect về đây sau khi khách trả tiền hoặc huỷ (returnUrl/cancelUrl).
+// Điểm CHỈ được cộng bởi webhook /api/payos/webhook (đã verify chữ ký) — trang
+// này không tự cộng, chỉ đọc trạng thái đơn và hiển thị.
+// ============================================================================
+const POLL_MS = 4000;          // nhịp kiểm tra khi đơn còn PENDING
+const POLL_TIMEOUT_MS = 90000; // ngừng tự kiểm tra sau 90s, để user bấm tay
+
+const STATUS_TEXT = {
+  PENDING: 'Chờ thanh toán', PAID: 'Đã thanh toán', CANCELLED: 'Đã huỷ',
+  EXPIRED: 'Hết hạn', UNDERPAID: 'Trả thiếu', FAILED: 'Thất bại'
+};
+
+let pollTimer = null;
+let pollDeadline = 0;
+
+function fmtVnd(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; }
+
+function fmtDate(s) {
+  if (!s) return '—';
+  const d = new Date(String(s).replace(' ', 'T') + 'Z');   // SQLite lưu UTC
+  if (isNaN(d)) return s;
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function orderCode() {
+  const c = parseInt(new URLSearchParams(location.search).get('order'), 10);
+  return Number.isFinite(c) ? c : null;
+}
+
+function cancelParam() {
+  return new URLSearchParams(location.search).get('status') === 'cancel';
+}
+
+function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+function startPoll() {
+  stopPoll();
+  pollDeadline = Date.now() + POLL_TIMEOUT_MS;
+  pollTimer = setInterval(() => {
+    if (Date.now() > pollDeadline) stopPoll();
+    else loadResult();
+  }, POLL_MS);
+}
+/** Đổ dữ liệu 1 đơn lên UI. */
+function render(o) {
+  const st = o.status || 'PENDING';
+  document.getElementById('loading').hidden = true;
+  document.getElementById('result').hidden = false;
+
+  const icon = document.getElementById('resIcon');
+  const title = document.getElementById('resTitle');
+  const sub = document.getElementById('resSub');
+  const hint = document.getElementById('resHint');
+
+  if (st === 'PAID') {
+    icon.className = 'res-icon paid';
+    icon.innerHTML = '<i class="fas fa-circle-check"></i>';
+    title.textContent = 'Thanh toán thành công';
+    sub.textContent = 'Điểm đã được cộng vào tài khoản của bạn.';
+    hint.textContent = 'Giao dịch đã ghi vào lịch sử — xem ở mục "Lịch sử giao dịch" trong trang điểm.';
+  } else if (st === 'PENDING') {
+    icon.className = 'res-icon pending';
+    icon.innerHTML = '<i class="fas fa-clock"></i>';
+    title.textContent = cancelParam() ? 'Đang kiểm tra lại đơn' : 'Đang chờ thanh toán';
+    sub.textContent = 'Hệ thống chưa nhận được xác nhận từ payOS. Trang tự kiểm tra lại mỗi 4 giây.';
+    hint.textContent = 'Nếu bạn đã chuyển khoản, đợi thêm ít phút rồi bấm "Kiểm tra lại" — đôi khi ngân hàng báo muộn.';
+  } else {
+    const isCancel = st === 'CANCELLED';
+    icon.className = 'res-icon fail';
+    icon.innerHTML = isCancel ? '<i class="fas fa-ban"></i>' : '<i class="fas fa-circle-xmark"></i>';
+    title.textContent = isCancel ? 'Đơn đã huỷ' : (st === 'EXPIRED' ? 'Đơn hết hạn' : 'Thanh toán thất bại');
+    sub.textContent = isCancel
+      ? 'Bạn (hoặc payOS) đã huỷ đơn nạp này. Chưa có khoản tiền nào bị trừ.'
+      : 'Đơn nạp không hoàn tất. Chưa có điểm nào được cộng — bạn có thể tạo đơn mới.';
+    hint.textContent = 'Quay lại trang điểm để tạo đơn nạp khác.';
+  }
+
+  document.getElementById('resOrder').textContent = '#' + o.order_code;
+  document.getElementById('resStatus').innerHTML =
+    `<span class="status-badge status-${st}">${STATUS_TEXT[st] || st}</span>`;
+  document.getElementById('resAmount').textContent = fmtVnd(o.amount_vnd);
+  document.getElementById('resCredits').textContent = (st === 'PAID' ? '+' : '') + o.credits + ' điểm';
+  document.getElementById('resTimeRow').hidden = !o.paid_at;
+  document.getElementById('resTime').textContent = fmtDate(o.paid_at);
+  document.getElementById('detailBtn').href = 'topup.html?order=' + o.order_code;
+
+  // Số dư chỉ hiện khi đã trả tiền (lúc đó webhook đã cộng).
+  document.getElementById('balLine').hidden = st !== 'PAID';
+  document.getElementById('retryBtn').hidden = st !== 'PENDING';
+
+  if (st === 'PAID') { stopPoll(); loadBalance(); }
+  else if (st === 'PENDING') { if (!pollTimer) startPoll(); }
+  else stopPoll();
+}
+
+async function loadBalance() {
+  try {
+    const r = await Auth.fetch('/api/credits/balance');
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('resBalance').textContent = d.balance;
+  } catch (e) { /* số dư là thông tin phụ, lỗi thì thôi */ }
+}
+
+async function loadResult() {
+  const code = orderCode();
+  if (code === null) {
+    document.getElementById('loading').hidden = true;
+    document.getElementById('fatal').hidden = false;
+    document.getElementById('fatal').textContent = 'Thiếu mã đơn (?order=) — không xác định được giao dịch.';
+    return;
+  }
+  try {
+    const r = await Auth.fetch('/api/credits/topup/' + code);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      // 404/403 → không phải đơn của user này hoặc đơn không tồn tại.
+      document.getElementById('loading').hidden = true;
+      document.getElementById('fatal').hidden = false;
+      document.getElementById('fatal').textContent = d.error || 'Không đọc được thông tin đơn nạp.';
+      stopPoll();
+      return;
+    }
+    document.getElementById('fatal').hidden = true;
+    render({
+      order_code: code, status: d.status, amount_vnd: d.amount_vnd, credits: d.credits,
+      paid_at: d.paid_at
+    });
+  } catch (e) {
+    document.getElementById('loading').hidden = true;
+    document.getElementById('fatal').hidden = false;
+    document.getElementById('fatal').textContent = e.message || 'Lỗi kết nối.';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof Auth !== 'undefined' && Auth.initNavbar) Auth.initNavbar();
+  if (typeof window.loadTheme === 'function') window.loadTheme();
+  if (typeof Auth === 'undefined' || !Auth.isLoggedIn()) {
+    if (typeof Auth !== 'undefined' && Auth.goLogin) Auth.goLogin();
+    else location.href = 'index.html';
+    return;
+  }
+  loadResult();
+});
+
+// Tab hiện lại → kiểm tra ngay, khỏi chờ nhịp poll kế tiếp.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && !document.getElementById('result').hidden) loadResult();
+});
+</script>
+</body>
+</html>

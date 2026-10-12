@@ -275,7 +275,7 @@ async function listAllTransactions({ userId = null, type = null, limit = 100, of
 
 /** Bảng user kèm số dư + tổng đã dùng (admin). */
 async function listUserCredits() {
-  return all(`SELECT u.id, u.username, u.role, u.status, u.created_at,
+  return all(`SELECT u.id, u.username, u.role, u.status, u.email, u.email_verified, u.created_at,
                      u.credit_balance AS balance,
                      COALESCE((SELECT SUM(-amount) FROM credit_transactions t
                                WHERE t.user_id = u.id AND t.type = 'lookup'), 0) AS used

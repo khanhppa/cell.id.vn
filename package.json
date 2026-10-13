@@ -1,6 +1,6 @@
 {
   "name": "cell-tracker",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Cell.id.vn — Cell ID Call Log and SMS Location Tracker",
   "main": "server.js",
   "scripts": {
@@ -20,6 +20,7 @@
     "multer": "^1.4.5-lts.1",
     "node-cron": "^3.0.3",
     "nodemailer": "^10.1.0",
+    "qrcode": "^1.5.4",
     "sharp": "^0.35.3",
     "sqlite3": "^5.1.7",
     "xlsx": "^0.18.5",

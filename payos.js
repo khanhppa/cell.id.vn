@@ -14,8 +14,35 @@
  */
 const db = require('./database');
 const { PayOS } = require('@payos/node');
+const QRCode = require('qrcode');
 
 const DEFAULT_BASE_URL = 'https://api-merchant.payos.vn';
+
+/**
+ * Sinh ảnh QR (data-URL PNG) từ **chuỗi VietQR** do payOS trả về.
+ *
+ * payOS KHÔNG trả URL ảnh QR — `qrCode` là chuỗi EMVCo VietQR
+ * (`00020101021238540010A000000727...`). Trình duyệt không render được chuỗi đó
+ * bằng `<img src>` nên phải tự dựng ảnh. Dùng `qrcode` (thuần JS, không native)
+ * → không phụ thuộc CDN/dịch vụ ngoài và test offline được.
+ *
+ * @param {string} qrCode chuỗi VietQR (rỗng/undefined → trả null)
+ * @returns {Promise<string|null>} `data:image/png;base64,...` hoặc null khi lỗi/rỗng
+ */
+async function buildQrImage(qrCode) {
+  const payload = (qrCode || '').trim();
+  if (!payload) return null;
+  // Chỉ nhận chuỗi VietQR. Test mode trả URL nội bộ (`/topup.html?order=..&mock=1`)
+  // thay vì chuỗi QR → cả URL tuyệt đối lẫn đường dẫn tương đối đều KHÔNG phải
+  // nội dung QR, bỏ qua (client hiện nút mở trang payOS thay thế).
+  if (/^https?:\/\//i.test(payload) || payload.startsWith('/')) return null;
+  try {
+    return await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 1, width: 320 });
+  } catch (e) {
+    // QR hỏng KHÔNG được làm hỏng việc tạo đơn — client sẽ hiện link payOS dự phòng.
+    return null;
+  }
+}
 
 // Cache client: key = fingerprint config, value = PayOS instance.
 let cachedClient = null;
@@ -174,6 +201,11 @@ async function createPaymentLink({ orderCode, amount, description, returnUrl, ca
       returnUrl,
       ...(buyerName ? { buyerName } : {})
     });
+    // payOS trả `qrCode` là CHUỖI VietQR (không phải URL ảnh) → dựng sẵn ảnh PNG
+    // để client chỉ việc nhét vào <img src>. Lỗi QR không làm hỏng việc tạo đơn.
+    if (data && typeof data === 'object') {
+      data.qrImage = await buildQrImage(data.qrCode);
+    }
     return { ok: true, data };
   } catch (e) {
     return { ok: false, reason: 'payos_error', message: mapError(e) };
@@ -274,6 +306,7 @@ module.exports = {
   getLimits,
   vndToCredits,
   buildDescription,
+  buildQrImage,
   createPaymentLink,
   getPaymentLink,
   cancelPaymentLink,

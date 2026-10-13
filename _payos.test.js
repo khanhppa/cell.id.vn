@@ -429,6 +429,20 @@ async function main() {
   const whNoAuth = await req('POST', '/api/payos/webhook', { code: '00', success: true, data: {}, signature: 'x' });
   ok('webhook gọi không token vẫn vào được (không 401)', whNoAuth.status === 200, whNoAuth.status);
 
+  // ------------------------------------------------------------------
+  console.log('\n== 13. buildQrImage: dựng ảnh QR từ chuỗi VietQR ==');
+  const qrImg = await payos.buildQrImage('00020101021238540010A000000727012400069704220110970422000000000802VNQRIB');
+  ok('chuỗi VietQR -> data-URL PNG', /^data:image\/png;base64,/.test(qrImg || ''), (qrImg || '').slice(0, 40));
+  ok('ảnh QR không rỗng (base64 dài)', (qrImg || '').length > 200, (qrImg || '').length);
+  ok('chuỗi rỗng -> null', (await payos.buildQrImage('')) === null);
+  ok('undefined -> null', (await payos.buildQrImage(undefined)) === null);
+  // Test mode trả URL thay vì chuỗi QR → KHÔNG dựng ảnh (client hiện link payOS).
+  ok('link http(s) -> null (không phải chuỗi QR)',
+    (await payos.buildQrImage('http://localhost/topup.html?order=1&mock=1')) === null);
+  // 2 chuỗi khác nhau phải cho 2 ảnh khác nhau (không hard-code 1 ảnh).
+  const qrImg2 = await payos.buildQrImage('00020101021138620010A000000727012400069704220110970422000000000802VNDQRIB9999');
+  ok('ảnh QR khác nội dung -> ảnh khác nhau', qrImg !== qrImg2 && /^data:image\/png/.test(qrImg2 || ''));
+
   console.log(`\n${pass} passed, ${fail} failed\n`);
   try { if (app && app.close) app.close(); } catch (e) {}
   try { db.close(); } catch (e) {}

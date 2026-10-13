@@ -719,6 +719,11 @@ function confirmOrderNext() {
 // ============================================================================
 // Bước 3: thanh toán (QR ngay trên trang)
 // ============================================================================
+/** Đơn có ảnh QR dùng được không (data-URL PNG server dựng từ chuỗi VietQR). */
+function hasQrImage(d) {
+  return /^data:image\//i.test((d && d.qr_image) || '');
+}
+
 function showPayCard(d) {
   activeOrder = d;
   document.getElementById('payCard').hidden = false;
@@ -730,13 +735,13 @@ function showPayCard(d) {
   document.getElementById('payDesc').textContent = d.description || '—';
   const hint = document.getElementById('payCopiedHint');
   if (hint) hint.textContent = '';
-  // payOS trả chuỗi VietQR (ảnh); test mode trả URL nội bộ → ẩn QR.
-  const isImg = /^https?:\/\//i.test(d.qr_code || '') && !/\.html(\?|$)/i.test(d.qr_code || '');
+  // Ảnh QR (data-URL PNG) do server dựng từ chuỗi VietQR — payOS KHÔNG trả URL ảnh,
+  // chỉ trả chuỗi QR thô nên không thể nhét thẳng vào <img src>.
   const qr = document.getElementById('payQr');
-  if (isImg) { qr.src = d.qr_code; qr.parentElement.hidden = false; }
+  if (hasQrImage(d)) { qr.src = d.qr_image; qr.parentElement.hidden = false; }
   else { qr.removeAttribute('src'); qr.parentElement.hidden = true; }
   // Popup QR dùng chung dữ liệu với thẻ trên trang.
-  fillPayModal(d, isImg);
+  fillPayModal(d, hasQrImage(d));
   document.getElementById('payMockBtn').hidden = !d.test_mode;
   setPayStatus('PENDING');
   closePayModal();
@@ -757,13 +762,14 @@ function fillPayModal(d, hasQr) {
   document.getElementById('payModalDesc').textContent = d.description || '—';
   const img = document.getElementById('payModalQr');
   const box = document.getElementById('payModalQrBox');
-  if (hasQr) { img.src = d.qr_code; box.hidden = false; }
+  if (hasQr) { img.src = d.qr_image; box.hidden = false; }
   else { img.removeAttribute('src'); box.hidden = true; }
-  // Không có ảnh QR (test mode) → cho khách mở trang payOS ở tab mới.
+  // Có ảnh QR → khách quét tại chỗ, KHÔNG cần link. Không có QR (test mode /
+  // payOS lỗi cấu hình) → hiện link để còn đường sang trang payOS.
   const link = document.getElementById('payModalCheckout');
   const url = d.checkout_url || '';
-  const usable = /^https?:\/\//i.test(url) && !/\.html(\?|$)/i.test(url);
-  if (usable) { link.href = url; link.hidden = false; } else { link.href = '#'; link.hidden = true; }
+  if (hasQr) { link.href = '#'; link.hidden = true; }
+  else { link.href = /^https?:\/\//i.test(url) ? url : '#'; link.hidden = false; }
   document.getElementById('payModalMsg').textContent = hasQr ? '' : 'Chưa có mã QR — nhờ admin kiểm tra cấu hình payOS.';
 }
 
@@ -1059,6 +1065,7 @@ async function resumeOrder(orderCode) {
       credits: o.credits,
       checkout_url: o.checkout_url,
       qr_code: o.qr_code,
+      qr_image: o.qr_image || '',
       account_number: o.account_number || '',
       description: o.description || '',
       expires_at: o.expires_at,

@@ -193,6 +193,10 @@ async function main() {
     c1.body && c1.body.expires_at);
   ok('trả description (nội dung CK)', !!(c1.body && c1.body.description), c1.body);
   ok('trả account_number', !!(c1.body && c1.body.account_number), c1.body);
+  // Test mode: `qrCode` là URL nội bộ (/topup.html?mock=1) chứ không phải chuỗi
+  // VietQR → server KHÔNG dựng ảnh QR (client hiện nút mở trang payOS thay thế).
+  ok('test mode: qr_image rỗng (không phải chuỗi VietQR)', c1.body && !c1.body.qr_image, c1.body && c1.body.qr_image);
+  ok('test mode: qr_code vẫn là link nội bộ', c1.body && /\/topup\.html\?order=\d+&mock=1$/.test(c1.body.qr_code || ''), c1.body && c1.body.qr_code);
   const code1 = Number(c1.body.order_code);
 
   console.log('\n== 2b. returnUrl / cancelUrl gửi cho payOS ==');
@@ -217,6 +221,7 @@ async function main() {
   ok('có expires_at', !!(g1.body && g1.body.expires_at), g1.body);
   ok('có package_label', g1.body && g1.body.package_label === 'Gói test 50k', g1.body);
   ok('amount_vnd khớp gói', g1.body && Number(g1.body.amount_vnd) === pkgAmount, g1.body);
+  ok('GET đơn PENDING: qr_image rỗng ở test mode', g1.body && !g1.body.qr_image, g1.body && g1.body.qr_image);
 
   console.log('\n== 8. cách ly đơn giữa các user ==');
   const gOther = await req('GET', `/api/credits/topup/${code1}`, undefined, otherToken);

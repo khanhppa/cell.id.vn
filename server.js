@@ -955,6 +955,9 @@ app.post('/api/credits/topup/create', requireAuth, topupUserRateLimit, async (re
       package_label: label,
       checkout_url: d.checkoutUrl,
       qr_code: d.qrCode,
+      // Ảnh QR (data-URL PNG) dựng từ chuỗi VietQR — `<img src>` không render được
+      // chuỗi QR thô của payOS (xem payos.buildQrImage).
+      qr_image: d.qrImage || null,
       account_number: d.accountNumber,
       // account_name KHÔNG trả về client: tên chủ tài khoản nhận tiền là thông tin
       // không cần thiết cho người nạp và đã bị ẩn khỏi giao diện (xem CHANGELOG).
@@ -983,6 +986,8 @@ app.get('/api/credits/topup/:orderCode', requireAuth, async (req, res) => {
       credits: order.credits, paid_at: order.paid_at, created_at: order.created_at,
       expires_at: topup.getOrderExpiry(order),
       checkout_url: order.checkout_url, qr_code: order.qr_code,
+      // Dựng lại ảnh QR từ chuỗi đã lưu (resume đơn qua ?order=) — không cần cột DB mới.
+      qr_image: await payos.buildQrImage(order.qr_code),
       description: order.description,
       package_label: order.package_id ? (await topup.getPackage(order.package_id))?.label || null : null
     });

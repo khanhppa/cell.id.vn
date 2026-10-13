@@ -47,6 +47,9 @@ function makeEl(id) {
     getAttribute(n) { return this.attrs[n] === undefined ? null : this.attrs[n]; },
     setAttribute(n, v) { this.attrs[n] = v; if (n === 'class') this.className = v; },
     removeAttribute(n) { delete this.attrs[n]; },
+    // `img.src = url` (property) phải soi được như attribute để test QR đọc lại được.
+    get src() { return this.attrs.src || ''; },
+    set src(v) { this.attrs.src = v; },
     appendChild(c) { this.children.push(c); return c; },
     addEventListener() {}, removeEventListener() {},
     scrollIntoView() {}, closest() { return makeEl('card'); }, click() {},
@@ -134,7 +137,10 @@ sandbox.Auth = {
           order_code: 4242, amount_vnd: 50000, credits: 50,
           package_label: 'Gói test 50k', description: 'NAP 4242',
           account_number: '123456',
-          checkout_url: 'https://pay.payos.vn/web/abc', qr_code: '',
+          checkout_url: 'https://pay.payos.vn/web/abc',
+          // payOS trả chuỗi VietQR, server dựng sẵn ảnh → `qr_image` là data-URL.
+          qr_code: '00020101021238540010A000000727012400069704220110970422000000000802VNQRIB',
+          qr_image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==',
           expires_at: new Date(Date.now() + 900000).toISOString(), test_mode: true
         })
       };
@@ -146,7 +152,7 @@ sandbox.fetch = sandbox.Auth.fetch;
 
 const ctx = vm.createContext(sandbox);
 vm.runInContext(
-  appJs + '\n;globalThis.__t = { createOrder, confirmOrderNext, confirmOrderBack, renderWizard, showResult, payNow, payBack, closePayModal, fillPayModal };',
+  appJs + '\n;globalThis.__t = { createOrder, confirmOrderNext, confirmOrderBack, renderWizard, showResult, showPayCard, payNow, payBack, closePayModal, fillPayModal };',
   ctx, { filename: 'topup-inline.js' }
 );
 
@@ -201,10 +207,27 @@ vm.runInContext(
   ok('vẫn hiển thị số tài khoản (#payAccNo) + nội dung CK (#payDesc)',
     byId('payAccNo').textContent === '123456' && byId('payDesc').textContent === 'NAP 4242',
     { acc: byId('payAccNo').textContent, desc: byId('payDesc').textContent });
-  ok('đơn thiếu QR → #payQrBox ẩn', byId('payQr').parentElement.hidden === true);
-  ok('đơn thiếu QR → popup ẩn QR + hiện link mở trang payOS',
-    byId('payModalQr').parentElement.hidden === true && byId('payModalMsg').textContent.length > 0,
-    { qrBox: byId('payModalQr').parentElement.hidden, msg: byId('payModalMsg').textContent });
+  ok('đơn CÓ qr_image → #payQr hiển thị đúng ảnh data-URL',
+    byId('payQr').parentElement.hidden === false
+    && /^data:image\/png;base64,/.test(byId('payQr').attrs.src || ''),
+    { hidden: byId('payQr').parentElement.hidden, src: (byId('payQr').attrs.src || '').slice(0, 32) });
+  ok('đơn CÓ qr_image → popup sẵn QR (#payModalQr), ẩn link payOS',
+    byId('payModalQr').parentElement.hidden === false
+    && /^data:image\/png;base64,/.test(byId('payModalQr').attrs.src || '')
+    && byId('payModalCheckout').hidden === true,
+    { qrBox: byId('payModalQr').parentElement.hidden, checkout: byId('payModalCheckout').hidden });
+  // Test biên: đơn không có ảnh QR (payOS trả qr_code rỗng / link lỗi / test mode)
+  // → cả thẻ #payQr lẫn popup phải ẩn QR và chuyển sang link mở trang payOS.
+  T.showPayCard({
+    order_code: 4242, amount_vnd: 50000, credits: 50, qr_image: '',
+    account_number: '123456', description: 'NAP 4242',
+    checkout_url: '/topup.html?order=4242&mock=1',
+    expires_at: new Date(Date.now() + 900000).toISOString(), test_mode: true
+  });
+  ok('đơn KHÔNG có qr_image → ẩn QR popup + hiện link mở trang payOS',
+    byId('payModalQr').parentElement.hidden === true && byId('payModalCheckout').hidden === false,
+    { qrBox: byId('payModalQr').parentElement.hidden, checkout: byId('payModalCheckout').hidden });
+  ok('đơn KHÔNG có qr_image → thẻ #payQr cũng ẩn QR', byId('payQr').parentElement.hidden === true);
   ok('tạo đơn xong popup thanh toán ĐANG ĐÓNG (chờ khách bấm Thanh toán)',
     byId('payModal').hidden === true);
   ok('bước 4 (kết quả) chưa hiện khi đơn còn PENDING', byId('wzStep4').hidden === true);

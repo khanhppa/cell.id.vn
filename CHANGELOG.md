@@ -15,6 +15,31 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
 - `smtp_pass` là secret: API admin chỉ trả bản che `••••1234`, gửi lại bản che nghĩa là
   "giữ nguyên" (không ghi đè).
 
+## [2.5.0] - 2026-10-12
+
+### Fixed
+- **Popup thanh toán hiện QR thật (trước đây QR trống)**: payOS trả `qrCode` là **chuỗi
+  EMVCo VietQR** (`0002010102...`) chứ không phải URL ảnh, nên guard cũ (`isImg`, đòi
+  `http` + không `.html`) loại nó và popup không có gì để quét. Nay server dựng ảnh PNG
+  bằng npm `qrcode` (`payos.buildQrImage()`, `{errorCorrectionLevel:'M', margin:1, width:320}`)
+  rồi trả về client qua trường mới `qr_image` (data-URL) — `POST /api/credits/topup/create`
+  lấy từ `data.qrImage`, `GET /api/credits/topup/:orderCode` dựng lại từ `qr_code` đã lưu
+  (derive-on-read, **không cần migration DB**) nên đơn khôi phục qua `?order=`/F5 vẫn có QR.
+  Client (`topup.html`) đổi sang đọc `qr_image` (`hasQrImage()` chỉ nhận `data:image/*`):
+  có ảnh → hiện QR (`#payQr`/`#payModalQr`) và ẩn link payOS; không có ảnh → ẩn QR, hiện
+  link **Mở trang thanh toán payOS**. Chuỗi rỗng, URL `http(s)`, và đường dẫn nội bộ
+  (`/topup.html?...` ở test mode) đều cho `qr_image = null`.
+- **Thêm dependency `qrcode@^1.5.4`** (thuần JS, không native) — render QR offline ở server,
+  không gọi CDN/dịch vụ ngoài (vẫn thoả test cấm nhúng `payos-checkout` qua CDN).
+
+### Tests
+- `_payos.test.js`: section **13. buildQrImage** (7 assert — chuỗi VietQR → data-URL PNG,
+  base64 > 200 ký tự, rỗng/`undefined`/link `http(s)` → `null`, 2 chuỗi khác nhau → 2 ảnh khác).
+- `_topupflow.js`: +2 assert test mode `qr_image` rỗng ở cả `create` lẫn `GET` (không dựng ảnh
+  từ link nội bộ).
+- `_creditwizard.test.js`: fixture có `qr_image` data-URL; assert `#payQr`/`#payModalQr` hiện
+  đúng ảnh + case `qr_image:''` (test mode) → ẩn QR và hiện link payOS.
+
 ## [2.4.0] - 2026-10-12
 
 ### Added

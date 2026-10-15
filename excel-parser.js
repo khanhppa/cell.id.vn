@@ -264,6 +264,80 @@ function parseWorkbook(buffer, filename) {
 }
 
 /**
+ * Gom bản ghi gọi/điện thành danh sách CELL duy nhất (dedup theo canonical key).
+ *
+ * Dùng cho popup "nạp Excel" mới: user cần xem mỗi cell một dòng kèm số dòng dữ
+ * liệu, dạng dữ liệu (RAT), khoảng thời gian... chứ không phải từng bản ghi.
+ *
+ * `canonicalKey` collapse alias short-cellid/ECI (662091 và 169495296 cùng 1 cell).
+ * `inferRadio` chỉ trả 'LTE'/'GSM'/'LTE' khi CHẮC chắn; mơ hồ → '' (UI hiện "?").
+ *
+ * @param {Array} records Bản ghi từ parseWorkbook()
+ * @param {Object} [opts] { canonicalKey: fn(cell)->string, inferRadio: fn(cellid,sector)->string }
+ * @returns {Array} Mỗi phần tử:
+ *   { key, mcc, mnc, lac, cellid, sector, radio, rowCount, firstTs, lastTs,
+ *     phones: string[], actionTypes: Object, addresses: string[] }
+ */
+function aggregateCellsFromRecords(records, opts) {
+  const o = opts || {};
+  const canonicalKey = typeof o.canonicalKey === 'function'
+    ? o.canonicalKey
+    : (c) => `${c.mcc}-${c.mnc}-${c.lac}-${c.cellid}`;
+  const inferRadioFn = o.inferRadio;
+
+  const map = new Map();
+  for (const r of (records || [])) {
+    if (!r) continue;
+    // Thiếu mcc/lac/cellid → không phải cell hợp lệ, bỏ (không dedup được).
+    if (!r.mcc || !r.lac || !r.cellid) continue;
+    const key = canonicalKey(r);
+    let cell = map.get(key);
+    if (!cell) {
+      cell = {
+        key,
+        mcc: r.mcc,
+        mnc: r.mnc,
+        lac: r.lac,
+        cellid: r.cellid,
+        sector: r.sector || '',
+        rowCount: 0,
+        firstTs: '',
+        lastTs: '',
+        phones: [],
+        actionTypes: {},
+        addresses: []
+      };
+      map.set(key, cell);
+    }
+    cell.rowCount++;
+    // Sector: giữ giá trị đầu tiên khác rỗng (log cùng cell có thể thiếu sector vài dòng).
+    if (!cell.sector && r.sector) cell.sector = r.sector;
+    const ts = String(r.timestamp || '');
+    if (ts) {
+      if (!cell.firstTs || ts < cell.firstTs) cell.firstTs = ts;
+      if (!cell.lastTs || ts > cell.lastTs) cell.lastTs = ts;
+    }
+    const phone = r.contact_number || r.phone_number || '';
+    if (phone && cell.phones.indexOf(phone) === -1 && cell.phones.length < 5) cell.phones.push(phone);
+    const act = r.action_type || '';
+    if (act) cell.actionTypes[act] = (cell.actionTypes[act] || 0) + 1;
+    const addr = String(r.cell_address || '').trim();
+    if (addr && cell.addresses.indexOf(addr) === -1 && cell.addresses.length < 2) cell.addresses.push(addr);
+  }
+
+  const cells = [...map.values()];
+  for (const c of cells) {
+    const radio = typeof inferRadioFn === 'function' ? (inferRadioFn(c.cellid, c.sector) || '') : '';
+    const confident = typeof o.radioConfident === 'function'
+      ? o.radioConfident(c.cellid, c.sector) : !!radio;
+    c.radio = confident ? radio : '';
+    c.radioConfident = !!confident;
+    if (!c.radio && radio) c.radioGuess = radio;
+  }
+  return cells;
+}
+
+/**
  * Backward-compatible wrapper: parse an Excel file path.
  * @deprecated Use parseWorkbook(buffer, filename)
  */
@@ -277,6 +351,7 @@ module.exports = {
   detectNetworkType,
   parseWorkbook,
   parseExcel,
+  aggregateCellsFromRecords,
   normalizePhone,
   parseTimestamp,
   mapActionType,

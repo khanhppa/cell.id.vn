@@ -260,6 +260,35 @@ async function main() {
   eq('listUserCredits trả số dư u1', u1row.balance, 1);
   eq('listUserCredits trả tổng đã dùng u1 = 5', u1row.used, 5);
 
+  console.log('\n== chargeLookupPartial: trừ tối đa trong khả năng ==');
+  const up1 = await makeUser('partial1');
+  await seedBalance(up1, 3);
+  const p1 = await credits.chargeLookupPartial(up1, 5, 'pbatch:1', 'tra lô 5, dư 3');
+  eq('requested = 5', p1.requested, 5);
+  eq('chỉ trừ 3 (đúng số dư)', p1.charged, 3);
+  eq('báo insufficient', p1.insufficient, true);
+  eq('số dư về 0', await credits.getBalance(up1), 0);
+  const p1tx = (await credits.listTransactions(up1)).filter(t => t.ref === 'pbatch:1');
+  eq('ghi 1 bút toán lookup', p1tx.length, 1);
+  eq('số tiền = -3', p1tx[0].amount, -3);
+
+  const p2 = await credits.chargeLookupPartial(up1, 5, 'pbatch:2', 'dư 0');
+  eq('dư 0 → charged = 0', p2.charged, 0);
+  eq('dư 0 → insufficient', p2.insufficient, true);
+  eq('không ghi bút toán khi không trừ được',
+    (await credits.listTransactions(up1)).filter(t => t.ref === 'pbatch:2').length, 0);
+
+  const up2 = await makeUser('partial2');
+  await seedBalance(up2, 10);
+  const p3 = await credits.chargeLookupPartial(up2, 4, 'pbatch:3', 'dư 10 > 4');
+  eq('dư đủ → charged = requested', p3.charged, 4);
+  eq('dư đủ → insufficient = false', p3.insufficient, false);
+  eq('số dư 10 → 6', await credits.getBalance(up2), 6);
+
+  const pDup = await credits.chargeLookupPartial(up2, 4, 'pbatch:3', 'retry');
+  eq('retry cùng ref → duplicate', pDup.duplicate, true);
+  eq('retry không trừ lại', await credits.getBalance(up2), 6);
+
   // ==========================================================================
   // PHẦN 2 — wiring server.js
   // ==========================================================================
@@ -280,7 +309,10 @@ async function main() {
   ok('resolve charge sau khi có kết quả', /chargeLookup\(userId, 1, chargeRef/.test(srvSrc));
   ok('resolve trả 402 khi hết điểm', /402/.test(srvSrc) && /Không đủ điểm/.test(srvSrc));
   ok('batch pre-check điểm trước khi tra online', /creditOn && creditCost > 0[\s\S]{0,300}insufficient/.test(srvSrc));
-  ok('batch charge theo foundCount', /chargeLookup\(userId, foundCount, batchId/.test(srvSrc));
+  ok('batch charge partial theo foundCount', /chargeLookupPartial\(userId, foundCount, chargeRef/.test(srvSrc));
+  ok('batch chargeRef tách theo vòng (roundIdx)', /const chargeRef = `\$\{batchId\}:r\$\{roundNo\}`/.test(srvSrc));
+  ok('batch đọc roundIdx từ body', /const \{ cells, uploadId, fileName, roundIdx \} = req\.body/.test(srvSrc));
+  ok('batch credit trả requested + insufficient', /requested: foundCount[\s\S]{0,120}insufficient/.test(srvSrc));
   ok('foundCount = số cell found', /const foundCount = historyItems\.filter\(h => h\.found\)\.length/.test(srvSrc));
 
   ok('register cấp signup bonus', /\/api\/register'[\s\S]{0,3000}grantSignupBonus/.test(srvSrc));
@@ -443,22 +475,36 @@ async function main() {
   ok('createOrder/createCustomOrder gán activeOrder = d rồi qua bước 2',
     (topupHtml.match(/^\s{4}activeOrder = d;/gm) || []).length === 2 &&
     (topupHtml.match(/^\s*wzGotoStep\(2\);/gm) || []).length === 3);  // 2 tạo đơn + payBack
-  ok('bước 3 có đủ 4 nút: Quay lại · Thanh toán · Hủy đơn · Đóng (+ nút test ẩn)',
+  ok('bước 3 có nút Quay lại + Huỷ đơn (dialog xác nhận), KHÔNG còn nút Thanh toán/Đóng rời',
     /id="payBackBtn"[^>]*onclick="payBack\(\)"/.test(topupHtml) &&
-    /id="payNowBtn"[^>]*onclick="payNow\(\)"/.test(topupHtml) &&
-    /id="payCancelBtn"[^>]*onclick="cancelOrder\(\)"/.test(topupHtml) &&
-    /onclick="closeTopupFlow\(\)"/.test(topupHtml) &&
+    /id="payCancelBtn"[^>]*onclick="openCancelConfirm\(\)"/.test(topupHtml) &&
+    !/id="payNowBtn"/.test(topupHtml) &&
     /id="payMockBtn" hidden/.test(topupHtml));
+  ok('dialog huỷ đơn gộp 2 lựa chọn: Đóng (giữ đơn) + Huỷ đơn',
+    /id="cancelModal"[\s\S]*?id="cancelCloseBtn"[\s\S]*?id="cancelConfirmBtn"/.test(topupHtml) &&
+    /id="cancelConfirmBtn"[^>]*onclick="cancelOrder\(\)"/.test(topupHtml) &&
+    /id="cancelCloseBtn"[^>]*onclick="closeCancelConfirm\(\)"/.test(topupHtml));
+  ok('đóng luồng nạp vẫn còn đường thoát (#payBackBtn / #cancelCloseBtn), bỏ nút Đóng riêng',
+    !/onclick="closeTopupFlow\(\)"/.test(topupHtml) || /function closeTopupFlow\(\)/.test(topupHtml));
   ok('payBack giữ đơn (KHÔNG gọi /cancel) rồi về bước 2',
     /function payBack\(\)[\s\S]{0,400}wzGotoStep\(2\)/.test(topupHtml) &&
     !/function payBack\(\)[\s\S]{0,400}\/cancel/.test(topupHtml));
-  ok('popup thanh toán có #payModal + số TK + nội dung CK + QR (#payModalQr)',
-    /id="payModal"[\s\S]*?id="payModalAccNo"[\s\S]*?id="payModalDesc"[\s\S]*?id="payModalQr"/.test(topupHtml));
-  ok('payNow mở popup; showResult đóng popup rồi về bước 4',
-    /function payNow\(\)[\s\S]{0,400}payModal'\)\.hidden = false/.test(topupHtml) ||
-    /function payNow\(\)[\s\S]{0,400}modal\.hidden = false/.test(topupHtml));
-  ok('showResult đóng popup (closePayModal) trước khi render bước 4',
-    /async function showResult\(o\)[\s\S]{0,300}closePayModal\(\)/.test(topupHtml));
+  ok('huỷ đơn dùng dialog tại chỗ, KHÔNG còn confirm() của trình duyệt',
+    !/confirm\('Huỷ đơn nạp/.test(topupHtml) &&
+    /function openCancelConfirm\(\)[\s\S]{0,400}cancelModal/.test(topupHtml));
+  ok('KHÔNG còn popup thanh toán #payModal/payNow (QR hiện sẵn ở bước 3)',
+    !/id="payModal"/.test(topupHtml) && !/function payNow\(/.test(topupHtml) &&
+    !/function fillPayModal\(/.test(topupHtml) && !/function closePayModal\(/.test(topupHtml));
+  ok('đơn không có QR → nhánh dự phòng #payFallback với link payOS (#payCheckoutLink)',
+    /id="payFallback"[\s\S]*?id="payCheckoutLink"/.test(topupHtml) &&
+    /function renderPayFallback\(/.test(topupHtml));
+  ok('bước 3 có hướng dẫn từng bước (.walkthrough) + hộp số tiền nổi bật',
+    /class="walkthrough"/.test(topupHtml) && /class="pay-amt-val" id="payAmount"/.test(topupHtml));
+  ok('bước 3 có dải tín hiệu tin cậy (.pay-trust) + dải trạng thái sống (#payLiveHint)',
+    /class="pay-trust"/.test(topupHtml) && /id="payLiveHint"/.test(topupHtml) &&
+    /<i class="fas fa-shield-halved"><\/i>/.test(topupHtml));
+  ok('showResult đóng dialog huỷ (closeCancelConfirm) trước khi render bước 4',
+    /async function showResult\(o\)[\s\S]{0,300}closeCancelConfirm\(\)/.test(topupHtml));
   ok('test_mode bật nút giả lập (#payMockBtn) ở bước 3',
     /getElementById\('payMockBtn'\)\.hidden = !d\.test_mode/.test(topupHtml));
   ok('confirmOrderBack huỷ đơn tạm rồi về bước 1',
@@ -468,6 +514,12 @@ async function main() {
     /function confirmOrderNext\(\)[\s\S]{0,400}if \(!activeOrder\)[\s\S]{0,400}showPayCard\(activeOrder\)/.test(topupHtml));
   ok('startPolling khi PAID → showResult (bước 4)',
     /d\.status === 'PAID'[\s\S]{0,400}showResult\(/.test(topupHtml));
+  ok('poll định kỳ gọi /sync đối soát payOS khi đơn còn PENDING (fallback webhook)',
+    /SYNC_EVERY/.test(topupHtml) &&
+    /payPollTicks % SYNC_EVERY === 0[\s\S]{0,60}syncOrderStatus\(/.test(topupHtml) &&
+    /function syncOrderStatus\(orderCode\)[\s\S]{0,400}\/sync', \{ method: 'POST' \}/.test(topupHtml));
+  ok('poll KHÔNG còn thoát sớm khi tab ẩn (bug: interval chết khi document.hidden)',
+    /setInterval\(async \(\) => \{\s*if \(document\.hidden\) return;/.test(topupHtml));
   ok('showResult đổ trạng thái PAID/PENDING/CANCELLED',
     /'PAID'/.test(topupHtml) && /'PENDING'/.test(topupHtml) && /'CANCELLED'/.test(topupHtml));
   ok('deep-link ?order= vào thẳng bước thanh toán; ?step= cho 1–3',

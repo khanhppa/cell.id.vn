@@ -333,7 +333,7 @@ async function runWiring() {
   // :root/[data-theme] thì navbar đứng im ở tông sáng dù trang đã sang dark.
   const NAVBAR_VARS = ['--header-bg', '--bg-surface', '--bg-surface2', '--bg-btn-primary', '--border-focus'];
   const THEMED_PAGES = ['index.html', 'admin.html', 'credits.html', 'topup.html', 'version.html',
-    'tools/port-check.html', 'tools/ebn-eci.html', 'tools/ip-tracker.html'];
+    'terms.html', 'tools/port-check.html', 'tools/ebn-eci.html', 'tools/ip-tracker.html'];
   for (const rel of THEMED_PAGES) {
     const html = read(path.join('public', rel));
     const missing = NAVBAR_VARS.filter(v => !new RegExp(v.replace(/-/g, '\\-') + '\\s*:').test(html));
@@ -351,11 +351,9 @@ async function runWiring() {
   ok('index.html: chân version #guestPanelFoot nằm ngoài mọi .tab-content',
     indexHtml.includes('id="guestPanelFoot"') &&
     !/tab-content[\s\S]*id="guestPanelFoot"[\s\S]*<\/div><!-- \/member-only -->/.test(indexHtml));
-  ok('index.html: #cellPanelVer không nằm trong khối .guest-only (hiện cả 2 chế độ)',
-    /id="guestPanelFoot"[\s\S]{0,400}id="cellPanelVer"/.test(indexHtml) &&
-    !/<div class="guest-only"[\s\S]{0,600}id="cellPanelVer"/.test(indexHtml));
-  ok('index.html: #cellPanelVer là nhãn tĩnh (không <a href>/can-link)',
-    !/<a[^>]*id="cellPanelVer"/.test(indexHtml) && !indexHtml.includes('can-link'));
+  ok('index.html: #cellPanelVer đã gỡ (không còn nhãn version ở chân panel)',
+    !indexHtml.includes('id="cellPanelVer"'));
+  ok('index.html: #cellPanelVerNote đã gỡ', !indexHtml.includes('id="cellPanelVerNote"'));
   ok('index.html: #cellPanelTrial (số lượt thử)', indexHtml.includes('id="cellPanelTrial"'));
   // Chân version phải là con của .sidebar (để nằm đáy left bar) nhưng KHÔNG
   // nằm trong .sidebar-body (vùng cuộn) — nếu không sẽ trôi theo nội dung.
@@ -406,6 +404,14 @@ async function runWiring() {
   ok('ebn-eci.html vẫn initNavbar', ebn.includes('Auth.initNavbar()'));
   const port = read(path.join('public', 'tools', 'port-check.html'));
   ok('port-check.html bỏ redirect login', !/window\.location\.href = '\/login\.html'/.test(port));
+  // Route VNTA phải CÔNG KHAI: khách mở port-check cần tải được captcha, không
+  // được bắt token (lỗi "No token provided") -> chỉ throttle bằng captchaRateLimit.
+  ok('server route VNTA captcha công khai (không requireAuth)',
+    /app\.get\('\/api\/tools\/port-check\/captcha',\s*captchaRateLimit/.test(server) &&
+    !/app\.get\('\/api\/tools\/port-check\/captcha',\s*requireAuth/.test(server));
+  ok('server route VNTA search công khai (không requireAuth)',
+    /app\.post\('\/api\/tools\/port-check\/search',\s*captchaRateLimit/.test(server) &&
+    !/app\.post\('\/api\/tools\/port-check\/search',\s*requireAuth/.test(server));
   const ip = read(path.join('public', 'tools', 'ip-tracker.html'));
   ok('ip-tracker.html YÊU CẦU đăng nhập (dùng Auth.goLogin)', /if \(!Auth\.isLoggedIn\(\)\) \{ Auth\.goLogin\(\); return; \}/.test(ip));
 

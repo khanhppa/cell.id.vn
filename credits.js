@@ -205,6 +205,47 @@ async function chargeLookup(userId, count, ref, note) {
   }
 }
 
+/**
+ * Trừ điểm cho lô tra cứu nhưng CHỈ trong khả năng số dư hiện có (partial charge).
+ * Dùng khi số cell tra được có thể vượt số dư: trừ tối đa `affordable` cell,
+ * phần còn lại báo `insufficient: true` để client thông báo user nạp thêm.
+ * @returns {{ok:boolean, charged:number, requested:number, balance:number|null,
+ *            insufficient:boolean, duplicate?:boolean, skipped?:boolean}}
+ */
+async function chargeLookupPartial(userId, maxCount, ref, note) {
+  const requested = Math.max(0, Math.floor(Number(maxCount) || 0));
+  const balance = await getBalance(userId);
+  const done = (charged, insufficient, extra) =>
+    ({ ok: true, charged, requested, balance, insufficient, ...(extra || {}) });
+
+  if (!await isEnabled()) return done(0, false, { skipped: true });
+  const cost = await getCost();
+  if (cost <= 0 || requested <= 0) return done(0, false, { skipped: true });
+
+  const allowNeg = await allowsNegative();
+  const bal = Number(balance) || 0;
+  const affordable = allowNeg ? requested : Math.min(requested, Math.floor(bal / cost));
+  if (affordable <= 0) return done(0, true);
+
+  try {
+    const res = await withTransaction(() => applyTx({
+      userId, amount: -(cost * affordable), type: TX_TYPES.LOOKUP,
+      ref: ref || null, note: note || null, allowNegative: allowNeg
+    }));
+    if (!res.ok) {
+      // Race: số dư vừa bị tiêu ở tab/tiến trình khác → không trừ được, báo thiếu điểm.
+      return done(0, true, { balance: res.balance != null ? res.balance : balance });
+    }
+    return done(affordable, affordable < requested, { balance: res.balance });
+  } catch (e) {
+    if (e.message === 'DUPLICATE_TX') {
+      // Retry cùng ref (cùng uploadId) → đã trừ ở lần trước, không trừ lại.
+      return done(0, false, { duplicate: true });
+    }
+    throw e;
+  }
+}
+
 /** Cấp điểm thưởng đăng ký. Idempotent theo ref `signup:<userId>`. */
 async function grantSignupBonus(userId, { adminId = null } = {}) {
   const bonus = await getSignupBonus();
@@ -303,6 +344,7 @@ module.exports = {
   getPublicConfig,
   getBalance,
   chargeLookup,
+  chargeLookupPartial,
   grantSignupBonus,
   topUp,
   adjust,

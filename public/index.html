@@ -88,6 +88,29 @@
     .sidebar.collapsed {
       transform: translateX(var(--sidebar-collapsed));
     }
+
+    /* Tay kéo đổi rộng panel: bám mép phải .sidebar. Icon grip báo vị trí kéo. */
+    .sidebar-resizer {
+      position: absolute; top: 0; right: 0; width: 6px; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: col-resize; z-index: 1000;
+      color: var(--text-faint); opacity: 0.35;
+      transition: opacity 0.15s, color 0.15s;
+      touch-action: none;
+    }
+    /* Vạch chỉ báo: chỉ hiện khi hover/kéo (không chiếm diện tích khi tính). */
+    .sidebar-resizer::before {
+      content: ''; position: absolute; top: 0; right: 0; width: 2px; height: 100%;
+      background: transparent; transition: background 0.15s;
+    }
+    .sidebar-resizer i { font-size: 12px; pointer-events: none; }
+    .sidebar-resizer:hover, .sidebar-resizer.dragging { opacity: 1; color: var(--border-focus); }
+    .sidebar-resizer:hover::before, .sidebar-resizer.dragging::before { background: var(--border-focus); }
+    /* Panel thu gọn thì không kéo được. */
+    .sidebar.collapsed .sidebar-resizer { display: none; }
+    /* Đang kéo: chặn bôi đen text và map nuốt pointer. */
+    body.resizing-sidebar { cursor: col-resize; user-select: none; }
+    body.resizing-sidebar #map { pointer-events: none; }
     .sidebar-toggle {
       position: fixed; top: 52px; left: var(--toggle-left, 8px);
       z-index: 1001;
@@ -369,6 +392,162 @@
     .cell-lookup-result.success { background: rgba(34,170,68,0.1); border: 1px solid rgba(34,170,68,0.3); color: #66dd88; }
     .cell-lookup-result.error { background: rgba(204,51,51,0.1); border: 1px solid rgba(204,51,51,0.3); color: #ee6666; }
 
+    /* Thanh hành động trên tab Xem rút list */
+    .cl-topbar { display: flex; gap: 6px; margin-bottom: 8px; }
+    .cl-topbar .btn { flex: 1; margin: 0; }
+
+    /* Popup nạp Excel (modal) */
+    .modal-box.cl-up { max-width: 480px; }
+    .cl-up-step[hidden] { display: none; }
+    .cl-up-net { margin-bottom: 10px; }
+    .cl-up-net label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+    .cl-up-net select {
+      width: 100%; padding: 7px 10px; border: 1px solid var(--border-color); border-radius: 6px;
+      background: var(--bg-surface2); color: var(--text-primary); font-size: 13px;
+      outline: none; transition: border-color 0.2s;
+    }
+    .cl-up-net select:focus { border-color: var(--border-focus); }
+    .cl-up-drop {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+      padding: 22px 14px; cursor: pointer; text-align: center;
+      border: 1.5px dashed var(--border-color); border-radius: 10px;
+      background: var(--bg-surface2); color: var(--text-secondary);
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .cl-up-drop:hover, .cl-up-drop.dragover {
+      border-color: var(--border-focus); background: var(--bg-hover); color: var(--text-primary);
+    }
+    .cl-up-drop > i { font-size: 26px; color: var(--accent, #3d7ce0); }
+    .cl-up-drop > b { font-size: 13px; color: var(--text-primary); }
+    .cl-up-drop-hint { font-size: 10.5px; color: var(--text-faint); }
+    .cl-up-drop input[type=file] { display: none; }
+    .cl-up-file {
+      display: flex; align-items: center; gap: 6px; font-size: 12px;
+      color: var(--text-primary); margin-bottom: 8px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cl-up-file > i { color: #22aa44; }
+    .cl-up-stats { display: flex; gap: 6px; margin-bottom: 10px; }
+    .cl-up-stat {
+      flex: 1 1 0; min-width: 0; text-align: center; padding: 8px 4px;
+      border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-surface2);
+    }
+    .cl-up-stat b { display: block; font-size: 16px; color: var(--text-primary); line-height: 1.2; }
+    .cl-up-stat span { font-size: 10px; color: var(--text-faint); }
+    .cl-up-stat.err b { color: #ee6666; }
+    .cl-up-stat.ok b { color: #22aa44; }
+    .cl-up-resolve {
+      padding: 9px 10px; border-radius: 8px; font-size: 11.5px; color: var(--text-primary);
+      border: 1px solid rgba(51,102,255,0.35); background: rgba(51,102,255,0.1);
+    }
+    .cl-up-resolve.free {
+      border-color: rgba(34,170,68,0.35); background: rgba(34,170,68,0.1);
+    }
+    .cl-up-resolve.warn {
+      border-color: rgba(255,136,0,0.4); background: rgba(255,136,0,0.1);
+    }
+    .cl-up-resolve .cl-up-warn { margin-top: 5px; color: #ff8800; }
+    .cl-up-actions { display: flex; gap: 6px; margin-top: 12px; }
+    .cl-up-actions .btn { flex: 1; margin: 0; }
+
+    /* Popup hướng dẫn. */
+    .cl-guide-list {
+      margin: 6px 0 0; padding-left: 18px;
+      font-size: 12px; line-height: 1.6; color: var(--text-secondary);
+    }
+    .cl-guide-list li { margin-bottom: 6px; }
+
+    /* Thông báo điểm sau khi tra */
+    .cl-credit-notice {
+      margin: 6px 0; padding: 8px 10px;
+      border-radius: 6px; font-size: 11px;
+      border: 1px solid rgba(255,136,0,0.4); background: rgba(255,136,0,0.1);
+      color: var(--text-primary);
+    }
+    .cl-credit-notice.ok {
+      border-color: rgba(34,170,68,0.35); background: rgba(34,170,68,0.1);
+    }
+    .cl-credit-notice a { color: inherit; text-decoration: underline; }
+
+    /* =====================================================
+       Popup full-window: bảng CELL sau khi nạp Excel
+       Nằm DƯỚI navbar → top:48px (khớp .sidebar / map controls).
+       ===================================================== */
+    .cl-fullsheet {
+      position: fixed; inset: 48px 0 0 0; z-index: 4900;
+      display: none; flex-direction: column;
+      background: var(--bg-surface); color: var(--text-primary);
+    }
+    .cl-fullsheet.show { display: flex; }
+    .cl-sheet-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; border-bottom: 1px solid var(--border-color);
+      background: var(--bg-surface2); flex: 0 0 auto;
+    }
+    .cl-sheet-title {
+      font-size: 13px; font-weight: 600; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cl-sheet-title .cl-sheet-net { font-weight: 400; color: var(--text-faint); font-size: 11.5px; }
+    .cl-sheet-head .cl-sheet-spacer { flex: 1 1 auto; }
+    .cl-sheet-body {
+      flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+      padding: 10px 12px; overflow: hidden;
+    }
+    .cl-sheet-step[hidden] { display: none; }
+    .cl-fullsheet .cl-up-drop { max-width: 520px; margin: 0 auto; }
+    .cl-sheet-meta {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      font-size: 11.5px; color: var(--text-secondary); margin-bottom: 8px; flex: 0 0 auto;
+    }
+    .cl-sheet-meta b { color: var(--text-primary); }
+    .cl-tbl-wrap {
+      flex: 1 1 auto; min-height: 0; overflow: auto;
+      border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-surface2);
+    }
+    .cl-tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    .cl-tbl thead th {
+      position: sticky; top: 0; z-index: 2;
+      background: var(--bg-surface2); border-bottom: 1px solid var(--border-color);
+      padding: 6px 7px; text-align: left; font-weight: 600; color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    .cl-tbl thead th.cl-tbl-sort { cursor: pointer; user-select: none; }
+    .cl-tbl thead th.cl-tbl-sort:hover { color: var(--text-primary); }
+    .cl-tbl thead th .cl-sort-ico { opacity: 0.35; font-size: 10px; margin-left: 3px; }
+    .cl-tbl thead th.cl-sort-asc .cl-sort-ico,
+    .cl-tbl thead th.cl-sort-desc .cl-sort-ico { opacity: 1; color: var(--accent, #3d7ce0); }
+    .cl-tbl tbody tr { border-bottom: 1px solid var(--border-color); }
+    .cl-tbl tbody tr:hover { background: var(--bg-hover); }
+    .cl-tbl tbody tr.cl-row-sel { background: rgba(51,102,255,0.08); }
+    .cl-tbl td { padding: 5px 7px; vertical-align: middle; }
+    .cl-tbl td.cl-tbl-num { text-align: right; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+    .cl-tbl td.cl-tbl-loc { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .cl-tbl td.cl-tbl-loc .cl-loc-copy { cursor: pointer; color: var(--text-faint); margin-left: 4px; }
+    .cl-tbl td.cl-tbl-loc .cl-loc-copy:hover { color: var(--text-primary); }
+    .cl-tbl .cl-tbl-addr {
+      max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      display: inline-block; vertical-align: bottom; color: var(--text-secondary);
+    }
+    .cl-tbl .cl-tbl-unknown { color: var(--text-faint); }
+    .cl-tbl-check { width: 14px; height: 14px; cursor: pointer; }
+    /* Trạng thái từng dòng */
+    .cl-row-status { white-space: nowrap; font-size: 11px; }
+    .cl-row-status.pending { color: var(--text-faint); }
+    .cl-row-status.busy { color: var(--accent, #3d7ce0); }
+    .cl-row-status.found { color: #22aa44; }
+    .cl-row-status.miss { color: #ee6666; }
+    .cl-row-status.unpaid { color: #ff8800; }
+    .cl-sheet-foot {
+      flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      padding: 8px 12px; border-top: 1px solid var(--border-color);
+      background: var(--bg-surface2);
+    }
+    .cl-sheet-foot .cl-sheet-spacer { flex: 1 1 auto; }
+    .cl-sheet-foot .cl-sheet-count { font-size: 11.5px; color: var(--text-secondary); }
+    .cl-sheet-foot .cl-sheet-count b { color: var(--text-primary); }
+    .cl-sheet-resolve { flex: 1 1 100%; }
+
     /* Lookup history */
     .hist-toolbar {
       display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px;
@@ -550,10 +729,6 @@
     /* =====================================================
        Improvements for sidebar panel
        ===================================================== */
-    /* Date/time fields */
-    .filter-datetime .form-group {
-      width: 100%;
-    }
     .form-row .form-group input,
     .form-row .form-group select { min-width: 0; }
     /* Compact buttons in subscriber tab */
@@ -565,10 +740,37 @@
        Tab Xem rút list — bộ lọc thu gọn + chip lọc hành động
        ===================================================== */
     .cl-filter-toggle {
-      display: flex; align-items: center; justify-content: center; gap: 6px;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+      flex: 0 0 auto; width: auto; margin: 0; padding: 0 10px; height: 30px; box-sizing: border-box;
       background: var(--bg-surface2); border: 1px solid var(--border-color);
-      color: var(--text-secondary); margin-bottom: 6px;
+      border-radius: 6px; font-size: 12px; cursor: pointer;
+      color: var(--text-secondary);
     }
+    /* Hàng tìm kiếm: input co giãn + nút bộ lọc (chỉ icon) ngang hàng. */
+    .cl-search-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    /* Ô tìm kiếm có icon kính lúp + nút xoá nhanh — style đầy đủ, đồng bộ .form-group input
+       (input này KHÔNG nằm trong .form-group nên phải khai báo border/background/height tại đây). */
+    .cl-search-box {
+      position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center;
+      height: 30px; border: 1px solid var(--border-color); border-radius: 6px;
+      background: var(--bg-surface2); transition: border-color 0.2s;
+    }
+    .cl-search-box:focus-within { border-color: var(--border-focus); }
+    .cl-search-box .cl-search-ico {
+      position: absolute; left: 9px; font-size: 11px; color: var(--text-muted); pointer-events: none;
+    }
+    .cl-search-box #logSearchInput {
+      flex: 1 1 auto; min-width: 0; width: 100%; height: 100%;
+      margin: 0; padding: 0 24px 0 27px;
+      border: 0; border-radius: 6px; background: transparent;
+      color: var(--text-primary); font-size: 12px; outline: none;
+    }
+    .cl-search-box #logSearchInput::placeholder { color: var(--text-faint); }
+    .cl-search-box .cl-search-clear {
+      position: absolute; right: 8px; font-size: 11px; color: var(--text-muted);
+      cursor: pointer; padding: 2px;
+    }
+    .cl-search-box .cl-search-clear:hover { color: var(--text-primary); }
     .cl-filter-toggle:hover { background: var(--bg-hover); color: var(--text-primary); }
     .cl-filter-toggle .cl-caret { margin-left: 2px; transition: transform 0.2s; font-size: 10px; }
     .cl-filter-toggle.open .cl-caret { transform: rotate(180deg); }
@@ -592,6 +794,43 @@
       background: var(--accent, #3d7ce0); border-color: var(--accent, #3d7ce0);
       color: #fff;
     }
+    .cl-chip { position: relative; }
+    /* Mũi tên nhỏ (đến/đi) góc phải chip — phân biệt SMS Đến/Đi khi base icon trùng. */
+    .cl-chip-dir {
+      position: absolute; right: 5px; bottom: 3px;
+      font-size: 7px; line-height: 1; opacity: 0.85; pointer-events: none;
+    }
+    /* Khoảng thời gian: 2 ô (từ → đến). Input date native phủ đầy ô (trong suốt) nên
+       bấm vào ô là bấm thẳng input → trình duyệt mở luôn bảng chọn ngày (không cần JS). */
+    .cl-date-range { display: flex; align-items: center; gap: 5px; margin-bottom: 8px; }
+    .cl-date-field {
+      position: relative; flex: 1 1 0; min-width: 0; height: 30px;
+      border: 1px solid var(--border-color); background: var(--bg-surface2);
+      color: var(--text-muted); border-radius: 6px; font-size: 11px;
+      transition: all 0.15s;
+    }
+    .cl-date-field:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .cl-date-field.active { border-color: var(--accent, #3d7ce0); color: var(--text-primary); }
+    .cl-date-face {
+      position: absolute; inset: 0; display: flex; align-items: center; gap: 5px;
+      padding: 0 8px; pointer-events: none;
+    }
+    .cl-date-field .cl-date-ico { flex: 0 0 auto; font-size: 12px; }
+    .cl-date-field .cl-date-label {
+      flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      text-align: left;
+    }
+    .cl-date-field .cl-date-x {
+      flex: 0 0 auto; opacity: 0.55; font-size: 11px; pointer-events: auto; cursor: pointer;
+    }
+    .cl-date-field .cl-date-x:hover { opacity: 1; }
+    /* Input native phủ khít ô, trong suốt → nhận click để mở date-picker. */
+    .cl-date-field .cl-date-native {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      opacity: 0; cursor: pointer; border: 0; padding: 0; margin: 0; background: transparent;
+      -webkit-appearance: none; appearance: none; z-index: 1;
+    }
+    .cl-date-sep { flex: 0 0 auto; color: var(--text-faint); font-size: 9px; }
     /* Dòng phiên đang xem — tên file + nút xoá cả phiên */
     .cl-cur-session {
       display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -871,75 +1110,68 @@
 
       <!-- Tab 1: Call Logs -->
       <div class="tab-content" id="tab-calllogs">
-        <div class="form-row">
-          <div class="form-group" style="flex:1.4">
-            <label>Chọn Mạng</label>
-            <select id="networkSelect">
-              <option value="auto">Tự động phát hiện</option>
-              <option value="viettel">Viettel</option>
-              <option value="mobifone">Mobifone</option>
-              <option value="vinaphone" disabled>Vinaphone (sắp ra)</option>
-            </select>
-          </div>
-          <div class="form-group" style="flex:1">
-            <label>Logs Của Tôi</label>
-            <button class="btn btn-sm btn-success btn-block file-upload-btn" style="margin:0">
-              <i class="fas fa-file-import"></i> Tải Excel
-              <input type="file" accept=".xlsx,.xls,.csv" onchange="uploadCallLogExcel(event)">
-            </button>
-          </div>
-        </div>
-
-        <div class="upload-progress" id="callLogUploadProgress">
-          <span id="callLogUploadStatus">Đang tải...</span>
-          <div class="progress-bar"><div class="progress-bar-fill" id="callLogUploadProgressFill"></div></div>
-        </div>
-
-        <div class="cell-lookup-result" id="callLogUploadResult"></div>
-
-        <div id="callSessionBanner" class="call-session-banner" style="display:none">
-          <i class="fas fa-clock-rotate-left"></i>
-          <span id="callSessionBannerText"></span>
-          <button class="btn btn-sm" id="callSessionResetBtn" onclick="resetCallSession()">
-            <i class="fas fa-trash-can"></i> <span data-i18n="calllogs.resetSession">Xoá phiên</span>
+        <!-- Thanh hành động: nạp Excel (mở popup) + hướng dẫn nhanh. -->
+        <div class="cl-topbar">
+          <button class="btn btn-sm btn-success" onclick="openClTableOverlay()">
+            <i class="fas fa-file-import"></i> <span data-i18n="calllogs.loadExcel">Load Excel</span>
+          </button>
+          <button class="btn btn-sm" onclick="openClGuideModal()" data-i18n-title="calllogs.guideBtn" title="Hướng dẫn">
+            <i class="fas fa-circle-question"></i> <span data-i18n="calllogs.guideBtn">Hướng dẫn</span>
+          </button>
+          <!-- Nút tra lại: hiện khi còn cell chưa trả phí (vd user bỏ dở để nạp điểm
+               rồi quay lại — popup xác nhận không tự mở nên cần đường bấm cố định). -->
+          <button class="btn btn-sm btn-primary" id="clResolveNowBtn" style="display:none" onclick="confirmClResolve()">
+            <i class="fas fa-satellite-dish"></i> <span data-i18n="calllogs.resolveBtn">Tra cứu ngay</span>
+            <span id="clResolveNowCount" class="cl-badge"></span>
           </button>
         </div>
-
-        <div id="callLogSummaryBar" class="call-log-summary" style="display:none"></div>
 
         <!-- Phiên đang xem: tên file + nút xoá cả phiên (luôn hiện khi có dữ liệu). -->
         <div id="clCurrentSession" class="cl-cur-session" style="display:none"></div>
 
         <div style="border-top:1px solid var(--border-color);margin:8px 0 0;padding-top:8px;flex:1;display:flex;flex-direction:column;min-height:0">
-          <div class="form-group">
-            <label data-i18n="cells.search">Tìm Kiếm</label>
-            <input type="text" id="logSearchInput" placeholder="SĐT, mạng, loại, cell..." oninput="searchCallLogs()">
+          <div class="cl-search-row">
+            <div class="cl-search-box">
+              <i class="fas fa-magnifying-glass cl-search-ico"></i>
+              <input type="text" id="logSearchInput" data-i18n-placeholder="calllogs.searchPlaceholder"
+                     placeholder="SĐT, mạng, loại, cell..." oninput="searchCallLogs()">
+              <i class="fas fa-xmark cl-search-clear hidden" id="logSearchClear"
+                 onclick="clearLogSearch()" title="Xoá"></i>
+            </div>
+            <button type="button" class="btn btn-sm cl-filter-toggle" id="clFilterToggle"
+                    onclick="toggleCallLogFilters()" aria-expanded="false" aria-controls="callLogFilterPanel"
+                    data-i18n-title="calllogs.filters" title="Bộ lọc">
+              <i class="fas fa-filter"></i>
+              <span class="cl-badge" id="clFilterBadge"></span>
+              <i class="fas fa-chevron-down cl-caret" id="clFilterCaret"></i>
+            </button>
           </div>
-
-          <!-- Bộ lọc phụ: thu gọn mặc định để danh sách có thêm chỗ. -->
-          <button type="button" class="btn btn-sm btn-block cl-filter-toggle" id="clFilterToggle"
-                  onclick="toggleCallLogFilters()" aria-expanded="false" aria-controls="callLogFilterPanel">
-            <i class="fas fa-filter"></i> <span data-i18n="calllogs.filters">Bộ lọc</span>
-            <span class="cl-badge" id="clFilterBadge"></span>
-            <i class="fas fa-chevron-down cl-caret" id="clFilterCaret"></i>
-          </button>
 
           <div id="callLogFilterPanel" class="cl-filter-panel hidden">
             <div class="cl-filter-chips" id="clActionChips">
               <button type="button" class="cl-chip active" data-action="all" data-i18n-title="filter.all" title="Tất Cả"><i class="fas fa-list"></i></button>
-              <button type="button" class="cl-chip" data-action="CALL_IN" data-i18n-title="filter.callIn" title="Gọi Đến"><i class="fas fa-phone-arrow-down-left"></i></button>
-              <button type="button" class="cl-chip" data-action="CALL_OUT" data-i18n-title="filter.callOut" title="Gọi Đi"><i class="fas fa-phone-arrow-up-right"></i></button>
-              <button type="button" class="cl-chip" data-action="SMS_IN" data-i18n-title="filter.smsIn" title="SMS Đến"><i class="fas fa-envelope-arrow-down"></i></button>
-              <button type="button" class="cl-chip" data-action="SMS_OUT" data-i18n-title="filter.smsOut" title="SMS Đi"><i class="fas fa-envelope-arrow-up"></i></button>
+              <button type="button" class="cl-chip" data-action="CALL_IN" data-i18n-title="filter.callIn" title="Gọi Đến"><i class="fas fa-phone"></i><i class="fas fa-arrow-down cl-chip-dir"></i></button>
+              <button type="button" class="cl-chip" data-action="CALL_OUT" data-i18n-title="filter.callOut" title="Gọi Đi"><i class="fas fa-phone"></i><i class="fas fa-arrow-up cl-chip-dir"></i></button>
+              <button type="button" class="cl-chip" data-action="SMS_IN" data-i18n-title="filter.smsIn" title="SMS Đến"><i class="fas fa-comment-sms"></i><i class="fas fa-arrow-down cl-chip-dir"></i></button>
+              <button type="button" class="cl-chip" data-action="SMS_OUT" data-i18n-title="filter.smsOut" title="SMS Đi"><i class="fas fa-comment-sms"></i><i class="fas fa-arrow-up cl-chip-dir"></i></button>
             </div>
-            <div class="form-row filter-datetime">
-              <div class="form-group">
-                <label data-i18n="subscribers.from">Từ</label>
-                <input type="datetime-local" id="dateFrom" onchange="applyCallLogFilters()">
+            <div class="cl-date-range">
+              <div class="cl-date-field" id="clDateFromField" data-i18n-title="calllogs.dateFrom" title="Từ ngày">
+                <input type="date" id="dateFrom" class="cl-date-native" onchange="applyCallLogFilters()">
+                <div class="cl-date-face">
+                  <i class="fas fa-calendar-days cl-date-ico"></i>
+                  <span class="cl-date-label" id="clDateFromLabel">Từ</span>
+                  <i class="fas fa-xmark cl-date-x hidden" id="clDateFromClear" onclick="clearCallLogDate('from')"></i>
+                </div>
               </div>
-              <div class="form-group">
-                <label data-i18n="subscribers.to">Đến</label>
-                <input type="datetime-local" id="dateTo" onchange="applyCallLogFilters()">
+              <i class="fas fa-arrow-right cl-date-sep"></i>
+              <div class="cl-date-field" id="clDateToField" data-i18n-title="calllogs.dateTo" title="Đến ngày">
+                <input type="date" id="dateTo" class="cl-date-native" onchange="applyCallLogFilters()">
+                <div class="cl-date-face">
+                  <i class="fas fa-calendar-days cl-date-ico"></i>
+                  <span class="cl-date-label" id="clDateToLabel">Đến</span>
+                  <i class="fas fa-xmark cl-date-x hidden" id="clDateToClear" onclick="clearCallLogDate('to')"></i>
+                </div>
               </div>
             </div>
             <div class="form-row">
@@ -951,6 +1183,9 @@
               <button class="btn btn-sm btn-block" id="playToggleBtn" onclick="playToggle()"><i class="fas fa-stop"></i> <span id="playToggleLabel" data-i18n="play.stop">Dừng lại</span></button>
               <button class="btn btn-sm" id="playNextBtn" onclick="playStep(1)"><i class="fas fa-chevron-right"></i></button>
             </div>
+            <!-- Kết quả tra cứu sau khi tra: đã trừ bao nhiêu điểm, còn bao nhiêu cell chưa tra.
+                 Nằm trong panel bộ lọc → chỉ hiện khi user mở bộ lọc. -->
+            <div id="clCreditNotice" class="cl-credit-notice" style="display:none"></div>
           </div>
 
           <div id="logRecordList" style="font-size:11px;flex:1;min-height:0;overflow-y:auto"></div>
@@ -962,7 +1197,151 @@
         </div>
       </div>
 
-      <!-- Tab 2: Cell DB -->
+      <!-- Popup nạp Excel: chọn file → tải → xác nhận tra cứu (dùng chung với luồng mở lại từ Lịch sử). -->
+      <div class="modal-overlay" id="clUploadModal">
+        <div class="modal-box cl-up">
+          <button class="modal-close" onclick="closeClUploadModal()" aria-label="Đóng">&times;</button>
+          <h2><i class="fas fa-file-import"></i> <span data-i18n="calllogs.uploadTitle">Nạp danh sách cuộc gọi</span></h2>
+
+          <!-- Bước 1: chọn file -->
+          <div id="clUpStepPick" class="cl-up-step">
+            <div class="cl-up-net">
+              <label>Chọn Mạng</label>
+              <select id="networkSelect">
+                <option value="auto">Tự động phát hiện</option>
+                <option value="viettel">Viettel</option>
+                <option value="mobifone">Mobifone</option>
+                <option value="vinaphone" disabled>Vinaphone (sắp ra)</option>
+              </select>
+            </div>
+            <label class="cl-up-drop" id="clUpDrop">
+              <i class="fas fa-cloud-arrow-up"></i>
+              <b data-i18n="calllogs.chooseFile">Chọn file Excel</b>
+              <span class="cl-up-drop-hint" data-i18n="calllogs.dropHint">Kéo thả .xlsx/.xls/.csv vào đây hoặc bấm để chọn</span>
+              <input type="file" accept=".xlsx,.xls,.csv" onchange="uploadCallLogExcel(event)">
+            </label>
+          </div>
+
+          <!-- Bước 2: đang tải -->
+          <div id="clUpStepBusy" class="cl-up-step" hidden>
+            <div class="cl-up-file"><i class="fas fa-file-excel"></i> <span id="clUpFileName"></span></div>
+            <div class="upload-progress show">
+              <span id="callLogUploadStatus">Đang tải...</span>
+              <div class="progress-bar"><div class="progress-bar-fill" id="callLogUploadProgressFill"></div></div>
+            </div>
+          </div>
+
+          <!-- Bước 3: xác nhận + cảnh báo điểm -->
+          <div id="clUpStepConfirm" class="cl-up-step" hidden>
+            <div class="cl-up-stats" id="clUpStats"></div>
+            <div class="cl-up-resolve" id="clUpResolve"></div>
+            <div class="cl-up-actions">
+              <button class="btn btn-sm btn-primary" id="clUpConfirmBtn" onclick="confirmClResolve()">
+                <i class="fas fa-satellite-dish"></i> <span data-i18n="calllogs.confirmResolve">Đồng ý tra cứu</span>
+              </button>
+              <button class="btn btn-sm" id="clUpSkipBtn" onclick="skipClResolve()">
+                <i class="fas fa-forward"></i> <span data-i18n="calllogs.closeBtn">Đóng</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Popup full-window (dưới navbar): nạp Excel → BẢNG CELL duy nhất →
+           chọn lẻ/chọn hết → Tra cứu (trừ điểm lần lượt tới hết) → marker.
+           Luồng popup cũ (#clUploadModal) giữ nguyên cho "mở lại từ Lịch sử". -->
+      <div class="cl-fullsheet" id="clTableOverlay">
+        <div class="cl-sheet-head">
+          <i class="fas fa-table-cells-large"></i>
+          <div class="cl-sheet-title" id="clSheetTitle" data-i18n="calllogs.tblTitle">Bảng cell cần tra</div>
+          <div class="cl-sheet-spacer"></div>
+          <button class="btn btn-sm" id="clSheetPickBtn" onclick="clSheetNewFile()" style="display:none">
+            <i class="fas fa-file-arrow-up"></i> <span data-i18n="calllogs.chooseFile">Chọn file Excel</span>
+          </button>
+          <button class="btn btn-sm" onclick="closeClTableOverlay()" aria-label="Đóng">
+            <i class="fas fa-xmark"></i> <span data-i18n="calllogs.closeBtn">Đóng</span>
+          </button>
+        </div>
+        <div class="cl-sheet-body">
+          <!-- Bước 1: chọn file -->
+          <div class="cl-sheet-step" id="clSheetStepPick">
+            <div class="cl-up-net">
+              <label data-i18n="calllogs.netLabel">Chọn Mạng</label>
+              <select id="clSheetNetworkSelect">
+                <option value="auto">Tự động phát hiện</option>
+                <option value="viettel">Viettel</option>
+                <option value="mobifone">Mobifone</option>
+                <option value="vinaphone" disabled>Vinaphone (sắp ra)</option>
+              </select>
+            </div>
+            <label class="cl-up-drop" id="clSheetDrop">
+              <i class="fas fa-cloud-arrow-up"></i>
+              <b data-i18n="calllogs.chooseFile">Chọn file Excel</b>
+              <span class="cl-up-drop-hint" data-i18n="calllogs.dropHint">Kéo thả .xlsx/.xls/.csv vào đây hoặc bấm để chọn</span>
+              <input type="file" accept=".xlsx,.xls,.csv" onchange="uploadCallLogAnalyze(event)">
+            </label>
+          </div>
+
+          <!-- Bước 2: đang đọc file -->
+          <div class="cl-sheet-step" id="clSheetStepBusy" hidden>
+            <div class="cl-up-file"><i class="fas fa-file-excel"></i> <span id="clSheetBusyFile"></span></div>
+            <div class="upload-progress show">
+              <span id="clSheetBusyStatus" data-i18n="calllogs.analyzing">Đang đọc file...</span>
+              <div class="progress-bar"><div class="progress-bar-fill" style="width:60%"></div></div>
+            </div>
+          </div>
+
+          <!-- Bước 3: bảng cell -->
+          <div class="cl-sheet-step" id="clSheetStepTable" hidden style="display:flex;flex-direction:column;flex:1;min-height:0">
+            <div class="cl-sheet-meta" id="clSheetMeta"></div>
+            <div class="cl-tbl-wrap">
+              <table class="cl-tbl">
+                <thead id="clTableHead"></thead>
+                <tbody id="clTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="cl-sheet-foot" id="clSheetFoot" style="display:none">
+          <label class="cl-sheet-count" style="display:flex;align-items:center;gap:5px;cursor:pointer">
+            <input type="checkbox" class="cl-tbl-check" id="clSelectAll" onchange="clSelectAll(this.checked)">
+            <span data-i18n="calllogs.selectAll">Chọn tất cả</span>
+          </label>
+          <span class="cl-sheet-count" id="clSheetCount"></span>
+          <div class="cl-sheet-spacer"></div>
+          <button class="btn btn-sm" id="clMapAllBtn" onclick="plotClTableOnMap()">
+            <i class="fas fa-map-location-dot"></i> <span data-i18n="calllogs.mapAllBtn">Hiển thị tất cả trên bản đồ</span>
+          </button>
+          <button class="btn btn-sm btn-primary" id="clResolveSelectedBtn" onclick="resolveClSelected()">
+            <i class="fas fa-satellite-dish"></i> <span data-i18n="calllogs.resolveBtn">Tra cứu</span>
+          </button>
+          <div class="cl-sheet-resolve" id="clSheetResolve"></div>
+        </div>
+      </div>
+
+
+      <!-- Popup hướng dẫn tính năng tab Xem rút list. -->
+      <div class="modal-overlay" id="clGuideModal">
+        <div class="modal-box cl-guide">
+          <button class="modal-close" onclick="closeClGuideModal()" aria-label="Đóng">&times;</button>
+          <h2><i class="fas fa-circle-question"></i> <span data-i18n="calllogs.guideTitle">Hướng dẫn Xem rút list</span></h2>
+          <ol class="cl-guide-list">
+            <li data-i18n="calllogs.guide1">Nạp file Excel/CSV danh sách cuộc gọi bằng nút Load Excel (hoặc kéo-thả file vào popup).</li>
+            <li data-i18n="calllogs.guide2">Sau khi nạp, popup hiện thống kê (Tổng/Đã chèn/Lỗi) và ước tính số cell cần tra cùng chi phí điểm.</li>
+            <li data-i18n="calllogs.guide3">Bấm Đồng ý tra cứu để bắt đầu tra. Chỉ sau khi xác nhận, kết quả tra mới hiện trên bản đồ và điểm mới bị trừ.</li>
+            <li data-i18n="calllogs.guide4">Nếu số dư không đủ tra hết, hệ thống tra tới khi hết điểm rồi dừng và hiện kết quả đã tra được; bấm Nạp điểm để tra tiếp.</li>
+            <li data-i18n="calllogs.guide5">Mở lại phiên cũ từ Lịch sử tra cứu sẽ hiển thị ngay kết quả đã tra trước đó, không trừ thêm điểm.</li>
+            <li data-i18n="calllogs.guide6">Dùng ô tìm kiếm và nút bộ lọc (loại cuộc gọi / khoảng ngày) để lọc danh sách; bấm một dòng để zoom tới cell trên bản đồ.</li>
+            <li data-i18n="calllogs.guide7">Bấm Xoá phiên ở dòng phiên đang xem để xoá toàn bộ bản ghi của lần tải.</li>
+          </ol>
+          <div class="cl-up-actions">
+            <button class="btn btn-sm btn-primary" onclick="closeClGuideModal()">
+              <i class="fas fa-check"></i> <span data-i18n="calllogs.closeBtn">Đóng</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="tab-content active" id="tab-cells">
         <!-- Khách: chỉ có tab Tra cứu + ô nhập mã cell; các tab cần đăng nhập bị ẩn. -->
         <div class="guest-only guest-block" id="guestLookupMode">
@@ -1150,14 +1529,15 @@
       </div>
 
     </div>
-    <!-- Chân left bar: số phiên bản, góc dưới-phải. Hiện ở CẢ khách lẫn
-         người dùng đã đăng nhập — không phải liên kết (chỉ là nhãn). -->
+    <!-- Chân left bar: chỉ còn số lượt thử (chỉ hiện với khách). -->
     <div class="panel-foot" id="guestPanelFoot">
       <span class="panel-foot-row">
         <span class="panel-foot-trial guest-only" id="cellPanelTrial" hidden></span>
-        <span class="panel-foot-ver" id="cellPanelVer" title="Phiên bản">v?</span>
       </span>
-      <span class="panel-foot-note" id="cellPanelVerNote"></span>
+    </div>
+    <!-- Tay kéo đổi rộng panel (mép phải). Bấm giữ và kéo ngang. -->
+    <div class="sidebar-resizer" id="sidebarResizer" title="Kéo để thay đổi độ rộng" data-i18n-title="sidebar.resize" aria-label="Kéo để thay đổi độ rộng">
+      <i class="fas fa-grip-vertical"></i>
     </div>
   </div>
 

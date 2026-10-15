@@ -71,6 +71,12 @@
   .ver-section ul { margin: 0; padding-left: 20px; }
   .ver-section li { line-height: 1.7; color: var(--text-primary); }
   .ver-section li::marker { color: var(--accent); }
+  /* Bullet con của một mục (vd các gạch đầu dòng "Thêm route ...") — không đánh
+     dấu đầu dòng lần nữa để không lẫn với mục cùng cấp. */
+  .ver-sub {
+    margin: 3px 0 6px; padding-left: 10px; border-left: 2px solid var(--border-color);
+    color: var(--text-secondary); font-size: 13px;
+  }
   .foot { margin-top: 22px; color: var(--text-faint); font-size: 12.5px; }
 </style>
 </head>

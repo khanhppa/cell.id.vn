@@ -35,6 +35,15 @@ ok('mọi heading release đúng dạng ## [x.y.z] - YYYY-MM-DD (hoặc [Unrelea
   }));
 ok('mục mới nhất khớp package.json version', changelogMd.includes(`## [${pkg.version}]`), pkg.version);
 
+console.log('\n== package-lock.json ==');
+// Version trong lockfile hay bị bỏ quên khi bump → khoá lại để không trôi.
+const lock = JSON.parse(read('package-lock.json'));
+ok('lockfile version (root) khớp package.json', lock.version === pkg.version,
+  { lock: lock.version, pkg: pkg.version });
+ok('lockfile packages[""] version khớp package.json',
+  lock.packages && lock.packages[''] && lock.packages[''].version === pkg.version,
+  lock.packages && lock.packages[''] && lock.packages[''].version);
+
 console.log('\n== version.js: parseChangelog ==');
 const version = require('./version');
 
@@ -65,6 +74,42 @@ eq('bỏ mục không có số version', parsed.map(p => p.version).includes('Kh
 eq('markdown rỗng trả []', version.parseChangelog(''), []);
 eq('null trả []', version.parseChangelog(null), []);
 
+// Dòng tiếp nối (bullet xuống dòng cho dễ đọc) phải được GỘP, không cắt cụt.
+const wrapped = [
+  '## [9.9.9] - 2026-12-31',
+  '### Fixed',
+  '- **Lỗi dài** mô tả trên nhiều dòng',
+  '  nên dòng này phải nối vào bullet trên.',
+  '  Và cả dòng này nữa.',
+  '- Mục ngắn',
+  '### Changed',
+  '- Mục có con:',
+  '  - Con 1',
+  '  - Con 2 nối',
+  '    tiếp dòng.',
+  '- Mục ngắn 2'
+].join('\n');
+const wr = version.parseChangelog(wrapped);
+eq('gộp dòng nối vào bullet (không cắt cụt)',
+  wr[0].sections[0].items[0],
+  '**Lỗi dài** mô tả trên nhiều dòng nên dòng này phải nối vào bullet trên. Và cả dòng này nữa.');
+eq('bullet ngắn không bị dính vào bullet trước', wr[0].sections[0].items[1], 'Mục ngắn');
+eq('bullet con gom vào children của bullet cha',
+  wr[0].sections[1].items[0],
+  { text: 'Mục có con:', children: ['Con 1', 'Con 2 nối tiếp dòng.'] });
+eq('bullet ngắn sau bullet có con vẫn là mục cùng cấp',
+  wr[0].sections[1].items[1], 'Mục ngắn 2');
+ok('entry thật 2.6.0 có nội dung đầy đủ (bullet Fixed > 100 ký tự, không cụt)',
+  (() => {
+    const e = version.getChangelog().find(x => x.version === '2.6.0');
+    if (!e) return false;
+    const fixed = e.sections.find(s => s.title === 'Fixed');
+    if (!fixed) return false;
+    const first = fixed.items[0];
+    const text = typeof first === 'string' ? first : first.text;
+    return text.length > 100;
+  })());
+
 console.log('\n== version.js: getInfo + cache ==');
 const info = version.getInfo();
 eq('version khớp package.json', info.version, pkg.version);
@@ -91,17 +136,50 @@ ok('/api/version GIỮ công khai (panel foot cần)',
 ok('/api/version/changelog CHỈ admin',
   /app\.get\(['"]\/api\/version\/changelog['"],\s*requireAuth,\s*requireAdmin/.test(server));
 
+console.log('\n== Chống cache changelog (2.6.2) ==');
+const versionSrc = read('version.js');
+ok('load() so mtime file nguồn (tự nạp lại khi CHANGELOG.md đổi)',
+  /loadedMtime/.test(versionSrc) && /mtimeOf/.test(versionSrc)
+  && /mtime\.changelog !== loadedMtime\.changelog/.test(versionSrc));
+ok('load() có mtimeOf() đọc statSync',
+  /function mtimeOf[\s\S]{0,120}statSync/.test(versionSrc));
+ok('express.static ép no-cache cho version.js/version.html',
+  /ALWAYS_REVALIDATE/.test(server) && /setHeaders/.test(server)
+  && /Cache-Control',\s*'no-cache'/.test(server));
+ok('ALWAYS_REVALIDATE chỉ khớp version.js / version.html',
+  (() => {
+    const m = server.match(/const ALWAYS_REVALIDATE = (\/.*?\/);/);
+    if (!m) return false;
+    const re = eval(m[1]); // eslint-disable-line no-eval
+    return re.test('D:\\app\\public\\version.js') && re.test('D:\\app\\public\\version.html')
+      && !re.test('D:\\app\\public\\admin.js') && !re.test('D:\\app\\public\\version2.html');
+  })());
+ok('cả 2 route version trả Cache-Control: no-store',
+  (server.match(/Cache-Control',\s*'no-store'/g) || []).length >= 2);
+
 console.log('\n== Wiring frontend ==');
 const vjs = read(path.join('public', 'version.js'));
 ok('public/version.js có AppVersion', /window\.AppVersion\s*=/.test(vjs));
 ok('version.js KHÔNG còn renderBadge', !vjs.includes('renderBadge'));
 ok('version.js có renderPanelVersion', vjs.includes('renderPanelVersion'));
-ok('renderPanelVersion vẽ #cellPanelVer', /renderPanelVersion[\s\S]{0,600}cellPanelVer/.test(vjs));
+ok('renderPanelVersion KHÔNG còn vẽ #cellPanelVer (đã bỏ khỏi UI)',
+  !/cellPanelVer/.test(vjs));
+ok('renderPanelVersion vẫn vẽ #cellPanelTrial (chỉ khách)',
+  /renderPanelVersion[\s\S]{0,400}cellPanelTrial/.test(vjs));
 ok('renderPanelVersion KHÔNG còn link /version.html (nhãn tĩnh)',
   !/renderPanelVersion[\s\S]{0,1400}setAttribute\('href'/.test(vjs));
-ok('renderPanelVersion đặt title "Phiên bản"', /renderPanelVersion[\s\S]{0,600}title\s*=\s*'Phiên bản'/.test(vjs));
+ok('version.js KHÔNG còn nhãn "Build"/title "Phiên bản"',
+  !/'Build ' \+/.test(vjs) && !/title\s*=\s*'Phiên bản'/.test(vjs));
 ok('version.js gọi /api/version', vjs.includes('/api/version'));
 ok('version.js gọi /api/version/changelog', vjs.includes('/api/version/changelog'));
+ok('renderChangelog gửi token qua Auth.fetch (route yêu cầu admin)',
+  /renderChangelog[\s\S]{0,1200}Auth\.fetch\('\/api\/version\/changelog'\)/.test(vjs));
+ok('fetch changelog có gắn token (Auth.fetch là đường mặc định, fetch trần chỉ là fallback)',
+  /typeof window\.Auth !== 'undefined' && window\.Auth\.fetch/.test(vjs));
+ok('renderChangelog tách lỗi HTTP khỏi "Chưa có lịch sử"',
+  /loadError\s*=\s*'HTTP '\s*\+\s*res\.status/.test(vjs)
+  && vjs.includes('Không tải được lịch sử phiên bản')
+  && vjs.includes('Chưa có lịch sử phiên bản'));
 
 const authjs = read(path.join('public', 'auth.js'));
 ok('auth.js KHÔNG còn badge version ở navbar', !authjs.includes('verBadgeCommon'));
@@ -127,7 +205,8 @@ ok('version.js fallback entry đầu khi không khớp version', /list\.slice\(0
 ok('version.js chip "Đang chạy" khi currentOnly', /currentOnly\s*\?\s*'Đang chạy'/.test(versionJs));
 
 const indexHtml = read(path.join('public', 'index.html'));
-ok('index.html có chân panel #cellPanelVer', indexHtml.includes('id="cellPanelVer"'));
+ok('index.html KHÔNG còn chân panel #cellPanelVer (đã gỡ)', !indexHtml.includes('id="cellPanelVer"'));
+ok('index.html KHÔNG còn #cellPanelVerNote (đã gỡ)', !indexHtml.includes('id="cellPanelVerNote"'));
 
 for (const page of ['index.html', path.join('tools', 'port-check.html'), path.join('tools', 'ebn-eci.html'), 'credits.html', 'topup.html', 'admin.html']) {
   ok(`${page} nạp version.js`, read(path.join('public', page)).includes('version.js'));

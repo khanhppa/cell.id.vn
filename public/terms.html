@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,39 +7,65 @@
   <script src="/auth.js"></script>
   <script src="/auth-popup.js"></script>
   <style>
+    /* Theme sáng/tối: khai báo theo đúng palette topup.html/version.html.
+       Kèm 5 biến navbar chung (auth.js) để navbar ăn theo data-theme. */
+    :root {
+      --bg-page: #f0f2f5; --bg-card: #ffffff;
+      --border-color: rgba(0,0,0,.1);
+      --text-primary: #1a1a2e; --text-secondary: #4a5165; --text-faint: #8a90a4;
+      --accent: #2563eb;
+      /* Biến navbar chung (auth.js) — thiếu thì navbar không theo dark mode. */
+      --bg-surface: var(--bg-card); --bg-surface2: rgba(0,0,0,.04);
+      --bg-hover: rgba(0,0,0,.06);
+      --bg-btn-primary: #4444cc;
+      --border-focus: #4444cc; --header-bg: var(--bg-card);
+    }
+    [data-theme="dark"] {
+      --bg-page: #14171f; --bg-card: #1c2029;
+      --border-color: #2b3140;
+      --text-primary: #e7ebf3; --text-secondary: #a4adc0; --text-faint: #6d7689;
+      --accent: #6cbdf5;
+      --bg-surface: var(--bg-card); --bg-surface2: rgba(255,255,255,.05);
+      --bg-hover: rgba(255,255,255,.09);
+      --bg-btn-primary: #4444cc;
+      --border-focus: #6666ff; --header-bg: var(--bg-card);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-      min-height: 100vh; color: #dfe3ee; padding: 28px 16px 60px;
+      background: var(--bg-page); color: var(--text-primary);
+      transition: background .3s ease, color .3s ease;
+      min-height: 100vh; padding: 28px 16px 60px;
     }
     .wrap { max-width: 780px; margin: 0 auto; }
     .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 12px; flex-wrap: wrap; }
-    .brand { font-size: 20px; font-weight: 800; color: #e8ecf7; }
+    .brand { font-size: 20px; font-weight: 800; color: var(--text-primary); }
     .top-actions { display: flex; gap: 8px; align-items: center; }
     .btn {
       display: inline-flex; align-items: center; gap: 7px; padding: 9px 15px; border-radius: 9px;
-      border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: #e8ecf7;
+      border: 1px solid var(--border-color); background: var(--bg-surface2); color: var(--text-secondary);
       cursor: pointer; font-size: 13px; font-weight: 600; text-decoration: none;
     }
-    .btn-primary { background: #0ea5e9; border-color: #0ea5e9; color: #fff; }
+    .btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .btn-primary { background: var(--bg-btn-primary); border-color: var(--bg-btn-primary); color: #fff; }
     .card {
-      background: rgba(255,255,255,.07); backdrop-filter: blur(14px);
-      border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 28px;
-      box-shadow: 0 18px 50px rgba(0,0,0,.35);
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px;
+      padding: 28px; box-shadow: 0 18px 50px rgba(0,0,0,.12);
     }
-    h1 { font-size: 23px; margin-bottom: 6px; color: #f3f6ff; }
-    .updated { font-size: 12.5px; color: #93a0bd; margin-bottom: 20px; }
-    h2 { font-size: 16px; margin: 22px 0 8px; color: #8ecdf7; }
-    p, li { font-size: 14px; line-height: 1.72; color: #ccd4e6; }
+    [data-theme="dark"] .card { box-shadow: 0 18px 50px rgba(0,0,0,.45); }
+    h1 { font-size: 23px; margin-bottom: 6px; color: var(--text-primary); }
+    .updated { font-size: 12.5px; color: var(--text-faint); margin-bottom: 20px; }
+    h2 { font-size: 16px; margin: 22px 0 8px; color: var(--accent); }
+    p, li { font-size: 14px; line-height: 1.72; color: var(--text-secondary); }
     ul { margin: 8px 0 0 20px; }
     li { margin-bottom: 5px; }
-    a { color: #6cbdf5; }
+    a { color: var(--accent); }
     .note {
       margin-top: 22px; padding: 14px 16px; border-radius: 10px;
-      background: rgba(120,180,255,.12); border: 1px dashed rgba(80,140,220,.5); font-size: 13px;
+      background: var(--bg-surface2); border: 1px dashed var(--border-color); font-size: 13px;
+      color: var(--text-secondary);
     }
-    .foot { text-align: center; margin-top: 22px; font-size: 13px; color: #93a0bd; }
+    .foot { text-align: center; margin-top: 22px; font-size: 13px; color: var(--text-faint); }
   </style>
 </head>
 <body>
@@ -48,11 +74,11 @@
       <div class="brand">Cell.id.vn</div>
       <div class="top-actions">
         <a class="btn" href="/index.html">Về trang chủ</a>
-        <a class="btn btn-primary" href="/index.html#register" onclick="if(window.AuthPopup){event.preventDefault();location.href='/index.html';setTimeout(function(){AuthPopup.open('register');},250);}">Đăng ký</a>
+        <a class="btn btn-primary" id="termsRegisterBtn" href="/index.html#register">Đăng ký</a>
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="termsCard">
       <h1>Điều khoản sử dụng</h1>
       <div class="updated">Cập nhật lần cuối: 10/10/2026</div>
 
@@ -120,5 +146,22 @@
 
     <div class="foot">© 2026 Cell.id.vn</div>
   </div>
+  <script>
+    // Áp theme sáng/tối theo localStorage 'theme' (dùng chung với app.js/auth.js).
+    // auth.js đã nạp nên loadTheme() có sẵn; vẫn có fallback để trang không lệ thuộc.
+    (function () {
+      try {
+        var saved = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', saved === 'dark' ? 'dark' : 'light');
+      } catch (e) {}
+      if (typeof window.loadTheme === 'function') window.loadTheme();
+      // Nút "Đăng ký" của trang: đang đứng ngay /terms.html thì mở popup tại chỗ
+      // (trang đã nạp auth-popup.js) thay vì nhảy sang trang chủ.
+      var reg = document.getElementById('termsRegisterBtn');
+      if (reg) reg.addEventListener('click', function (e) {
+        if (window.AuthPopup) { e.preventDefault(); AuthPopup.open('register'); }
+      });
+    })();
+  </script>
 </body>
 </html>

@@ -544,6 +544,21 @@ Auth.refreshCreditBalance = async function() {
   }
 };
 
+// Cấu hình credit công khai (enabled, cost, signup_bonus) — cache trong session,
+// dùng cho ước tính chi phí trước khi tra (không bắt buộc đăng nhập).
+Auth.getCreditConfig = async function() {
+  if (this._creditCfg !== undefined) return this._creditCfg;
+  try {
+    const res = await this.fetch('/api/credits/config');
+    if (!res.ok) { this._creditCfg = null; return null; }
+    this._creditCfg = await res.json();
+    return this._creditCfg;
+  } catch (e) {
+    this._creditCfg = null;
+    return null;
+  }
+};
+
 Auth.toggleToolsDropdownCommon = function(event) {
   event.stopPropagation();
   const dropdown = document.getElementById('toolsDropdownCommon');

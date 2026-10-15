@@ -39,50 +39,30 @@
     },
 
     /**
-     * Vẽ chân panel trái (left bar):
-     *  - `#cellPanelVer`  : số phiên bản — nhãn tĩnh, không liên kết.
-     *  - `#cellPanelVerNote`: ngày build.
-     *  - `#cellPanelTrial`: số lượt thử còn lại (chỉ hiện với khách).
+     * Vẽ chân panel trái (left bar): chỉ còn số lượt thử của khách
+     * (`#cellPanelTrial`) — số phiên bản/ngày build đã bỏ khỏi UI.
      * Idempotent — gọi lại ở mỗi lần đổi tab đều an toàn.
      */
     async renderPanelVersion() {
-      const el = document.getElementById('cellPanelVer');
-      if (!el) return;
-      const note = document.getElementById('cellPanelVerNote');
       const trial = document.getElementById('cellPanelTrial');
-
-      const cached = this.cached();
-      if (cached) el.textContent = this.label(cached);
-      if (note && cached) note.textContent = 'Build ' + (cached.buildDate || '?');
-
-      // Nhãn tĩnh: không còn liên kết tới trang lịch sử (trang đó là nội bộ,
-      // chỉ mở được từ menu Tools của admin).
-      el.title = 'Phiên bản';
-
-      const info = await this.load();
-      if (info) {
-        el.textContent = this.label(info);
-        if (note) note.textContent = 'Build ' + (info.buildDate || '?');
-      }
+      if (!trial) return;
 
       // Số lượt thử còn lại: chỉ hiện với khách (body.guest-mode).
-      if (trial) {
-        if (typeof window !== 'undefined' && window.__guestMode) {
-          try {
-            const res = await fetch('/api/guest/status');
-            if (res.ok) {
-              const s = await res.json();
-              const up = s.remaining <= 0;
-              trial.classList.toggle('exhausted', up);
-              trial.textContent = up
-                ? 'Đã hết lượt thử'
-                : `Còn ${s.remaining}/${s.max} lượt thử`;
-              trial.hidden = false;
-            }
-          } catch (e) { /* offline: ẩn, không chặn UI */ }
-        } else {
-          trial.hidden = true;
-        }
+      if (typeof window !== 'undefined' && window.__guestMode) {
+        try {
+          const res = await fetch('/api/guest/status');
+          if (res.ok) {
+            const s = await res.json();
+            const up = s.remaining <= 0;
+            trial.classList.toggle('exhausted', up);
+            trial.textContent = up
+              ? 'Đã hết lượt thử'
+              : `Còn ${s.remaining}/${s.max} lượt thử`;
+            trial.hidden = false;
+          }
+        } catch (e) { /* offline: ẩn, không chặn UI */ }
+      } else {
+        trial.hidden = true;
       }
     },
 
@@ -99,11 +79,22 @@
       const info = await this.load();
       if (!info) { el.innerHTML = '<p class="muted">Không tải được thông tin phiên bản.</p>'; return; }
 
+      // `/api/version/changelog` yêu cầu quyền admin → PHẢI gửi token. Trước đây
+      // gọi `fetch()` trần nên server trả 401, `list` rỗng và trang in nhầm
+      // "Chưa có lịch sử phiên bản" dù CHANGELOG có dữ liệu. `Auth.fetch` tự gắn
+      // `Authorization: Bearer <token>` (xem public/auth.js).
       let list = [];
+      let loadError = null;
       try {
-        const res = await fetch('/api/version/changelog');
+        const res = (typeof window.Auth !== 'undefined' && window.Auth.fetch)
+          ? await window.Auth.fetch('/api/version/changelog')
+          : await fetch('/api/version/changelog');
         if (res.ok) list = (await res.json()).changelog || [];
-      } catch (e) { /* dùng info.changelog nếu có */ }
+        else loadError = 'HTTP ' + res.status;
+      } catch (e) {
+        loadError = e && e.message ? e.message : 'network';
+      }
+      // Fallback: cache localStorage chỉ có ích khi có sẵn changelog (không thì rỗng).
       if (!list.length) list = (this.cached() || {}).changelog || [];
 
       // Chỉ phiên bản đang chạy: tìm entry khớp info.version (fallback: entry đầu tiên).
@@ -120,19 +111,37 @@
         </div>
       </div>`;
 
+      // Rỗng do LỖI (401/403/500/mạng) khác hẳn rỗng do CHANGELOG thật sự trống —
+      // nếu gộp làm một thì lỗi quyền bị che thành "Chưa có lịch sử".
+      if (!list.length && loadError) {
+        el.innerHTML = head + `<p class="muted">Không tải được lịch sử phiên bản (${loadError}).</p>`;
+        return;
+      }
       if (!list.length) { el.innerHTML = head + '<p class="muted">Chưa có lịch sử phiên bản.</p>'; return; }
 
       const chip = opts.currentOnly ? 'Đang chạy' : 'Mới nhất';
+      const esc = (s) => String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      // Bullet có thể là string (mục đơn giản) hoặc { text, children } — bullet con
+      // render thành <p> trong cùng <li> để giữ đúng nghĩa "list con" của CHANGELOG.
+      const renderItem = (it) => {
+        const text = typeof it === 'string' ? it : (it.text || '');
+        const kids = (typeof it === 'string' ? [] : (it.children || []));
+        const childHtml = kids.length
+          ? `<p class="ver-sub">${kids.map(esc).join('<br>')}</p>`
+          : '';
+        return `<li>${esc(text)}${childHtml}</li>`;
+      };
       const blocks = list.map((entry, idx) => {
         const sections = (entry.sections || []).map(sec => `
           <div class="ver-section">
-            <div class="ver-section-title">${sec.title}</div>
-            <ul>${(sec.items || []).map(i => `<li>${i}</li>`).join('')}</ul>
+            <div class="ver-section-title">${esc(sec.title)}</div>
+            <ul>${(sec.items || []).map(renderItem).join('')}</ul>
           </div>`).join('');
         return `<div class="ver-entry${idx === 0 ? ' latest' : ''}">
           <div class="ver-entry-head">
-            <span class="ver-tag">${entry.version}</span>
-            <span class="muted">${entry.date || ''}</span>
+            <span class="ver-tag">${esc(entry.version)}</span>
+            <span class="muted">${esc(entry.date || '')}</span>
             ${idx === 0 ? `<span class="ver-chip">${chip}</span>` : ''}
           </div>
           ${sections}

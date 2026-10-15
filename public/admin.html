@@ -417,6 +417,11 @@
             <div class="hint">Giới hạn số lượt tra nguồn online cho mỗi lần xử lý batch. Đặt 0 để tắt tra online. Đặt bất kỳ số nào (không trần).</div>
           </div>
           <div class="form-group">
+            <label>Số cell tối đa mỗi request Google (max_google_per_batch)</label>
+            <input type="number" id="setGoogleMax" min="1" placeholder="10">
+            <div class="hint">Nguồn Google Geolocation trả 1 toạ độ cho CẢ NHÓM cell, nên chỉ gom tối đa bấy nhiêu cell miss vào 1 request — nhóm càng lớn càng dễ trộn cell của nhiều vị trí khác nhau. Google tính phí theo request, đặt nhỏ để tiết kiệm.</div>
+          </div>
+          <div class="form-group">
             <label>Số ngày lưu lịch sử tra cứu (lookup_history_retention_days)</label>
             <input type="number" id="setRetention" min="1" placeholder="90">
             <div class="hint">Lịch sử tra cứu cũ hơn số ngày này sẽ tự động bị xóa (job chạy 03:30 mỗi ngày).</div>
@@ -865,6 +870,7 @@
                 <option value="opencellid">OpenCellID.org</option>
                 <option value="opencellid_web">OpenCellID (web, không cần key)</option>
                 <option value="t0stbrot">t0stbrot.net</option>
+                <option value="google">Google Geolocation (cần key, tốn phí)</option>
                 <option value="combain">Combain.com</option>
               </select>
             </div>
@@ -886,8 +892,8 @@
           <h4>Danh sách nguồn</h4>
           <p class="muted-text" style="font-size:12px">Tra cứu luôn thử CSDL nội bộ (Local) trước. Sau đó chạy lần lượt các nguồn Online theo thứ tự ưu tiên (từ trên xuống), dừng lại ngay khi tìm thấy. Dùng nút ▲▼ để sắp xếp.</p>
           <table>
-            <thead><tr><th>ID</th><th>Ưu tiên</th><th>Tên</th><th>Loại</th><th>Trạng thái</th><th>Actions</th></tr></thead>
-            <tbody id="sourceTableBody"><tr><td colspan="6" class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr></tbody>
+            <thead><tr><th>ID</th><th>Ưu tiên</th><th>Tên</th><th>Loại</th><th>Trạng thái</th><th>Lỗi gần nhất</th><th>Actions</th></tr></thead>
+            <tbody id="sourceTableBody"><tr><td colspan="7" class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr></tbody>
           </table>
         </div>
 

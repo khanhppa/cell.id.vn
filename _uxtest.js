@@ -95,7 +95,7 @@ ok('reset ô tìm kiếm logSearchInput', /logSearchInput[\s\S]{0,80}value = ''/
 ok('openCallLogsFromHistory KHÔNG ghi sessionStorage', !/sessionStorage/.test(ocBody));
 ok('histOpenOnMap batch KHÔNG còn gọi histOpenBatchOnMap', !/function histOpenOnMap[\s\S]{0,900}histOpenBatchOnMap\(r\.batch_id\)/.test(appSrc));
 ok('histOpenOnMap batch gọi openCallLogsFromHistory', /function histOpenOnMap[\s\S]{0,1200}openCallLogsFromHistory\(/.test(appSrc));
-ok('resolveUnmatchedCells bỏ qua row _fromHistory (không tiêu credit)', /r\._fromHistory\)\s*continue/.test(fnBody('resolveUnmatchedCells')));
+ok('countResolveNeeded bỏ qua row _fromHistory (không tiêu credit)', /r\._fromHistory\)\s*continue/.test(fnBody('countResolveNeeded')));
 ok('renderCallLogs ẩn nút xoá với bản ghi từ lịch sử', /l\._fromHistory\s*\?\s*''/.test(renderBody));
 
 console.log('\n== 5. Phiên rút list (upload Excel) — xoá / xem lại ==');
@@ -134,6 +134,15 @@ ok('KHÔNG còn getElementById actionFilter trong app.js', !/getElementById\('ac
 ok('có hàm setClActionFilter', /function setClActionFilter\(action, chipEl\)/.test(appSrc));
 ok('có hàm updateClFilterBadge', /function updateClFilterBadge\(\)/.test(appSrc));
 ok('bắt click chip qua delegation #clActionChips', /closest\('#clActionChips \.cl-chip'\)/.test(appSrc));
+ok('chip SMS dùng icon free fa-comment-sms (không còn Pro-only)', /data-action="SMS_IN"[\s\S]{0,160}fa-comment-sms/.test(htmlSrc) && /data-action="SMS_OUT"[\s\S]{0,160}fa-comment-sms/.test(htmlSrc));
+ok('KHÔNG còn icon Pro fa-envelope-arrow-* trong index.html', !/fa-envelope-arrow-(down|up)/.test(htmlSrc));
+ok('chip SMS có mũi tên đến/đi (.cl-chip-dir + fa-arrow-down/up)', /fa-arrow-down cl-chip-dir/.test(htmlSrc) && /fa-arrow-up cl-chip-dir/.test(htmlSrc));
+ok('chip gọi đến/đi dùng fa-phone + mũi tên (không còn Pro-only)', /data-action="CALL_IN"[\s\S]{0,160}fa-phone"[\s\S]{0,120}fa-arrow-down cl-chip-dir/.test(htmlSrc) && /data-action="CALL_OUT"[\s\S]{0,160}fa-phone"[\s\S]{0,120}fa-arrow-up cl-chip-dir/.test(htmlSrc));
+ok('KHÔNG còn icon Pro fa-phone-arrow-* trong index.html', !/fa-phone-arrow-(down-left|up-right)/.test(htmlSrc));
+ok('có hàm clearCallLogDate xoá 1 đầu khoảng', /function clearCallLogDate\(which\)/.test(appSrc));
+ok('có hàm syncClDateButtons', /function syncClDateButtons\(\)/.test(appSrc));
+ok('applyCallLogFilters gọi syncClDateButtons', /syncClDateButtons\(\)/.test(fnBody('applyCallLogFilters')));
+ok('dateTo so sánh trọn ngày cuối (<= 23:59:59)', /23:59:59/.test(fnBody('getFilteredLogs')));
 
 console.log('\n== 6. Draw layer persist (created/edited/deleted) ==');
 ok('drawnItems và logShapeGroup là 2 group riêng', /const logShapeGroup = new L\.FeatureGroup\(\)/.test(appSrc));
@@ -162,9 +171,26 @@ ok("có key 'calllogs.deleteThisSession' (vi+en)", (appSrc.match(/'calllogs\.del
 ok('có hàm fmtTpl nội suy {n}', /function fmtTpl\(key, vars\)/.test(appSrc));
 
 console.log('\n== UI (index.html) ==');
-ok('có banner phiên #callSessionBanner', /id="callSessionBanner"/.test(htmlSrc));
-ok('banner có nút Xoá phiên gọi resetCallSession', /onclick="resetCallSession\(\)"/.test(htmlSrc));
-ok('có thanh tổng kết #callLogSummaryBar', /id="callLogSummaryBar"/.test(htmlSrc));
+ok('KHÔNG còn banner phiên #callSessionBanner (gộp vào #clCurrentSession)', !/id="callSessionBanner"/.test(htmlSrc));
+ok('KHÔNG còn nút topbar gọi resetCallSession (đã gỡ khỏi HTML)',
+  !/onclick="resetCallSession\(\)"/.test(htmlSrc));
+ok('vẫn còn hàm resetCallSession (dùng lại được)',
+  /async function resetCallSession/.test(appSrc));
+ok('topbar KHÔNG còn nút mở tab Lịch sử tra cứu',
+  !/cl-topbar[\s\S]{0,600}switchTab\('lookuphistory'\)/.test(htmlSrc));
+ok('topbar có nút Hướng dẫn mở #clGuideModal',
+  /cl-topbar[\s\S]{0,600}onclick="openClGuideModal\(\)"/.test(htmlSrc));
+ok('có popup #clGuideModal (modal-overlay)', /<div class="modal-overlay" id="clGuideModal">/.test(htmlSrc));
+ok('có hàm openClGuideModal/closeClGuideModal',
+  /function openClGuideModal\(\)[\s\S]{0,160}classList\.add\('show'\)/.test(appSrc) &&
+  /function closeClGuideModal\(\)[\s\S]{0,160}classList\.remove\('show'\)/.test(appSrc));
+ok('search row: .cl-search-row chứa #logSearchInput + #clFilterToggle',
+  /class="cl-search-row"[\s\S]{0,600}id="logSearchInput"/.test(htmlSrc) &&
+  /class="cl-search-row"[\s\S]{0,900}id="clFilterToggle"/.test(htmlSrc));
+ok('tab calllogs KHÔNG còn nhãn cells.search',
+  !/id="tab-calllogs"[\s\S]{0,600}data-i18n="cells\.search"/.test(htmlSrc));
+ok('CSS có .cl-search-row', /\.cl-search-row\s*\{/.test(htmlSrc));
+ok('KHÔNG còn thanh tổng kết #callLogSummaryBar', !/id="callLogSummaryBar"/.test(htmlSrc));
 ok('CSS có @keyframes cellPulse', /@keyframes cellPulse/.test(htmlSrc));
 ok('CSS có .cell-hl-ring', /\.cell-hl-ring\s*\{/.test(htmlSrc));
 ok('CSS có .call-session-banner', /\.call-session-banner\s*\{/.test(htmlSrc));
@@ -176,6 +202,12 @@ ok('có panel bộ lọc #callLogFilterPanel', /id="callLogFilterPanel"/.test(ht
 ok('panel bộ lọc mặc định ẩn (class hidden)', /id="callLogFilterPanel" class="cl-filter-panel hidden"/.test(htmlSrc));
 ok('có nút toggle bộ lọc #clFilterToggle', /id="clFilterToggle"/.test(htmlSrc));
 ok('có dãy chip lọc #clActionChips', /id="clActionChips"/.test(htmlSrc));
+ok('có ô ngày from/to #clDateFromField/#clDateToField', /id="clDateFromField"/.test(htmlSrc) && /id="clDateToField"/.test(htmlSrc));
+ok('giữ input #dateFrom/#dateTo (phủ trong suốt, type=date)', /id="dateFrom"[^>]*class="cl-date-native"/.test(htmlSrc) && /id="dateTo"[^>]*class="cl-date-native"/.test(htmlSrc));
+ok('input date nằm trong .cl-date-field để nhận click mở picker', /<div class="cl-date-field"[\s\S]{0,200}id="dateFrom"/.test(htmlSrc) && /<div class="cl-date-field"[\s\S]{0,200}id="dateTo"/.test(htmlSrc));
+ok('KHÔNG còn input datetime-local trong index.html', !/type="datetime-local"/.test(htmlSrc));
+ok('CSS có .cl-date-range/.cl-date-field/.cl-date-native/.cl-chip-dir', /\.cl-date-range\s*\{/.test(htmlSrc) && /\.cl-date-field\s*\{/.test(htmlSrc) && /\.cl-date-native\s*\{/.test(htmlSrc) && /\.cl-chip-dir\s*\{/.test(htmlSrc));
+ok("i18n calllogs.dateFrom/dateTo (vi+en)", (appSrc.match(/'calllogs\.dateFrom'/g) || []).length >= 2 && (appSrc.match(/'calllogs\.dateTo'/g) || []).length >= 2);
 ok('chip lọc có đủ 5 loại hành động', ['all','CALL_IN','CALL_OUT','SMS_IN','SMS_OUT'].every(a => htmlSrc.includes('data-action="' + a + '"')));
 ok('KHÔNG còn <select id="actionFilter">', !/id="actionFilter"/.test(htmlSrc));
 ok('có dòng phiên đang xem #clCurrentSession', /id="clCurrentSession"/.test(htmlSrc));
@@ -190,7 +222,547 @@ ok('ArrowLeft -> playStep(-1)', /ArrowLeft'[\s\S]{0,60}playStep\(-1\)/.test(appS
 ok('ArrowRight -> playStep(1)', /ArrowRight'[\s\S]{0,60}playStep\(1\)/.test(appSrc));
 ok('Space -> playToggle', /e\.code === 'Space'[\s\S]{0,60}playToggle\(\)/.test(appSrc));
 ok('bỏ qua khi focus vào input/select/textarea', /tag === 'input' \|\| tag === 'select' \|\| tag === 'textarea'/.test(appSrc));
+
+console.log('\n== Popup nạp Excel (modal) ==');
+ok('KHÔNG còn <details id="clUploadTools"> trong index.html', !/<details id="clUploadTools"/.test(htmlSrc));
+ok('có popup #clUploadModal (modal-overlay)', /<div class="modal-overlay" id="clUploadModal">/.test(htmlSrc));
+ok('popup có 3 bước pick/busy/confirm', /id="clUpStepPick"/.test(htmlSrc) &&
+  /id="clUpStepBusy"/.test(htmlSrc) && /id="clUpStepConfirm"/.test(htmlSrc));
+ok('bước pick có dropzone + input file', /id="clUpDrop"[\s\S]{0,600}<input type="file"/.test(htmlSrc));
+ok('bước confirm có #clUpStats + #clUpResolve + nút confirmClResolve',
+  /id="clUpStats"/.test(htmlSrc) && /id="clUpResolve"/.test(htmlSrc) &&
+  /onclick="confirmClResolve\(\)"/.test(htmlSrc));
+ok('CSS có .cl-topbar / .cl-up-drop / .cl-up-stat / .cl-up-resolve',
+  /\.cl-topbar\s*\{/.test(htmlSrc) && /\.cl-up-drop\s*\{/.test(htmlSrc) &&
+  /\.cl-up-stat\s*\{/.test(htmlSrc) && /\.cl-up-resolve\s*\{/.test(htmlSrc));
+ok('CSS KHÔNG còn .cl-tools / .cl-prompt', !/\.cl-tools\s*\{/.test(htmlSrc) && !/\.cl-prompt\s*\{/.test(htmlSrc));
+ok('tab-calllogs có thanh hành động mở overlay bảng cell + giữ popup cũ cho luồng Lịch sử',
+  /id="tab-calllogs"[\s\S]{0,900}onclick="openClTableOverlay\(\)"/.test(htmlSrc) &&
+  /function openClUploadModal\(\)/.test(appSrc) && /function closeClUploadModal\(\)/.test(appSrc));
+ok('có hàm openClUploadModal mở modal (.show)', /function openClUploadModal\(\)[\s\S]{0,160}classList\.add\('show'\)/.test(appSrc));
+ok('có hàm closeClUploadModal đóng modal', /function closeClUploadModal\(\)[\s\S]{0,160}classList\.remove\('show'\)/.test(appSrc));
+ok('có hàm setClUpStep chuyển 3 bước', /function setClUpStep\(name\)[\s\S]{0,400}clUpStepConfirm/.test(appSrc));
+ok('có hàm confirmClResolve tra sau khi đóng popup',
+  /function confirmClResolve\(\)[\s\S]{0,200}resolveUnmatchedCells\(\)/.test(appSrc));
+ok('có hàm skipClResolve đóng popup không tra',
+  /function skipClResolve\(\)[\s\S]{0,160}closeClUploadModal\(\)/.test(appSrc));
+ok('renderClConfirm dùng countResolveNeeded + Auth.getCreditConfig',
+  /countResolveNeeded\(\)/.test(fnBody('renderClConfirm')) && /Auth\.getCreditConfig\(\)/.test(fnBody('renderClConfirm')));
+ok('renderClConfirm ẩn nút khi không có cell cần tra (n === 0)',
+  /n === 0[\s\S]{0,300}confirmBtn\.style\.display = 'none'/.test(fnBody('renderClConfirm')));
+ok('renderClConfirm disable nút khi không đủ điểm', /confirmBtn\.disabled = !enough/.test(fnBody('renderClConfirm')));
+ok('uploadCallLogExcel gọi loadCallLogs({ prompt: false }) rồi renderClConfirm',
+  /loadCallLogs\(\{ prompt: false \}\)/.test(fnBody('uploadCallLogExcel')) &&
+  /renderClConfirm\(/.test(fnBody('uploadCallLogExcel')));
+ok('empty-state chỉ còn hint (bỏ nút Load Excel + Hướng dẫn)',
+  !/openClUploadModal\(\)/.test(fnBody('renderCallLogs')) &&
+  !/openClGuideModal\(\)/.test(fnBody('renderCallLogs')) &&
+  /calllogs\.emptyHint/.test(fnBody('renderCallLogs')));
+ok('empty-state KHÔNG còn nút mở tab Lịch sử tra cứu',
+  !/switchTab\('lookuphistory'\)/.test(fnBody('renderCallLogs')));
+ok('có hàm openClResolveForRestore (hiện ngay, không mở popup)',
+  /function openClResolveForRestore\(\)/.test(appSrc));
+ok('openClResolveForRestore bỏ cờ hoãn map + vẽ lại (không popup)',
+  /function openClResolveForRestore\(\)[\s\S]{0,200}clMapDeferred = false[\s\S]{0,80}renderCallLogs\(\)/.test(appSrc));
+ok('openCallLogsFromHistory KHÔNG mở popup xác nhận',
+  !/openClUploadModal\(\)/.test(fnBody('openCallLogsFromHistory')) &&
+  !/openClResolveForRestore[\s\S]{0,0}setClUpStep/.test(fnBody('openCallLogsFromHistory')) &&
+  /renderCallLogs\(\)|openClResolveForRestore\(\)/.test(fnBody('openCallLogsFromHistory')) &&
+  !/resolveUnmatchedCells\(/.test(fnBody('openCallLogsFromHistory')));
+ok('openClResolveForRestore KHÔNG còn mở popup (không setClUpStep/classList.add)',
+  !/setClUpStep/.test(fnBody('openClResolveForRestore')) &&
+  !/classList\.add\('show'\)/.test(fnBody('openClResolveForRestore')));
+ok('openCallLogSession KHÔNG mở popup xác nhận (hiện ngay)',
+  !/openClUploadModal\(\)/.test(fnBody('openCallLogSession')) &&
+  !/resolveUnmatchedCells\(/.test(fnBody('openCallLogSession')));
+ok('countResolveNeeded bỏ qua dòng _fromHistory (không trừ điểm khi phục hồi)',
+  /if \(r\._fromHistory\) continue;/.test(fnBody('countResolveNeeded')));
+ok('i18n calllogs.loadExcel/uploadTitle/chooseFile/confirmResolve (vi+en)',
+  (appSrc.match(/'calllogs\.loadExcel'/g) || []).length >= 2 &&
+  (appSrc.match(/'calllogs\.uploadTitle'/g) || []).length >= 2 &&
+  (appSrc.match(/'calllogs\.chooseFile'/g) || []).length >= 2 &&
+  (appSrc.match(/'calllogs\.confirmResolve'/g) || []).length >= 2);
+
+console.log('\n== Cảnh báo điểm trước khi tra ==');
+ok('có hàm countResolveNeeded', /function countResolveNeeded\(\)/.test(appSrc));
+ok('renderClConfirm cảnh báo khi số dư < tổng điểm (notEnoughTotal)',
+  /calllogs\.notEnoughTotal/.test(fnBody('renderClConfirm')));
+ok('renderClConfirm có nút Nạp điểm → /topup.html',
+  /renderClConfirm[\s\S]{0,2600}href="\/topup\.html"/.test(appSrc));
+ok('i18n calllogs.notEnoughTotal/topupBtn (vi+en)',
+  (appSrc.match(/'calllogs\.notEnoughTotal'/g) || []).length >= 2 &&
+  (appSrc.match(/'calllogs\.topupBtn'/g) || []).length >= 2);
+
+console.log('\n== Hoãn vẽ bản đồ (clMapDeferred) ==');
+ok('có state clMapDeferred', /let clMapDeferred = false;/.test(appSrc));
+ok('plotCallLogs defer: return sớm khi clMapDeferred',
+  /function plotCallLogs\(records\)[\s\S]{0,700}if \(clMapDeferred\) return;/.test(appSrc));
+ok('uploadCallLogExcel bật clMapDeferred = true',
+  /function uploadCallLogExcel\(event\)[\s\S]{0,2200}clMapDeferred = true;/.test(appSrc));
+ok('confirmClResolve tắt cờ hoãn (clMapDeferred = false)',
+  /function confirmClResolve\(\)[\s\S]{0,200}clMapDeferred = false;/.test(appSrc));
+ok('skipClResolve tắt cờ hoãn + vẽ lại',
+  /function skipClResolve\(\)[\s\S]{0,200}clMapDeferred = false;[\s\S]{0,80}renderCallLogs\(\)/.test(appSrc));
+ok('resolveUnmatchedCells tắt cờ hoãn khi bắt đầu tra',
+  /async function resolveUnmatchedCells\(\)[\s\S]{0,400}clMapDeferred = false;/.test(appSrc));
+ok('resolveUnmatchedCells break khi credit.insufficient (không gọi vòng kế)',
+  /if \(credit\.insufficient\) break;/.test(fnBody('resolveUnmatchedCells')));
+
+console.log('\n== Popup marker dùng chung (buildCellPopupHtml) ==');
+ok('có hàm buildCellPopupHtml', /function buildCellPopupHtml\(opts\)/.test(appSrc));
+ok('plotCallLogs dùng buildCellPopupHtml', /buildCellPopupHtml\(/.test(fnBody('plotCallLogs')));
+ok('showCellOnMap dùng buildCellPopupHtml', /buildCellPopupHtml\(/.test(fnBody('showCellOnMap')));
+ok('buildCellPopupHtml nhận opts.extra (list bản ghi)',
+  /opts\.extra/.test(fnBody('buildCellPopupHtml')));
+ok('plotCallLogs extra có "Số bản ghi"/records + list timestamp',
+  /histEsc\(t\('upload\.records'\)\)/.test(fnBody('plotCallLogs')) &&
+  /lineItems/.test(fnBody('plotCallLogs')));
+ok('plotCallLogs đọc toạ độ cả r.lat/lon (không đổi shape)',
+  /r\.lat && r\.lon/.test(fnBody('plotCallLogs')));
+ok('SOURCE_LABELS là hằng global (dùng chung)',
+  /^const SOURCE_LABELS = \{/m.test(appSrc));
+ok('i18n calllogs.guideBtn/guideTitle/guide1..7 (vi+en)',
+  (appSrc.match(/'calllogs\.guideBtn'/g) || []).length >= 2 &&
+  (appSrc.match(/'calllogs\.guideTitle'/g) || []).length >= 2 &&
+  (appSrc.match(/'calllogs\.guide3'/g) || []).length >= 2);
+ok('có hàm showResolvePrompt mở popup bước confirm', /async function showResolvePrompt\(\)/.test(appSrc) &&
+  /setClUpStep\('confirm'\)/.test(fnBody('showResolvePrompt')));
+ok('có hàm startResolveFromPrompt', /function startResolveFromPrompt\(\)/.test(appSrc));
+ok('có hàm skipResolve', /function skipResolve\(\)/.test(appSrc));
+ok('có hàm showResolveResult', /function showResolveResult\(credit\)/.test(appSrc));
+ok('loadCallLogs hỏi prompt khi không truyền prompt:false', /showResolvePrompt\(\)/.test(fnBody('loadCallLogs')) &&
+  /opts\.prompt === false/.test(fnBody('loadCallLogs')));
+ok('loadCallLogs KHÔNG còn auto gọi resolveUnmatchedCells', !/await resolveUnmatchedCells\(\)/.test(fnBody('loadCallLogs')));
+ok('renderClConfirm dùng countResolveNeeded để ước tính', /countResolveNeeded\(\)/.test(fnBody('renderClConfirm')));
+ok('renderClConfirm đọc cost từ Auth.getCreditConfig', /Auth\.getCreditConfig\(\)/.test(fnBody('renderClConfirm')));
+ok('renderClConfirm đọc số dư qua Auth.getCreditBalance', /getCreditBalance\(\)/.test(fnBody('renderClConfirm')));
+ok('renderClConfirm disable nút khi không đủ điểm (popup)', /confirmBtn\.disabled = !enough/.test(fnBody('renderClConfirm')));
+ok('renderClConfirm LUÔN refresh số dư (nạp điểm ở tab khác vẫn dùng được)',
+  /balance = await Auth\.refreshCreditBalance\(\)/.test(fnBody('renderClConfirm')) &&
+  !/balance == null && typeof Auth\.refreshCreditBalance/.test(fnBody('renderClConfirm')));
+ok('renderClConfirm có fallback cache khi refresh lỗi',
+  /if \(balance == null\) balance = Auth\.getCreditBalance\(\)/.test(fnBody('renderClConfirm')));
+ok('có refresh số dư khi cửa sổ focus lại (quay về từ /topup.html)',
+  /window\.addEventListener\('focus', rebind\)/.test(appSrc) &&
+  /visibilitychange/.test(appSrc));
+ok('có nút #clResolveNowBtn ở topbar gọi confirmClResolve',
+  /id="clResolveNowBtn"/.test(htmlSrc) && /onclick="confirmClResolve\(\)"/.test(htmlSrc));
+ok('có helper updateClResolveNowBtn + gọi trong renderCallLogs',
+  /function updateClResolveNowBtn\(\)/.test(appSrc) &&
+  /updateClResolveNowBtn\(\)/.test(fnBody('renderCallLogs')));
+ok('updateClResolveNowBtn hiện nút khi còn cell cần tra',
+  /countResolveNeeded\(\)\.length/.test(fnBody('updateClResolveNowBtn')) &&
+  /btn\.style\.display = 'none'/.test(fnBody('updateClResolveNowBtn')));
+ok('showResolveResult mở filter panel để thấy thông báo điểm',
+  /toggleCallLogFilters\(\)/.test(fnBody('showResolveResult')));
+ok('auth.js có Auth.getCreditConfig gọi /api/credits/config',
+  (() => { const a = fs.readFileSync(path.join(__dirname, 'public', 'auth.js'), 'utf8');
+    return /Auth\.getCreditConfig = async function[\s\S]{0,300}\/api\/credits\/config/.test(a); })());
+ok('i18n calllogs.resolveNeed/skipBtn/notEnough (vi+en)',
+  (appSrc.match(/'calllogs\.resolveNeed'/g) || []).length >= 2 &&
+  (appSrc.match(/'calllogs\.skipBtn'/g) || []).length >= 2 &&
+  (appSrc.match(/'calllogs\.notEnough'/g) || []).length >= 2);
+
+console.log('\n== Trừ điểm một phần ==');
+const resolveBody = fnBody('resolveUnmatchedCells');
+ok('resolveUnmatchedCells tích luỹ resp.credit.charged', /credit\.charged \+= Number\(resp\.credit\.charged\)/.test(resolveBody));
+ok('resolveUnmatchedCells ghi nhận insufficient', /resp\.credit\.insufficient/.test(resolveBody));
+ok('resolveUnmatchedCells dùng countResolveNeeded', /countResolveNeeded\(\)/.test(resolveBody));
+ok('resolveUnmatchedCells gọi showResolveResult sau khi tra', /showResolveResult\(credit\)/.test(resolveBody));
+ok('i18n calllogs.creditCharged/creditPartial/notEnough (vi+en)',
+  (appSrc.match(/'calllogs\.creditCharged'/g) || []).length >= 2 &&
+  (appSrc.match(/'calllogs\.creditPartial'/g) || []).length >= 2 &&
+  (appSrc.match(/'calllogs\.notEnough'/g) || []).length >= 2);
+
+console.log('\n== Tra lần lượt khi thiếu điểm + thông báo 3 số ==');
+// Client tích luỹ đủ found/missed/unpaid từ server.
+ok('resolveUnmatchedCells tích luỹ credit.found', /credit\.found \+= Number\(resp\.credit\.found\)/.test(resolveBody));
+ok('resolveUnmatchedCells tích luỹ credit.missed', /credit\.missed \+= Number\(resp\.credit\.missed\)/.test(resolveBody));
+ok('resolveUnmatchedCells ghi nhận credit.unpaid', /credit\.unpaid = Math\.max\(credit\.unpaid, Number\(resp\.credit\.unpaid\)/.test(resolveBody));
+ok('resolveUnmatchedCells bỏ qua cell unpaid (không nhận toạ độ chưa trả phí)',
+  /if \(r\.unpaid\) \{ continue; \}/.test(resolveBody));
+// Thông báo 3 số: tra được / không ra kết quả / chưa tra vì hết điểm.
+const resultBody = fnBody('showResolveResult');
+ok('showResolveResult dùng {m} = số cell không ra kết quả', /replace\('\{m\}', missed\)/.test(resultBody));
+ok('showResolveResult dùng {z} = số cell chưa tra vì hết điểm', /replace\('\{z\}', left\)/.test(resultBody));
+ok('showResolveResult đọc credit.missed/credit.unpaid',
+  /credit\.missed/.test(resultBody) && /credit\.unpaid/.test(resultBody));
+ok('i18n creditCharged/creditPartial có placeholder {m} (vi+en)',
+  (appSrc.match(/'calllogs\.creditCharged': '[^']*\{m\}/g) || []).length >= 2 &&
+  (appSrc.match(/'calllogs\.creditPartial': '[^']*\{m\}/g) || []).length >= 2);
+ok('i18n creditPartial báo "không ra kết quả" + "chưa tra" (vi)',
+  /Đã tra \{f\}\/\{n\} cell[^']*\{m\} cell không ra kết quả[^']*\{z\} cell chưa tra/.test(appSrc));
+
+const srvSrc2 = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+ok('server trả credit.found/missed/unpaid', /creditInfo\.found = foundCount/.test(srvSrc2) &&
+  /creditInfo\.missed = missCount/.test(srvSrc2) && /creditInfo\.unpaid = unpaidCount/.test(srvSrc2));
+ok('server gán charged theo THỨ TỰ (tra lần lượt đến khi hết điểm)',
+  /let paidLeft = affordable/.test(srvSrc2) && /if \(paidLeft > 0\) \{[\s\S]{0,120}results\[i\]\.charged = true/.test(srvSrc2));
+ok('server ẩn toạ độ cell found vượt điểm (unpaid:true, lat/lon null)',
+  /results\[i\]\.unpaid = true;[\s\S]{0,200}results\[i\]\.lat = null;[\s\S]{0,80}results\[i\]\.lon = null;/.test(srvSrc2));
+ok('server: retry cùng vòng (duplicate) coi như đã trả phí cả lô',
+  /if \(charge\.duplicate\) affordable = foundCount;/.test(srvSrc2));
+
+// Nguồn Google Geolocation — option B: chỉ chạy cho cell miss, gom nhóm ≤ setting.
+ok("server có 'google' trong ONLINE_SOURCE_TYPES + defaults",
+  /ONLINE_SOURCE_TYPES = \[[^\]]*'google'/.test(srvSrc2) && /google: \{ name: 'Google Geolocation'/.test(srvSrc2));
+ok('server mặc định TẮT nguồn google (tốn phí)',
+  /ONLINE_SOURCE_DEFAULT_DISABLED = \['opencellid_web', 'google'\]/.test(srvSrc2));
+ok('resolver google gửi considerIp:false (không rò toạ độ theo IP server)',
+  /considerIp: false/.test(srvSrc2));
+ok('resolver google KHÔNG set cellId cho radio nr (dùng newRadioCellId)',
+  /tower\.newRadioCellId = nid;/.test(srvSrc2) &&
+  !/if \(radio === 'nr'\) \{[\s\S]{0,400}tower\.cellId = [^\n]*\n[\s\S]{0,100}\}/.test(srvSrc2));
+ok('server gom nhóm google theo max_google_per_batch',
+  /maxPerReq = await getGoogleMaxPerBatch\(\)/.test(srvSrc2) &&
+  /missIdx\.slice\(g, g \+ maxPerReq\)/.test(srvSrc2));
+ok('getGoogleKey fallback GOOGLE_MAPS_API_KEY + DB-first',
+  /process\.env\.GOOGLE_MAPS_API_KEY/.test(srvSrc2) && /getGoogleKeyFromDB/.test(srvSrc2));
+ok('setting max_google_per_batch nằm trong SETTING_KEYS + SETTING_DEFAULTS',
+  /'max_google_per_batch'/.test(srvSrc2) && /max_google_per_batch: '10'/.test(srvSrc2) &&
+  /max_google_per_batch: 1e5/.test(srvSrc2));
+ok('admin: option google trong admin.html',
+  /<option value="google">/.test(fs.readFileSync(path.join(__dirname, 'public', 'admin.html'), 'utf8')));
+ok('admin: input max_google_per_batch + nhánh hint google + badge',
+  /id="setGoogleMax"/.test(fs.readFileSync(path.join(__dirname, 'public', 'admin.html'), 'utf8')) &&
+  /type === 'google'/.test(fs.readFileSync(path.join(__dirname, 'public', 'admin.js'), 'utf8')) &&
+  /s === 'google'/.test(fs.readFileSync(path.join(__dirname, 'public', 'admin.js'), 'utf8')));
+
 ok('showPlayNav toggle class play-active', /classList\.toggle\('play-active'/.test(appSrc));
+
+console.log('\n== Fix rút list (6 hạng mục) ==');
+
+// (1) Ô tìm kiếm đồng bộ: icon kính lúp + nút xoá + placeholder i18n.
+ok('HTML có .cl-search-box bọc input + icon search',
+  /class="cl-search-box"/.test(htmlSrc) && /cl-search-ico/.test(htmlSrc));
+ok('HTML có nút xoá tìm kiếm #logSearchClear',
+  /id="logSearchClear"/.test(htmlSrc) && /onclick="clearLogSearch\(\)"/.test(htmlSrc));
+ok('CSS có .cl-search-box / .cl-search-ico / .cl-search-clear',
+  /\.cl-search-box\s*\{/.test(htmlSrc) && /\.cl-search-ico\s*\{/.test(htmlSrc) &&
+  /\.cl-search-clear\s*\{/.test(htmlSrc));
+ok('CSS .cl-search-box có border+background+height (input không nằm trong .form-group)',
+  /\.cl-search-box\s*\{[^}]*height:\s*30px[^}]*border:\s*1px solid var\(--border-color\)[^}]*background:\s*var\(--bg-surface2\)/.test(htmlSrc));
+ok('CSS #logSearchInput có border:0 + transparent + color + font-size',
+  /\.cl-search-box #logSearchInput\s*\{[^}]*border:\s*0[^}]*background:\s*transparent[^}]*color:\s*var\(--text-primary\)[^}]*font-size:\s*12px/.test(htmlSrc));
+ok('CSS có focus-within cho ô tìm kiếm', /\.cl-search-box:focus-within\s*\{/.test(htmlSrc));
+ok('CSS nút lọc có height 30px khớp ô tìm kiếm',
+  /\.cl-filter-toggle\s*\{[^}]*height:\s*30px/.test(htmlSrc));
+ok('input tìm kiếm dùng placeholder i18n',
+  /id="logSearchInput"[^>]{0,200}data-i18n-placeholder="calllogs\.searchPlaceholder"/.test(htmlSrc));
+ok('có hàm syncLogSearchClear + clearLogSearch',
+  /function syncLogSearchClear\(\)/.test(appSrc) && /function clearLogSearch\(\)/.test(appSrc));
+ok('renderCallLogs gọi syncLogSearchClear', /syncLogSearchClear\(\)/.test(fnBody('renderCallLogs')));
+ok('i18n calllogs.searchPlaceholder/clearSearch (vi+en)',
+  (appSrc.match(/'calllogs\.searchPlaceholder'/g) || []).length >= 2 &&
+  (appSrc.match(/'calllogs\.clearSearch'/g) || []).length >= 2);
+
+// (2) Kết quả tra cứu nằm TRONG panel bộ lọc (chỉ hiện khi mở filter).
+const idxFilterPanel = htmlSrc.indexOf('id="callLogFilterPanel"');
+const idxCreditNotice = htmlSrc.indexOf('id="clCreditNotice"');
+const idxLogList = htmlSrc.indexOf('id="logRecordList"');
+ok('HTML: #clCreditNotice nằm trong #callLogFilterPanel',
+  idxFilterPanel !== -1 && idxCreditNotice > idxFilterPanel && idxCreditNotice < idxLogList,
+  { idxFilterPanel, idxCreditNotice, idxLogList });
+ok('HTML: #clCreditNotice không còn đứng trước #clCurrentSession',
+  !(idxCreditNotice !== -1 && idxCreditNotice < htmlSrc.indexOf('id="clCurrentSession"')));
+
+// (3)+(6) Trừ điểm: ref tách theo vòng.
+ok('client gửi roundIdx mỗi vòng resolve',
+  /roundIdx: round/.test(fnBody('resolveUnmatchedCells')));
+
+// (4) Vào trang chủ KHÔNG tự mở popup nạp list.
+ok('init gọi loadCallLogs({ prompt: false }) — không tự bật popup',
+  /loadCallLogs\(\{ prompt: false \}\);\s*\n\s*loadAnnotations\(\)/.test(appSrc));
+
+// (5) Đồng ý / Bỏ qua đều vẽ lại bản đồ.
+ok('resolveUnmatchedCells tắt cờ hoãn TRƯỚC nhánh early-return',
+  /async function resolveUnmatchedCells\(\)[\s\S]{0,300}clMapDeferred = false;[\s\S]{0,120}if \(unresolved\.length === 0\)/.test(appSrc));
+ok('resolveUnmatchedCells vẽ map khi không còn cell cần tra',
+  /if \(unresolved\.length === 0\) \{\s*\n\s*renderCallLogs\(\);/.test(appSrc));
+ok('resolveUnmatchedCells catch cũng vẽ lại map (không nuốt lỗi)',
+  /catch \(e\) \{[\s\S]{0,200}clMapDeferred = false;[\s\S]{0,80}renderCallLogs\(\);/.test(fnBody('resolveUnmatchedCells')));
+
+console.log('\n== Trừ điểm cell đã có trong CSDL nội bộ ==');
+// Luật: "tra ra kết quả là trừ điểm" — KHÔNG phân biệt nguồn local hay online.
+// countResolveNeeded KHÔNG được bỏ qua cell đã có toạ độ (nếu chưa trả phí).
+ok('countResolveNeeded KHÔNG bỏ qua cell đã có lat/lon',
+  !/if \(r\.lat && r\.lon\) continue;/.test(fnBody('countResolveNeeded')));
+ok('countResolveNeeded bỏ qua cell đã trả phí (_charged)',
+  /if \(r\._charged\) continue;/.test(fnBody('countResolveNeeded')));
+ok('countResolveNeeded vẫn bỏ qua dòng mở từ Lịch sử',
+  /if \(r\._fromHistory\) continue;/.test(fnBody('countResolveNeeded')));
+// Server trả cờ `charged` theo từng cell.
+ok('client đọc resp.results[].charged để đánh dấu _charged',
+  /r\.charged/.test(fnBody('resolveUnmatchedCells')) && /_charged = true;/.test(fnBody('resolveUnmatchedCells')));
+
+// =====================================================
+// Popup full-window: bảng CELL sau khi nạp Excel
+// =====================================================
+console.log('\n== Popup bảng cell (overlay full-window) ==');
+ok('HTML có overlay #clTableOverlay (.cl-fullsheet)',
+  /<div class="cl-fullsheet" id="clTableOverlay">/.test(htmlSrc));
+ok('overlay có 3 bước pick/busy/table',
+  /id="clSheetStepPick"/.test(htmlSrc) && /id="clSheetStepBusy"/.test(htmlSrc) &&
+  /id="clSheetStepTable"/.test(htmlSrc));
+ok('bước pick có dropzone #clSheetDrop + input file gọi uploadCallLogAnalyze',
+  /id="clSheetDrop"[\s\S]{0,700}onchange="uploadCallLogAnalyze\(event\)"/.test(htmlSrc));
+ok('có bảng #clTableHead + #clTableBody + khối meta',
+  /id="clTableHead"/.test(htmlSrc) && /id="clTableBody"/.test(htmlSrc) && /id="clSheetMeta"/.test(htmlSrc));
+ok('footer có chọn tất cả + đếm + nút map + nút tra',
+  /id="clSelectAll"/.test(htmlSrc) && /id="clSheetCount"/.test(htmlSrc) &&
+  /id="clMapAllBtn"/.test(htmlSrc) && /id="clResolveSelectedBtn"/.test(htmlSrc) &&
+  /onclick="plotClTableOnMap\(\)"/.test(htmlSrc) && /onclick="resolveClSelected\(\)"/.test(htmlSrc));
+ok('nút topbar Load Excel mở overlay mới (openClTableOverlay)',
+  /id="tab-calllogs"[\s\S]{0,600}onclick="openClTableOverlay\(\)"/.test(htmlSrc));
+ok('CSS .cl-fullsheet nằm DƯỚI navbar (inset top 48px) + z-index 4900',
+  /\.cl-fullsheet\s*\{[^}]*position:\s*fixed[^}]*inset:\s*48px 0 0 0[^}]*z-index:\s*4900/.test(htmlSrc));
+ok('CSS có .cl-fullsheet.show hiện overlay',
+  /\.cl-fullsheet\.show\s*\{\s*display:\s*flex/.test(htmlSrc));
+ok('CSS có .cl-sheet-head/.cl-sheet-body/.cl-tbl-wrap/.cl-sheet-foot',
+  /\.cl-sheet-head\s*\{/.test(htmlSrc) && /\.cl-sheet-body\s*\{/.test(htmlSrc) &&
+  /\.cl-tbl-wrap\s*\{/.test(htmlSrc) && /\.cl-sheet-foot\s*\{/.test(htmlSrc));
+ok('CSS có cột sort + trạng thái dòng',
+  /\.cl-tbl thead th\.cl-tbl-sort\s*\{/.test(htmlSrc) && /\.cl-row-status\.found\s*\{/.test(htmlSrc) &&
+  /\.cl-row-status\.miss\s*\{/.test(htmlSrc) && /\.cl-row-status\.unpaid\s*\{/.test(htmlSrc));
+ok('CSS cột Vị trí có icon copy', /\.cl-tbl-loc \.cl-loc-copy\s*\{/.test(htmlSrc));
+ok('KHÔNG đổi popup cũ #clUploadModal (2 luồng song song)',
+  /<div class="modal-overlay" id="clUploadModal">/.test(htmlSrc) &&
+  /function openClUploadModal\(\)/.test(appSrc) && /function closeClUploadModal\(\)/.test(appSrc));
+
+console.log('\n== Hàm overlay bảng cell ==');
+ok('có state clAnalyze', /let clAnalyze = null;/.test(appSrc));
+ok('có hằng CL_TBL_COLS với 9 cột', /const CL_TBL_COLS = \[/.test(appSrc) &&
+  (appSrc.match(/key: '(idx|cell|sector|rowCount|radio|time|address|loc|status)'/g) || []).length >= 9);
+ok('có hàm openClTableOverlay mở .show', /function openClTableOverlay\(\)[\s\S]{0,220}classList\.add\('show'\)/.test(appSrc));
+ok('có hàm closeClTableOverlay đóng (.remove show)', /function closeClTableOverlay\(\)[\s\S]{0,160}classList\.remove\('show'\)/.test(appSrc));
+ok('có hàm clSheetStep chuyển 3 bước', /function clSheetStep\(name\)[\s\S]{0,420}clSheetStepTable/.test(appSrc));
+ok('uploadCallLogAnalyze POST /api/call-logs/analyze',
+  /async function uploadCallLogAnalyze\(event\)[\s\S]{0,1400}'\/api\/call-logs\/analyze'/.test(appSrc));
+ok('uploadCallLogAnalyze tạo clAnalyze + chọn hết mặc định',
+  /clAnalyze = \{[\s\S]{0,400}selected: new Set\(\)/.test(fnBody('uploadCallLogAnalyze')) &&
+  /clAnalyze\.selected\.add\(c\.key\)/.test(fnBody('uploadCallLogAnalyze')));
+ok('uploadCallLogAnalyze KHÔNG gọi resolve/trừ điểm khi nạp',
+  !/resolve-batch/.test(fnBody('uploadCallLogAnalyze')) &&
+  !/resolveUnmatchedCells/.test(fnBody('uploadCallLogAnalyze')));
+ok('có hàm renderClTable + clTableRowHtml', /function renderClTable\(\)/.test(appSrc) &&
+  /function clTableRowHtml\(cell, index\)/.test(appSrc));
+ok('cột Sóng hiện "?" khi không khẳng định được',
+  /calllogs\.unknown/.test(fnBody('clTableRowHtml')) && /cell\.radio \?/.test(fnBody('clTableRowHtml')));
+ok('sortClTable là sort phía client (JS-side)', /function sortClTable\(key\)/.test(appSrc) &&
+  /clAnalyze\.sort = \{ key/.test(fnBody('sortClTable')) && /renderClTable\(\)/.test(fnBody('sortClTable')));
+ok('sortClTable dùng clSortValue (không đụng server)', /function clSortValue\(cell, key\)/.test(appSrc) &&
+  /clSortValue\(a, key\)/.test(fnBody('clSortedRows')));
+ok('clSelectAll chọn/bỏ chọn toàn bộ rồi render lại', /function clSelectAll\(checked\)/.test(appSrc) &&
+  /clAnalyze\.selected = new Set\(\)/.test(fnBody('clSelectAll')));
+ok('clToggleRow cập nhật 1 dòng tại chỗ', /function clToggleRow\(key, checked\)/.test(appSrc) &&
+  /classList\.toggle\('cl-row-sel'/.test(fnBody('clToggleRow')));
+ok('updateClTableRow cập nhật toạ độ + trạng thái tại chỗ',
+  /function updateClTableRow\(key\)/.test(appSrc) && /clRowLocHtml\(cell\)/.test(fnBody('updateClTableRow')));
+
+// F5 sau khi trả phí: khôi phục cờ `_charged` từ sessionStorage.
+
+ok('resolveClSelected tra tuần tự theo THỨ TỰ bảng (clSortedRows)',
+  /async function resolveClSelected\(\)/.test(appSrc) &&
+  /clSortedRows\(\)\.filter\(c => selected\.has\(c\.key\)\)/.test(fnBody('resolveClSelected')));
+ok('resolveClSelected dừng khi hết điểm (insufficient)',
+  /resp\.credit\.insufficient/.test(fnBody('resolveClSelected')) &&
+  /state: 'unpaid'/.test(fnBody('resolveClSelected')));
+ok('resolveClSelected gửi roundIdx + uploadId chung 1 lần tra',
+  /roundIdx: round/.test(fnBody('resolveClSelected')) && /uploadId = 'up'/.test(fnBody('resolveClSelected')));
+ok('resolveClSelected truyền các cell đang chọn vào /api/cells/resolve-batch',
+  /'\/api\/cells\/resolve-batch'/.test(fnBody('resolveClSelected')));
+ok('plotClTableOnMap đẩy cell đã tra vào myLogsCache',
+  /function plotClTableOnMap\(\)/.test(appSrc) && /myLogsCache\.push\(r\)/.test(fnBody('plotClTableOnMap')));
+ok('plotClTableOnMap chỉ lấy cell state found (không rò cell chưa trả phí)',
+  /r\.state === 'found' && r\.lat != null/.test(fnBody('plotClTableOnMap')));
+ok('plotClTableOnMap đánh dấu _charged true → qua canViewRecord',
+  /_charged: true/.test(fnBody('plotClTableOnMap')) && /canViewRecord/.test(appSrc));
+ok('plotClTableOnMap bỏ cờ hoãn map rồi renderCallLogs',
+  /clMapDeferred = false;/.test(fnBody('plotClTableOnMap')) &&
+  /renderCallLogs\(\)/.test(fnBody('plotClTableOnMap')));
+ok('canViewRecord vẫn là cổng chặn duy nhất khi vẽ (không nới lỏng)',
+  /function canViewRecord\(r\) \{\s*\n\s*return !!\(r && r\.lat && r\.lon && \(r\._charged \|\| r\._fromHistory\)\);/.test(appSrc));
+ok('renderClSheetResolve ước tính điểm (resolveNeed + notEnoughTotal)',
+  /calllogs\.resolveNeed/.test(fnBody('renderClSheetResolve')) &&
+  /calllogs\.notEnoughTotal/.test(fnBody('renderClSheetResolve')));
+ok('renderClSheetResolve refresh số dư từ server',
+  /Auth\.refreshCreditBalance\(\)/.test(fnBody('renderClSheetResolve')));
+ok('overlay cập nhật điểm khi quay lại từ /topup.html',
+  /clTableOverlay[\s\S]{0,200}renderClSheetResolve\(\)\.catch/.test(appSrc));
+ok('entry point /topup.html có trong luồng bảng cell',
+  /calllogs\.topupBtn/.test(fnBody('renderClSheetResolve')));
+ok('có hằng CSS class trạng thái dùng đúng tên (pending/busy/found/miss/unpaid)',
+  /state: 'found'/.test(appSrc) && /state: 'miss'/.test(appSrc) &&
+  /state: 'unpaid'/.test(appSrc) && /state: 'busy'/.test(appSrc));
+
+console.log('\n== i18n bảng cell (vi+en) ==');
+for (const k of ['tblTitle', 'colCell', 'colSector', 'colRows', 'colRadio', 'colTime',
+  'colAddress', 'colLoc', 'colStatus', 'selectAll', 'selectedN', 'resolveN', 'mapAllBtn',
+  'analyzing', 'statusPending', 'statusFound', 'statusMiss',
+  'statusUnpaid', 'statusLocal', 'unknown', 'noCells', 'noSelection', 'noResolved',
+  'mapAllDone', 'netLabel', 'stepPick', 'stepDone']) {
+  const re = new RegExp("'calllogs\\." + k + "'", 'g');
+  ok(`i18n calllogs.${k} (vi+en)`, (appSrc.match(re) || []).length >= 2);
+}
+
+// =====================================================
+// Nạp Excel để PHÂN TÍCH không được trừ điểm / đốt quota (server-side)
+// =====================================================
+console.log('\n== Analyze chỉ đọc (server) ==');
+const srvAnalyze = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+function srvBody(marker) {
+  const idx = srvAnalyze.indexOf(marker);
+  if (idx === -1) return '';
+  const open = srvAnalyze.indexOf('{', idx);
+  let depth = 0;
+  for (let i = open; i < srvAnalyze.length; i++) {
+    if (srvAnalyze[i] === '{') depth++;
+    else if (srvAnalyze[i] === '}') { depth--; if (depth === 0) return srvAnalyze.slice(open, i + 1); }
+  }
+  return srvAnalyze.slice(open);
+}
+const analyzeRoute = srvBody("app.post('/api/call-logs/analyze'");
+ok('có route POST /api/call-logs/analyze (requireAuth + multer)',
+  /app\.post\('\/api\/call-logs\/analyze', requireAuth, upload\.single\('file'\)/.test(srvAnalyze));
+ok('analyze KHÔNG chèn DB (không INSERT INTO call_logs/batches)',
+  !/INSERT INTO call_logs/.test(analyzeRoute) && !/INSERT OR REPLACE INTO call_log_batches/.test(analyzeRoute));
+ok('analyze KHÔNG trừ điểm (không chargeLookup*)', !/chargeLookup/.test(analyzeRoute));
+ok('analyze KHÔNG gọi nguồn online (không getEnabledOnlineSources / gọi cells/resolve-batch)',
+  !/getEnabledOnlineSources/.test(analyzeRoute) && !/apiRequest|fetch\(/.test(analyzeRoute) &&
+  !/'\/api\/cells\/resolve-batch'/.test(analyzeRoute));
+ok('analyze chỉ ĐỌC bảng cells để gắn toạ độ có sẵn',
+  /SELECT[^`]*FROM cells/.test(analyzeRoute) && /localLat/.test(analyzeRoute));
+ok('analyze xoá file tạm (fs.unlinkSync)', /fs\.unlinkSync\(req\.file\.path\)/.test(analyzeRoute));
+ok('analyze dùng aggregateCellsFromRecords + canonicalCellKey',
+  /aggregateCellsFromRecords\(/.test(analyzeRoute) && /canonicalKey: canonicalCellKey/.test(analyzeRoute));
+ok('analyze trả network/totalRows/cellCount/cells',
+  /network: network\.name/.test(analyzeRoute) && /cellCount: cells\.length/.test(analyzeRoute) &&
+  /cells,/.test(analyzeRoute));
+
+ok('loadCallLogs gọi restoreChargedFlags sau khi nạp rows',
+  /restoreChargedFlags\(\)/.test(fnBody('loadCallLogs')));
+ok('có hàm restoreChargedFlags đọc từ phiên sessionStorage',
+  /function restoreChargedFlags\(\)/.test(appSrc) &&
+  /loadCallSession\(\)/.test(fnBody('restoreChargedFlags')));
+ok('resolveUnmatchedCells cập nhật cả row đã có toạ độ (để nhận _resolvedOnline)',
+  !/if \(row\.lat && row\.lon\) continue;/.test(fnBody('resolveUnmatchedCells')));
+// Nút "Đóng" không lộ toạ độ cell chưa trả phí.
+ok('có helper canViewRecord (_charged || _fromHistory)',
+  /function canViewRecord\(r\)/.test(appSrc) &&
+  /r\._charged \|\| r\._fromHistory/.test(fnBody('canViewRecord')));
+ok('plotCallLogs chỉ vẽ group canViewRecord',
+  /if \(!group\.some\(canViewRecord\)\) return;/.test(fnBody('plotCallLogs')));
+ok('renderCallLogs chặn click/highlight cell chưa trả phí',
+  /const canView = canViewRecord\(l\);/.test(fnBody('renderCallLogs')));
+ok('playCallLogs lọc canViewRecord',
+  /\.filter\(canViewRecord\)/.test(fnBody('playCallLogs')));
+ok('updatePlayBtn đếm canViewRecord',
+  /getFilteredLogs\(\)\.some\(canViewRecord\)/.test(fnBody('updatePlayBtn')));
+ok('updateCallSessionUi đếm located bằng canViewRecord',
+  /return l && canViewRecord\(l\);/.test(fnBody('updateCallSessionUi')));
+ok('KHÔNG còn cờ clPlotOnlyPaid',
+  !/clPlotOnlyPaid/.test(appSrc));
+
+console.log('\n== Kéo giãn sidebar panel trái ==');
+ok('index.html có handle #sidebarResizer',
+  /id="sidebarResizer"/.test(htmlSrc) && /class="sidebar-resizer"/.test(htmlSrc));
+ok('handle dùng icon grip dọc (fa-grip-vertical)',
+  /class="fas fa-grip-vertical"/.test(htmlSrc));
+ok('handle nằm trong .sidebar, sau panel-foot',
+  htmlSrc.indexOf('id="sidebarResizer"') > htmlSrc.indexOf('id="guestPanelFoot"'));
+ok('handle là con của .sidebar (trước </div> đóng sidebar)',
+  (function () {
+    const iHandle = htmlSrc.indexOf('id="sidebarResizer"');
+    if (iHandle === -1) return false;
+    // .sidebar kết thúc trước #legendBtn (sibling ngoài sidebar).
+    const iAfter = htmlSrc.indexOf('id="legendBtn"');
+    return iAfter > iHandle;
+  })());
+ok('handle có data-i18n-title="sidebar.resize"',
+  /data-i18n-title="sidebar\.resize"/.test(htmlSrc));
+ok('CSS .sidebar-resizer dùng cursor col-resize',
+  /\.sidebar-resizer\s*\{[^}]*cursor:\s*col-resize/.test(htmlSrc));
+ok('CSS .sidebar-resizer bám mép phải (right: 0)',
+  /\.sidebar-resizer\s*\{[^}]*right:\s*0/.test(htmlSrc));
+ok('CSS ẩn handle khi panel thu gọn',
+  /\.sidebar\.collapsed\s+\.sidebar-resizer\s*\{\s*display:\s*none/.test(htmlSrc));
+ok('CSS body.resizing-sidebar chặn chọn text',
+  /body\.resizing-sidebar\s*\{[^}]*user-select:\s*none/.test(htmlSrc));
+ok('CSS body.resizing-sidebar chặn map nhận pointer',
+  /body\.resizing-sidebar\s+#map\s*\{\s*pointer-events:\s*none/.test(htmlSrc));
+ok('--sidebar-width vẫn khai báo trong :root',
+  /--sidebar-width:\s*340px/.test(htmlSrc));
+ok('--sidebar-collapsed vẫn khai báo trong :root',
+  /--sidebar-collapsed:\s*-340px/.test(htmlSrc));
+ok('có hàm initSidebarResize',
+  /function initSidebarResize\(\)/.test(appSrc));
+ok('initSidebarResize gọi ở cuối file (init)',
+  /\ninitSidebarResize\(\);\s*$/.test(appSrc));
+ok('có hàm applySidebarWidth ghi --sidebar-width',
+  /function applySidebarWidth\(/.test(appSrc) &&
+  /setProperty\('--sidebar-width',\s*w\s*\+\s*'px'\)/.test(fnBody('applySidebarWidth')));
+ok('applySidebarWidth cập nhật cả --sidebar-collapsed',
+  /setProperty\('--sidebar-collapsed',\s*\(-w\)\s*\+\s*'px'\)/.test(fnBody('applySidebarWidth')));
+ok('applySidebarWidth gọi updateSidebarState (đồng bộ nút)',
+  /updateSidebarState\(\)/.test(fnBody('applySidebarWidth')));
+ok('có hàm clampSidebarWidth ép trong min/max',
+  /function clampSidebarWidth\(/.test(appSrc) &&
+  /Math\.min\(max,\s*Math\.max\(SIDEBAR_MIN_WIDTH/.test(fnBody('clampSidebarWidth')));
+ok('có hằng SIDEBAR_MIN_WIDTH = 260',
+  /SIDEBAR_MIN_WIDTH\s*=\s*260/.test(appSrc));
+ok('có hằng SIDEBAR_DEFAULT_WIDTH = 340',
+  /SIDEBAR_DEFAULT_WIDTH\s*=\s*340/.test(appSrc));
+ok('có hằng SIDEBAR_WIDTH_KEY = sidebarWidth',
+  /SIDEBAR_WIDTH_KEY\s*=\s*'sidebarWidth'/.test(appSrc));
+ok('có hàm savedSidebarWidth đọc localStorage',
+  /function savedSidebarWidth\(\)/.test(appSrc) &&
+  /localStorage\.getItem\(SIDEBAR_WIDTH_KEY\)/.test(fnBody('savedSidebarWidth')));
+ok('initSidebarResize khôi phục độ rộng đã lưu',
+  /savedSidebarWidth\(\)/.test(fnBody('initSidebarResize')) &&
+  /applySidebarWidth\(saved\)/.test(fnBody('initSidebarResize')));
+ok('initSidebarResize lưu độ rộng khi thả chuột',
+  /localStorage\.setItem\(SIDEBAR_WIDTH_KEY/.test(fnBody('initSidebarResize')));
+ok('initSidebarResize bọc try/catch khi ghi localStorage',
+  /try\s*\{\s*localStorage\.setItem\(SIDEBAR_WIDTH_KEY/.test(fnBody('initSidebarResize')));
+ok('initSidebarResize nghe mousedown + touchstart',
+  /addEventListener\('mousedown',\s*onDown\)/.test(fnBody('initSidebarResize')) &&
+  /addEventListener\('touchstart',\s*onDown/.test(fnBody('initSidebarResize')));
+ok('initSidebarResize chặn kéo khi panel đang thu gọn',
+  /if \(sidebar\.classList\.contains\('collapsed'\)\) return;/.test(fnBody('initSidebarResize')));
+ok('onUp gỡ hết listener (không rò rỉ)',
+  (fnBody('initSidebarResize').match(/removeEventListener\(/g) || []).length >= 4);
+ok('có hàm resetSidebarWidth (nháy đúp)',
+  /function resetSidebarWidth\(\)/.test(appSrc));
+ok('resetSidebarWidth xoá key localStorage',
+  /localStorage\.removeItem\(SIDEBAR_WIDTH_KEY\)/.test(fnBody('resetSidebarWidth')));
+ok('handle nghe dblclick -> resetSidebarWidth',
+  /addEventListener\('dblclick',\s*resetSidebarWidth\)/.test(fnBody('initSidebarResize')));
+ok('handle có tabindex + role=separator (bàn phím)',
+  /setAttribute\('tabindex',\s*'0'\)/.test(fnBody('initSidebarResize')) &&
+  /setAttribute\('role',\s*'separator'\)/.test(fnBody('initSidebarResize')));
+ok('handle hỗ trợ ArrowLeft/ArrowRight',
+  /e\.key === 'ArrowLeft'/.test(fnBody('initSidebarResize')) &&
+  /e\.key === 'ArrowRight'/.test(fnBody('initSidebarResize')));
+ok('handle hỗ trợ Home để đặt lại',
+  /e\.key === 'Home'/.test(fnBody('initSidebarResize')));
+ok('có hàm invalidateMapSize gọi map.invalidateSize',
+  /function invalidateMapSize\(\)/.test(appSrc) &&
+  /window\.map\.invalidateSize\(\)/.test(fnBody('invalidateMapSize')));
+ok('onUp gọi invalidateMapSize sau khi kéo',
+  /invalidateMapSize\(\)/.test(fnBody('initSidebarResize')));
+ok('nút toggle gọi invalidateMapSize sau transition',
+  /setTimeout\(invalidateMapSize,\s*320\)/.test(fnBody('initSidebarResize')));
+ok('cửa sổ resize thì clamp lại độ rộng',
+  /window\.addEventListener\('resize'/.test(fnBody('initSidebarResize')));
+ok('i18n sidebar.resize có ở cả vi + en',
+  (appSrc.match(/'sidebar\.resize':/g) || []).length === 2);
+ok('i18n sidebar.resizeReset có ở cả vi + en',
+  (appSrc.match(/'sidebar\.resizeReset':/g) || []).length === 2);
+ok('sidebarMaxWidth chừa chỗ cho map (SIDEBAR_MIN_MAP_WIDTH)',
+  /function sidebarMaxWidth\(\)/.test(appSrc) &&
+  /window\.innerWidth\s*-\s*SIDEBAR_MIN_MAP_WIDTH/.test(fnBody('sidebarMaxWidth')));
+ok('sidebarMaxWidth không trả dưới MIN_WIDTH kể cả màn hình hẹp',
+  /Math\.max\(SIDEBAR_MIN_WIDTH/.test(fnBody('sidebarMaxWidth')));
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

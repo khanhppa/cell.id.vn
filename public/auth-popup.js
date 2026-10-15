@@ -25,6 +25,7 @@
       captchaLabel: 'Mã xác nhận', captchaClick: 'Bấm để đổi mã',
       captchaPlaceholder: 'Nhập 6 ký tự',
       acceptTerms: 'Tôi đồng ý với', termsLink: 'điều khoản sử dụng',
+      termsTitle: 'Điều khoản sử dụng', termsBack: '← Về đăng ký',
       loginBtn: 'Đăng nhập', registerBtn: 'Đăng ký', submitting: 'Đang xử lý…',
       forgot: 'Quên mật khẩu?', noAccount: 'Chưa có tài khoản?', backToLogin: '← Về đăng nhập',
       verifyTitle: 'Kích hoạt tài khoản',
@@ -62,6 +63,7 @@
       captchaLabel: 'Verification code', captchaClick: 'Click to refresh',
       captchaPlaceholder: 'Enter 6 characters',
       acceptTerms: 'I agree to the', termsLink: 'terms of use',
+      termsTitle: 'Terms of use', termsBack: '← Back to sign up',
       loginBtn: 'Sign in', registerBtn: 'Sign up', submitting: 'Working…',
       forgot: 'Forgot password?', noAccount: 'No account yet?', backToLogin: '← Back to sign in',
       verifyTitle: 'Activate account',
@@ -131,57 +133,106 @@
       '#authPopupOverlay.show{display:flex}',
       // overflow:hidden + flex column: chỉ #apBody cuộn, nên scrollbar KHÔNG chồng
       // lên viền bo góc 16px và không cắt mất nút đóng. dvh ưu tiên mobile.
+      // Padding gọn (18/22/20) + các class dưới nén lại để form vừa khung,
+      // KHÔNG phát sinh nhu cầu cuộn trên phần lớn màn hình.
       '#authPopupBox{width:100%;max-width:410px;max-height:92vh;max-height:calc(100dvh - 32px);',
       'overflow:hidden;display:flex;flex-direction:column;background:var(--bg-surface,#fff);',
       'color:var(--text-primary,#1a1a2e);border:1px solid var(--border-color,rgba(0,0,0,.12));border-radius:16px;',
-      'box-shadow:0 24px 70px rgba(0,0,0,.35);padding:22px 24px 24px;position:relative;font-size:14px;',
+      'box-shadow:0 24px 70px rgba(0,0,0,.35);padding:18px 22px 20px;position:relative;font-size:14px;',
       "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}",
-      // Vùng cuộn thật: chỉ form cuộn; chừa lề phải để thumb không dính chữ.
+      // Vùng cuộn DỰ PHÒNG: form đã nén nên thường không cuộn; trên màn rất thấp
+      // vẫn cuộn được nhưng thanh mảnh + chỉ hiện khi hover (overlay, không chiếm chỗ).
       '#apBody{overflow-y:auto;overflow-x:hidden;flex:1 1 auto;min-height:0;',
-      'margin:0 -8px 0 0;padding-right:8px;scrollbar-width:thin;',
-      'scrollbar-color:var(--border-color,rgba(0,0,0,.22)) transparent}',
-      '#apBody::-webkit-scrollbar{width:8px}',
+      'scrollbar-width:thin;scrollbar-color:var(--border-color,rgba(0,0,0,.22)) transparent}',
+      '#apBody::-webkit-scrollbar{width:6px}',
       '#apBody::-webkit-scrollbar-track{background:transparent}',
-      '#apBody::-webkit-scrollbar-thumb{background:var(--border-color,rgba(0,0,0,.22));border-radius:8px}',
+      '#apBody::-webkit-scrollbar-thumb{background:transparent;border-radius:8px}',
+      '#apBody:hover::-webkit-scrollbar-thumb{background:var(--border-color,rgba(0,0,0,.22))}',
       '#apBody::-webkit-scrollbar-thumb:hover{background:var(--text-faint,rgba(0,0,0,.35))}',
       // Thanh tiêu đề (brand + nút đóng) đứng yên khi form cuộn.
       '.ap-top{flex:0 0 auto}',
       '.ap-close{position:absolute;top:12px;right:12px;border:0;background:transparent;cursor:pointer;',
       'font-size:18px;color:var(--text-secondary,#667);line-height:1;padding:4px}',
-      '.ap-brand{font-size:19px;font-weight:800;text-align:center;margin:0 0 4px;color:var(--text-primary,#1a1a2e)}',
-      '.ap-tabs{display:flex;gap:6px;background:var(--bg-surface2,rgba(0,0,0,.04));border-radius:10px;padding:4px;margin:14px 0 16px}',
-      '.ap-tab{flex:1;padding:9px;border:0;border-radius:8px;background:transparent;cursor:pointer;',
+      '.ap-brand{font-size:17px;font-weight:800;text-align:center;margin:0 0 2px;color:var(--text-primary,#1a1a2e)}',
+      '.ap-tabs{display:flex;gap:6px;background:var(--bg-surface2,rgba(0,0,0,.04));border-radius:10px;padding:4px;margin:10px 0 12px}',
+      '.ap-tab{flex:1;padding:8px;border:0;border-radius:8px;background:transparent;cursor:pointer;',
       'font-size:13px;font-weight:600;color:var(--text-secondary,#556)}',
       '.ap-tab.active{background:var(--bg-btn-primary,#4444cc);color:#fff}',
-      '.ap-h2{font-size:16px;font-weight:700;margin:0 0 4px}',
-      '.ap-sub{font-size:12.5px;color:var(--text-secondary,#667);margin:0 0 14px;line-height:1.5}',
-      '.ap-field{margin-bottom:12px}',
+      '.ap-h2{font-size:15px;font-weight:700;margin:0 0 2px}',
+      '.ap-sub{font-size:12px;color:var(--text-secondary,#667);margin:0 0 10px;line-height:1.4}',
+      '.ap-field{margin-bottom:9px}',
+      // Nhãn đã chuyển vào placeholder; giữ class rỗng phòng khi cần định vị.
       '.ap-label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:var(--text-secondary,#556)}',
-      '.ap-input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:9px;',
+      // Bọc input + icon: icon tuyệt đối bên trái, input chừa lề trái.
+      '.ap-iw{position:relative;display:block}',
+      '.ap-ic{position:absolute;left:11px;top:50%;transform:translateY(-50%);display:flex;',
+      'color:var(--text-secondary,#667);opacity:.75;pointer-events:none}',
+      '.ap-ic svg{width:17px;height:17px;display:block}',
+      '.ap-iw .ap-input{padding-left:36px}',
+      '.ap-input{width:100%;box-sizing:border-box;padding:9px 11px;border-radius:9px;',
       'border:1px solid var(--border-color,rgba(0,0,0,.16));background:var(--bg-surface,#fff);',
       'color:var(--text-primary,#1a1a2e);font-size:14px;outline:none}',
       '.ap-input:focus{border-color:var(--border-focus,#4444cc)}',
       '.ap-captcha{display:flex;gap:10px;align-items:center}',
+      '.ap-captcha .ap-iw{flex:1 1 auto;min-width:0}',
       '.ap-canvas{flex:0 0 auto;border-radius:9px;border:1px solid var(--border-color,rgba(0,0,0,.16));',
       'cursor:pointer;background:#0f172a;user-select:none}',
-      '.ap-check{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.5;margin:4px 0 14px;',
+      '.ap-check{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.5;margin:4px 0 11px;',
       'color:var(--text-secondary,#556)}',
       '.ap-check input{margin-top:2px}.ap-check a{color:var(--accent,#2563eb);font-weight:600}',
-      '.ap-btn{width:100%;padding:11px;border:0;border-radius:9px;background:var(--bg-btn-primary,#4444cc);',
+      '.ap-btn{width:100%;padding:10px;border:0;border-radius:9px;background:var(--bg-btn-primary,#4444cc);',
       'color:#fff;font-size:14.5px;font-weight:700;cursor:pointer}',
       '.ap-btn:disabled{opacity:.6;cursor:not-allowed}',
-      '.ap-btn-ghost{width:100%;padding:10px;margin-top:8px;border:1px solid var(--border-color,rgba(0,0,0,.16));',
+      '.ap-btn-ghost{width:100%;padding:9px;margin-top:8px;border:1px solid var(--border-color,rgba(0,0,0,.16));',
       'border-radius:9px;background:transparent;color:var(--text-primary,#1a1a2e);font-size:13px;font-weight:600;cursor:pointer}',
       '.ap-link{color:var(--accent,#2563eb);cursor:pointer;font-weight:600;font-size:12.5px;background:none;border:0;padding:0}',
-      '.ap-foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:8px}',
-      '.ap-msg{margin-top:12px;font-size:12.5px;line-height:1.5;min-height:16px}',
+      '.ap-foot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:8px}',
+      '.ap-msg{margin-top:10px;font-size:12.5px;line-height:1.5;min-height:16px}',
+      // Rỗng thì không chiếm chỗ -> bớt ~26px chiều cao mỗi lần render.
+      '.ap-msg:empty{display:none}',
       '.ap-msg.err{color:#e5484d}.ap-msg.ok{color:#1f9e5a}.ap-msg.info{color:var(--text-secondary,#667)}',
       '.ap-dev{margin-top:10px;padding:10px;border-radius:9px;background:rgba(120,180,255,.12);',
       'border:1px dashed rgba(80,140,220,.5);font-size:12px;word-break:break-all}',
       '.ap-copy{margin-top:6px;font-size:11.5px;padding:4px 9px;border-radius:6px;cursor:pointer;',
-      'border:1px solid var(--border-color,rgba(0,0,0,.16));background:transparent;color:inherit}'
+      'border:1px solid var(--border-color,rgba(0,0,0,.16));background:transparent;color:inherit}',
+      // View "điều khoản" trong popup: nội dung nạp từ /terms.html, tự ăn màu theme
+      // của trang (biến --text-* / --border-color) nên khớp cả sáng lẫn tối.
+      '.ap-terms{margin-top:6px;font-size:12.5px;line-height:1.62;color:var(--text-secondary,#556)}',
+      '.ap-terms h1{font-size:15px;margin:0 0 2px;color:var(--text-primary,#1a1a2e)}',
+      '.ap-terms h2{font-size:13px;margin:14px 0 4px;color:var(--border-focus,#4444cc)}',
+      '.ap-terms p,.ap-terms li{font-size:12.5px;line-height:1.62;color:var(--text-secondary,#556)}',
+      '.ap-terms ul{margin:5px 0 0 18px}',
+      '.ap-terms .updated{font-size:11.5px;color:var(--text-faint,#aaaabb);margin-bottom:6px}',
+      '.ap-terms .note,.ap-terms .foot{display:none}',
+      '.ap-terms a{color:var(--accent,#2563eb)}',
+      '.ap-terms.loading{color:var(--text-muted,#888899);font-style:italic}'
     ].join('');
     document.head.appendChild(st);
+  }
+
+  // ==========================================================================
+  // Icon + field — nhãn đã chuyển vào placeholder nên cần icon để nhận diện.
+  // SVG inline (stroke=currentColor) để không phụ thuộc thư viện icon nào.
+  // ==========================================================================
+  var ICON = {
+    user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.5c0-4 3.4-6.4 7.5-6.4s7.5 2.4 7.5 6.4"/></svg>',
+    mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.6 6.6 12 13l8.4-6.4"/></svg>',
+    lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>',
+    shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 5 6v6c0 4.3 3 7.6 7 8.8 4-1.2 7-4.5 7-8.8V6l-7-2.8Z"/><path d="m9.2 12.2 2 2 3.6-4"/></svg>',
+    key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.2" cy="15.8" r="3.6"/><path d="m10.9 13.1 7.6-7.6M16 8l2.3 2.3M18.4 5.6l2.3 2.3"/></svg>'
+  };
+
+  function ic(name) {
+    return '<span class="ap-ic" aria-hidden="true">' + (ICON[name] || '') + '</span>';
+  }
+
+  /**
+   * Bọc input trong .ap-iw kèm icon bên trái.
+   * @param {string} iconName khoá trong ICON
+   * @param {string} inputHtml thẻ <input> đã dựng
+   */
+  function field(iconName, inputHtml) {
+    return '<div class="ap-iw">' + ic(iconName) + inputHtml + '</div>';
   }
 
   // ==========================================================================
@@ -195,9 +246,12 @@
   }
 
   function captchaField() {
-    return '<div class="ap-field"><label class="ap-label">' + esc(T('captchaLabel')) + '</label>' +
+    return '<div class="ap-field">' +
       '<div class="ap-captcha">' +
-      '<input class="ap-input" id="apCaptcha" maxlength="6" autocapitalize="characters" placeholder="' + esc(T('captchaPlaceholder')) + '">' +
+      field('shield',
+        '<input class="ap-input" id="apCaptcha" maxlength="6" autocapitalize="characters"' +
+        ' placeholder="' + esc(T('captchaPlaceholder')) + '"' +
+        ' aria-label="' + esc(T('captchaLabel')) + '" title="' + esc(T('captchaLabel')) + '">') +
       '<canvas class="ap-canvas" id="apCaptchaCanvas" width="118" height="42" title="' + esc(T('captchaClick')) + '" onclick="AuthPopup.refreshCaptcha()"></canvas>' +
       '</div></div>';
   }
@@ -206,10 +260,14 @@
     return tabsHtml() +
       '<h2 class="ap-h2">' + esc(T('loginTitle')) + '</h2>' +
       '<p class="ap-sub">' + esc(T('loginSub')) + '</p>' +
-      '<div class="ap-field"><label class="ap-label">' + esc(T('usernameOrEmail')) + '</label>' +
-      '<input class="ap-input" id="apUser" autocomplete="username" placeholder="' + esc(T('usernameOrEmail')) + '"></div>' +
-      '<div class="ap-field"><label class="ap-label">' + esc(T('password')) + '</label>' +
-      '<input class="ap-input" id="apPass" type="password" autocomplete="current-password" placeholder="' + esc(T('password')) + '"></div>' +
+      '<div class="ap-field">' + field('user',
+        '<input class="ap-input" id="apUser" autocomplete="username"' +
+        ' placeholder="' + esc(T('usernameOrEmail')) + '"' +
+        ' aria-label="' + esc(T('usernameOrEmail')) + '" title="' + esc(T('usernameOrEmail')) + '">') + '</div>' +
+      '<div class="ap-field">' + field('lock',
+        '<input class="ap-input" id="apPass" type="password" autocomplete="current-password"' +
+        ' placeholder="' + esc(T('password')) + '"' +
+        ' aria-label="' + esc(T('password')) + '" title="' + esc(T('password')) + '">') + '</div>' +
       '<button class="ap-btn" id="apSubmit" onclick="AuthPopup.submitLogin()">' + esc(T('loginBtn')) + '</button>' +
       '<div class="ap-foot"><button class="ap-link" onclick="AuthPopup.view(\'forgot\')">' + esc(T('forgot')) + '</button>' +
       '<button class="ap-link" onclick="AuthPopup.view(\'register\')">' + esc(T('noAccount')) + '</button></div>' +
@@ -220,17 +278,24 @@
     return tabsHtml() +
       '<h2 class="ap-h2">' + esc(T('registerTitle')) + '</h2>' +
       '<p class="ap-sub">' + esc(T('registerSub')) + '</p>' +
-      '<div class="ap-field"><label class="ap-label">' + esc(T('username')) + '</label>' +
-      '<input class="ap-input" id="apUser" autocomplete="username" placeholder="' + esc(T('username')) + '"></div>' +
-      '<div class="ap-field"><label class="ap-label">' + esc(T('email')) + '</label>' +
-      '<input class="ap-input" id="apEmail" type="email" autocomplete="email" placeholder="you@example.com"></div>' +
-      '<div class="ap-field"><label class="ap-label">' + esc(T('password')) + '</label>' +
-      '<input class="ap-input" id="apPass" type="password" autocomplete="new-password" placeholder="' + esc(T('password')) + '"></div>' +
-      '<div class="ap-field"><label class="ap-label">' + esc(T('confirmPassword')) + '</label>' +
-      '<input class="ap-input" id="apPass2" type="password" autocomplete="new-password" placeholder="' + esc(T('confirmPassword')) + '"></div>' +
+      '<div class="ap-field">' + field('user',
+        '<input class="ap-input" id="apUser" autocomplete="username"' +
+        ' placeholder="' + esc(T('username')) + '"' +
+        ' aria-label="' + esc(T('username')) + '" title="' + esc(T('username')) + '">') + '</div>' +
+      '<div class="ap-field">' + field('mail',
+        '<input class="ap-input" id="apEmail" type="email" autocomplete="email" placeholder="you@example.com"' +
+        ' aria-label="' + esc(T('email')) + '" title="' + esc(T('email')) + '">') + '</div>' +
+      '<div class="ap-field">' + field('lock',
+        '<input class="ap-input" id="apPass" type="password" autocomplete="new-password"' +
+        ' placeholder="' + esc(T('password')) + '"' +
+        ' aria-label="' + esc(T('password')) + '" title="' + esc(T('password')) + '">') + '</div>' +
+      '<div class="ap-field">' + field('lock',
+        '<input class="ap-input" id="apPass2" type="password" autocomplete="new-password"' +
+        ' placeholder="' + esc(T('confirmPassword')) + '"' +
+        ' aria-label="' + esc(T('confirmPassword')) + '" title="' + esc(T('confirmPassword')) + '">') + '</div>' +
       captchaField() +
       '<label class="ap-check"><input type="checkbox" id="apTerms"> <span>' + esc(T('acceptTerms')) +
-      ' <a href="/terms.html" target="_blank" rel="noopener">' + esc(T('termsLink')) + '</a></span></label>' +
+      ' <a href="/terms.html" onclick="AuthPopup.view(\'terms\');return false;">' + esc(T('termsLink')) + '</a></span></label>' +
       '<button class="ap-btn" id="apSubmit" onclick="AuthPopup.submitRegister()">' + esc(T('registerBtn')) + '</button>' +
       '<div class="ap-msg" id="apMsg"></div>';
   }
@@ -238,9 +303,10 @@
   function verifyHtml() {
     return '<h2 class="ap-h2">' + esc(T('verifyTitle')) + '</h2>' +
       '<p class="ap-sub">' + esc(T('verifySub', { email: state.email || '' })) + '</p>' +
-      '<div class="ap-field"><label class="ap-label">' + esc(T('resetCode')) + '</label>' +
-      '<input class="ap-input" id="apCode" maxlength="6" inputmode="numeric" placeholder="000000"' +
-      ' style="letter-spacing:6px;font-size:18px;text-align:center"></div>' +
+      '<div class="ap-field">' + field('key',
+        '<input class="ap-input" id="apCode" maxlength="6" inputmode="numeric" placeholder="000000"' +
+        ' aria-label="' + esc(T('resetCode')) + '" title="' + esc(T('resetCode')) + '"' +
+        ' style="letter-spacing:6px;font-size:18px;text-align:center">') + '</div>' +
       '<button class="ap-btn" id="apSubmit" onclick="AuthPopup.submitVerify()">' + esc(T('verifyBtn')) + '</button>' +
       '<button class="ap-btn-ghost" id="apResend" onclick="AuthPopup.resend()">' + esc(T('resend')) + '</button>' +
       '<div class="ap-msg" id="apMsg"></div>' +
@@ -250,8 +316,9 @@
   function forgotHtml() {
     return '<h2 class="ap-h2">' + esc(T('forgotTitle')) + '</h2>' +
       '<p class="ap-sub">' + esc(T('forgotSub')) + '</p>' +
-      '<div class="ap-field"><label class="ap-label">' + esc(T('email')) + '</label>' +
-      '<input class="ap-input" id="apEmail" type="email" autocomplete="email" placeholder="you@example.com"></div>' +
+      '<div class="ap-field">' + field('mail',
+        '<input class="ap-input" id="apEmail" type="email" autocomplete="email" placeholder="you@example.com"' +
+        ' aria-label="' + esc(T('email')) + '" title="' + esc(T('email')) + '">') + '</div>' +
       captchaField() +
       '<button class="ap-btn" id="apSubmit" onclick="AuthPopup.submitForgot()">' + esc(T('forgotBtn')) + '</button>' +
       '<div class="ap-msg" id="apMsg"></div>' +
@@ -261,16 +328,53 @@
   function resetHtml() {
     return '<h2 class="ap-h2">' + esc(T('resetTitle')) + '</h2>' +
       '<p class="ap-sub">' + esc(T('resetSub')) + '</p>' +
-      '<div class="ap-field"><label class="ap-label">' + esc(T('email')) + '</label>' +
-      '<input class="ap-input" id="apEmail" type="email" value="' + esc(state.email || '') + '" placeholder="you@example.com"></div>' +
-      '<div class="ap-field"><label class="ap-label">' + esc(T('resetCode')) + '</label>' +
-      '<input class="ap-input" id="apCode" maxlength="6" inputmode="numeric" placeholder="000000"' +
-      ' style="letter-spacing:6px;font-size:18px;text-align:center"></div>' +
-      '<div class="ap-field"><label class="ap-label">' + esc(T('newPassword')) + '</label>' +
-      '<input class="ap-input" id="apPass" type="password" autocomplete="new-password" placeholder="' + esc(T('newPassword')) + '"></div>' +
+      '<div class="ap-field">' + field('mail',
+        '<input class="ap-input" id="apEmail" type="email" value="' + esc(state.email || '') + '" placeholder="you@example.com"' +
+        ' aria-label="' + esc(T('email')) + '" title="' + esc(T('email')) + '">') + '</div>' +
+      '<div class="ap-field">' + field('key',
+        '<input class="ap-input" id="apCode" maxlength="6" inputmode="numeric" placeholder="000000"' +
+        ' aria-label="' + esc(T('resetCode')) + '" title="' + esc(T('resetCode')) + '"' +
+        ' style="letter-spacing:6px;font-size:18px;text-align:center">') + '</div>' +
+      '<div class="ap-field">' + field('lock',
+        '<input class="ap-input" id="apPass" type="password" autocomplete="new-password"' +
+        ' placeholder="' + esc(T('newPassword')) + '"' +
+        ' aria-label="' + esc(T('newPassword')) + '" title="' + esc(T('newPassword')) + '">') + '</div>' +
       '<button class="ap-btn" id="apSubmit" onclick="AuthPopup.submitReset()">' + esc(T('resetBtn')) + '</button>' +
       '<div class="ap-msg" id="apMsg"></div>' +
       '<div class="ap-foot"><button class="ap-link" onclick="AuthPopup.view(\'login\')">' + esc(T('backToLogin')) + '</button></div>';
+  }
+
+  // Điều khoản hiển thị NGAY TRONG popup (thay vì mở tab /terms.html). Nội dung
+  // lấy từ /terms.html rồi trích `#termsCard` -> chỉ một nguồn duy nhất, không
+  // phải chép lại văn bản vào JS. Màu do CSS .ap-terms ăn biến theme của trang.
+  function termsHtml() {
+    return '<h2 class="ap-h2">' + esc(T('termsTitle')) + '</h2>' +
+      '<div class="ap-terms loading" id="apTermsBody">…</div>' +
+      '<div class="ap-foot"><button class="ap-link" onclick="AuthPopup.view(\'register\')">' + esc(T('termsBack')) + '</button></div>';
+  }
+
+  /** Eager-load /terms.html rồi nhét nội dung #termsCard vào khung .ap-terms. */
+  function loadTerms() {
+    var box = document.getElementById('apTermsBody');
+    if (!box) return;
+    fetch('/terms.html').then(function (r) { return r.text(); }).then(function (html) {
+      var box2 = document.getElementById('apTermsBody');
+      if (!box2) return; // người dùng đã rời view
+      // Lấy ruột #termsCard: từ sau thẻ mở tới ngay trước khối .foot
+      // (bám .foot vì card chứa nhiều </div> lồng nhau, không đếm cho chắc được).
+      var m = html.match(/id="termsCard"[^>]*>([\s\S]*?)<\/div>\s*<div class="foot">/);
+      var inner = m ? m[1] : '';
+      if (!inner) {
+        // Fallback: từ <h1> tới hết khối .note (nếu markup .foot đổi).
+        var m2 = html.match(/<h1[\s\S]*?<div class="note">[\s\S]*?<\/div>/);
+        inner = m2 ? m2[0] : '';
+      }
+      box2.className = 'ap-terms';
+      box2.innerHTML = inner || esc(T('errNetwork'));
+    }).catch(function () {
+      var box2 = document.getElementById('apTermsBody');
+      if (box2) { box2.className = 'ap-terms'; box2.textContent = T('errNetwork'); }
+    });
   }
 
   function render() {
@@ -280,8 +384,10 @@
     else if (state.view === 'register') body.innerHTML = registerHtml();
     else if (state.view === 'verify') body.innerHTML = verifyHtml();
     else if (state.view === 'forgot') body.innerHTML = forgotHtml();
+    else if (state.view === 'terms') body.innerHTML = termsHtml();
     else body.innerHTML = resetHtml();
 
+    if (state.view === 'terms') { loadTerms(); return; } // không có input -> bỏ focus/Enter
     if (document.getElementById('apCaptchaCanvas')) refreshCaptcha();
     var focusId = (state.view === 'verify' || state.view === 'reset') ? 'apCode'
       : (state.view === 'forgot' ? 'apEmail' : 'apUser');
@@ -296,6 +402,7 @@
     box.onkeydown = function (e) {
       if (e.key !== 'Enter') return;
       e.preventDefault();
+      if (state.view === 'terms') return;
       if (state.view === 'login') AuthPopup.submitLogin();
       else if (state.view === 'register') AuthPopup.submitRegister();
       else if (state.view === 'verify') AuthPopup.submitVerify();

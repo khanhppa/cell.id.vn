@@ -68,7 +68,16 @@ const { isPlausibleLatLng } = require('./geo-util');
 // Middleware
 app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+// `version.js` và `version.html` là tài nguyên hay bị sửa (bump phiên bản / sửa
+// renderer changelog) nhưng lại KHÔNG có tên gắn hash như build tool. Trình duyệt
+// giữ bản cũ trong cache → user mở /version.html vẫn thấy UI/nội dung cũ dù server
+// đã đổi. Ép revalidate (vẫn cho 304 nếu chưa đổi) để luôn lấy bản mới nhất.
+const ALWAYS_REVALIDATE = /[\\/](version\.js|version\.html)$/;
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders(res, filePath) {
+    if (ALWAYS_REVALIDATE.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+  }
+}));
 
 // Auth middleware
 const JWT_SECRET = process.env.JWT_SECRET || 'cell-tracker-secret-key-2024';
@@ -714,14 +723,18 @@ app.get('/api/credits/balance', requireAuth, async (req, res) => {
 // ========================
 // Version (public)
 // ========================
-// Nguồn: package.json + CHANGELOG.md, cache trong RAM lúc start (xem version.js).
+// Nguồn: package.json + CHANGELOG.md, tự nạp lại khi file đổi (xem version.js).
+// `no-store`: thông tin phiên bản phải luôn tươi, không để browser/proxy cache lại
+// (sửa CHANGELOG.md xong reload trang là phải thấy nội dung mới).
 app.get('/api/version', (req, res) => {
+  res.set('Cache-Control', 'no-store');
   try { res.json(version.getInfo()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Lịch sử phiên bản = thông tin nội bộ → chỉ admin (xem trang admin panel).
 app.get('/api/version/changelog', requireAuth, requireAdmin, (req, res) => {
+  res.set('Cache-Control', 'no-store');
   try { res.json({ version: version.getInfo().version, changelog: version.getChangelog() }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -862,6 +875,22 @@ function topupUserRateLimit(req, res, next) {
   if (hits.length >= 10) return res.status(429).json({ error: 'Bạn thao tác quá nhanh, thử lại sau 1 phút' });
   hits.push(now);
   topupUserHits.set(key, hits);
+  next();
+}
+
+// Rate limit riêng cho đối soát: route này gọi RA payOS nên phải rộng hơn
+// (client tự gọi ~1 lần/20s khi đơn còn PENDING = ~15 lần/5 phút) nhưng vẫn
+// chặn được vòng lặp bấm tay. Không dùng chung topupUserRateLimit (10/phút)
+// vì sẽ tự khoá luồng poll của chính khách đang chờ trả tiền.
+const topupSyncHits = new Map();
+function topupSyncRateLimit(req, res, next) {
+  if (process.env.AUTH_TEST_NO_RATELIMIT === '1') return next();
+  const key = String(req.user.id);
+  const now = Date.now();
+  const hits = (topupSyncHits.get(key) || []).filter(t => now - t < 300000);
+  if (hits.length >= 30) return res.status(429).json({ error: 'Bạn kiểm tra quá nhanh, thử lại sau ít phút' });
+  hits.push(now);
+  topupSyncHits.set(key, hits);
   next();
 }
 
@@ -1028,6 +1057,34 @@ app.post('/api/credits/topup/:orderCode/cancel', requireAuth, topupUserRateLimit
     } catch (e) { payosWarn = e.message; }
     await topup.updateOrderStatus(order.id, topup.STATUSES.CANCELLED);
     res.json({ success: true, order_code: code, status: topup.STATUSES.CANCELLED, warning: payosWarn });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Đối soát đơn của CHÍNH user với payOS (fallback khi webhook không tới).
+// Client gọi định kỳ khi poll mãi thấy PENDING → tránh cảnh "trả tiền rồi mà
+// đơn vẫn chờ thanh toán" khi webhook chưa được đăng ký / URL chưa public.
+// Điểm vẫn CHỈ được cộng bởi payOS báo PAID qua SDK; client không tự cộng được.
+app.post('/api/credits/topup/:orderCode/sync', requireAuth, topupSyncRateLimit, async (req, res) => {
+  try {
+    const code = parseInt(req.params.orderCode, 10);
+    if (!Number.isFinite(code)) return res.status(400).json({ error: 'order_code không hợp lệ' });
+    const order = await topup.getOrderByCode(code);
+    if (!order) return res.status(404).json({ error: 'Không tìm thấy đơn' });
+    if (order.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Không có quyền với đơn này' });
+    }
+    // Đơn đã có kết quả cuối → trả luôn, KHÔNG gọi payOS và KHÔNG hạ cấp trạng thái.
+    if (order.status !== topup.STATUSES.PENDING) {
+      return res.json({
+        success: true, status: order.status, synced: false, already: order.status === topup.STATUSES.PAID
+      });
+    }
+
+    const r = await syncOrderFromPayos(order);
+    // Lỗi tạm thời từ payOS (mạng/5xx) KHÔNG làm hỏng nhịp poll của client:
+    // trả 200 kèm synced=false để client thử lại vòng sau thay vì hiện lỗi đỏ.
+    if (!r.ok) return res.json({ success: true, status: order.status, synced: false, remote_error: r.message });
+    res.json({ success: true, status: r.status, remote_status: r.remoteStatus, synced: true, credited: r.credited });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1256,6 +1313,29 @@ app.get('/api/admin/payments/stats', requireAuth, requireAdmin, async (req, res)
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Lõi đối soát 1 đơn với payOS (fallback khi webhook không tới).
+// Dùng chung cho route admin (đối soát tay trong admin.html) và route user
+// (/api/credits/topup/:code/sync — client tự gọi khi poll mãi vẫn PENDING).
+// KHÔNG tin client: chỉ cộng điểm khi payOS thật báo PAID, và creditOrder
+// idempotent theo ledgerRef nên gọi lặp vô hại.
+async function syncOrderFromPayos(order) {
+  const code = order.order_code;
+  const remote = await payos.getPaymentLink(order.payment_link_id || code);
+  if (!remote.ok) return { ok: false, message: remote.message || 'Không lấy được trạng thái từ payOS' };
+
+  const status = remote.data.status;
+  let credited = null;
+  if (status === 'PAID') {
+    const tx = (remote.data.transactions && remote.data.transactions[0]) || null;
+    credited = await topup.creditOrder(code, { transactionRef: tx ? tx.reference : null });
+  } else if (['CANCELLED', 'EXPIRED', 'UNDERPAID', 'FAILED'].includes(status)
+    && order.status === topup.STATUSES.PENDING) {
+    await topup.updateOrderStatus(order.id, status);
+  }
+  const fresh = await topup.getOrderByCode(code);
+  return { ok: true, status: fresh.status, remoteStatus: status, credited };
+}
+
 // Đồng bộ trạng thái 1 đơn từ payOS (fallback khi webhook không tới).
 // Dùng paymentLinkId nếu có, không thì orderCode.
 app.post('/api/admin/payments/:orderCode/sync', requireAuth, requireAdmin, creditAdminRateLimit, async (req, res) => {
@@ -1265,19 +1345,9 @@ app.post('/api/admin/payments/:orderCode/sync', requireAuth, requireAdmin, credi
     const order = await topup.getOrderByCode(code);
     if (!order) return res.status(404).json({ error: 'Không tìm thấy đơn' });
 
-    const remote = await payos.getPaymentLink(order.payment_link_id || code);
-    if (!remote.ok) return res.status(400).json({ error: remote.message || 'Không lấy được trạng thái từ payOS' });
-
-    const status = remote.data.status;
-    let credited = null;
-    if (status === 'PAID') {
-      const tx = (remote.data.transactions && remote.data.transactions[0]) || null;
-      credited = await topup.creditOrder(code, { transactionRef: tx ? tx.reference : null });
-    } else if (['CANCELLED', 'EXPIRED', 'UNDERPAID', 'FAILED'].includes(status) && order.status === topup.STATUSES.PENDING) {
-      await topup.updateOrderStatus(order.id, status);
-    }
-    const fresh = await topup.getOrderByCode(code);
-    res.json({ success: true, status: fresh.status, remote_status: status, credited });
+    const r = await syncOrderFromPayos(order);
+    if (!r.ok) return res.status(400).json({ error: r.message });
+    res.json({ success: true, status: r.status, remote_status: r.remoteStatus, credited: r.credited });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -2149,11 +2219,13 @@ app.get('/api/cells/resolve', requireAuth, (req, res) => {
         let data = null;
         if (src.type === 'opencellid') {
           const apiKey = await getOpenCellIDKey();
-          if (!apiKey) continue;
+          if (!apiKey) { noteSourceError('opencellid', 'Chưa cấu hình API key'); continue; }
+          let lastErr = null;
           for (const candidateId of candidates) {
-            try { data = await resolveOpenCellID({ mcc, mnc, lac, cellid: candidateId }, apiKey); break; }
-            catch (e) { /* try next candidate */ }
+            try { data = await resolveOpenCellID({ mcc, mnc, lac, cellid: candidateId }, apiKey); lastErr = null; break; }
+            catch (e) { lastErr = e; /* try next candidate */ }
           }
+          if (!data && lastErr) noteSourceError('opencellid', lastErr.message);
         } else if (src.type === 'opencellid_web') {
           data = await resolveOpenCellIDWeb({ mcc, mnc, lac, cellid, radio: radioHint || (row ? row.radio : '') }, sector);
         } else if (src.type === 't0stbrot') {
@@ -2162,6 +2234,7 @@ app.get('/api/cells/resolve', requireAuth, (req, res) => {
           data = await resolveCombain({ mcc, mnc, lac, cellid, sector, radio: radioHint });
         }
         if (data && data.lat != null) {
+          clearSourceError(src.type);
           if (!isPlausibleLatLng(data.lat, data.lon, mcc)) {
             console.warn(`geo gate: bỏ toạ độ không hợp lệ từ ${src.type} (${mcc}-${mnc}-${lac}-${cellid} → ${data.lat},${data.lon})`);
             continue;
@@ -2188,23 +2261,96 @@ app.get('/api/cells/resolve', requireAuth, (req, res) => {
             data
           });
         }
-      } catch (e) { /* fall through to next source */ }
+      } catch (e) { noteSourceError(src.type, e.message); /* fall through to next source */ }
     }
+
+    // Google Geolocation — nguồn cuối, chỉ dùng khi MỌI nguồn per-cell đã miss.
+    // Google trả 1 toạ độ cho cả tập cell (không phải toạ độ riêng từng trạm) nên
+    // với 1 cell lẻ nó chỉ là ước lượng thô; vẫn hơn là miss hoàn toàn.
+    if (onlineSources.some(s => s.type === 'google')) {
+      const gKey = await getGoogleKey();
+      if (!gKey) {
+        noteSourceError('google', 'Chưa cấu hình API key');
+      } else {
+        try {
+          const cell = { mcc, mnc, lac, cellid, sector, radio: radioHint };
+          const g = await resolveGoogleGeolocation([cell], gKey);
+          if (g && isPlausibleLatLng(g.lat, g.lng, mcc)) {
+            const storeRadio = radioHint || normalizeRadio(row ? row.radio : '') || inferRadio(cellid, sector, row ? row.radio : '');
+            const data = {
+              mcc, mnc, lac, cellid,
+              lat: g.lat, lon: g.lng, range: g.accuracy,
+              radio: storeRadio,
+              description: `Google Geolocation ${mcc}-${mnc}`
+            };
+            const storeId = cellId.cellIdCandidates(cellid, sector)[0];
+            const store = await storeOnlineCell({
+              mcc, mnc, lac, cellid: storeId,
+              lat: g.lat, lng: g.lng, range: g.accuracy, description: data.description,
+              source: 'google', radio: storeRadio, userId,
+            });
+            if (!store.written && store.reason && store.reason !== 'csv-protected') {
+              console.warn(`store gate: không ghi google ${mcc}-${mnc}-${lac}-${cellid} (${store.reason})`);
+            }
+            logOne(true, 'google', g.lat, g.lng, g.accuracy, storeRadio);
+            clearSourceError('google');
+            const charge = await credits.chargeLookup(userId, 1, chargeRef,
+              `Tra cứu 1 cell (${ONLINE_SOURCE_DEFAULTS.google.name})`);
+            if (!charge.ok) return res.status(402).json({ error: 'Không đủ điểm', balance: charge.balance, required: await credits.getCost(), reason: charge.reason });
+            return res.json({
+              source: 'google', credit: { balance: charge.balance, charged: charge.skipped ? 0 : 1 },
+              radioInferred: !radioHint && !normalizeRadio(storeRadio),
+              radioConfident: radioConfident(cellid, sector, radioHint || (row ? row.radio : '')),
+              data
+            });
+          }
+          console.warn(`geo gate: bỏ toạ độ không hợp lệ từ google (${mcc}-${mnc}-${lac}-${cellid} → ${g.lat},${g.lng})`);
+        } catch (e) {
+          noteSourceError('google', e.message);
+          console.warn(`Google Geolocation miss (${mcc}-${mnc}-${lac}-${cellid}): ${e.message}`);
+        }
+      }
+    }
+
     logOne(false, null, null, null, null);
     const names = ['CSDL nội bộ', ...onlineSources.map(s => ONLINE_SOURCE_DEFAULTS[s.type]?.name || s.type)];
-    res.status(404).json({ error: 'Không tìm thấy cell trong ' + names.join(', ') + '.' });
+    // `?debug=1` (admin) kèm lý do miss gần nhất của từng nguồn — thay vì phải mò log
+    // console (nhiều khi không bật file log). Không lộ key, chỉ giữ message lỗi.
+    const payload = { error: 'Không tìm thấy cell trong ' + names.join(', ') + '.' };
+    if (req.query.debug === '1' && req.user && req.user.role === 'admin') {
+      const perSource = {};
+      for (const src of onlineSources) {
+        let keyReady = true;
+        if (src.type === 'opencellid') keyReady = !!(await getOpenCellIDKey());
+        else if (src.type === 'google') keyReady = !!(await getGoogleKey());
+        else if (src.type === 'combain') keyReady = !!(await getCombainKey());
+        const le = sourceLastError.get(src.type);
+        perSource[src.type] = {
+          key: keyReady ? 'set' : 'missing',
+          lastError: le ? le.message : null,
+          lastErrorAt: le ? le.at : null
+        };
+      }
+      payload.debug = { sources: perSource, sourcesQueried: onlineSources.map(s => s.type) };
+    }
+    res.status(404).json(payload);
   }).catch((e) => res.status(500).json({ error: e.message }));
 });
 
 // Batch resolve for call logs — local first, then online sources by priority
 app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
-  const { cells, uploadId, fileName } = req.body;
+  const { cells, uploadId, fileName, roundIdx } = req.body;
   if (!Array.isArray(cells) || cells.length === 0) return res.status(400).json({ error: 'cells array required' });
 
   // uploadId do client sinh 1 lần cho cả file → mọi vòng resolve của cùng 1 lần
   // upload gộp về chung 1 nhóm trong lịch sử.
   const batchId = (typeof uploadId === 'string' && /^[A-Za-z0-9_-]{6,64}$/.test(uploadId))
     ? uploadId : require('crypto').randomUUID();
+  // Bút toán trừ điểm tách theo VÒNG: cùng 1 file có thể cần nhiều vòng (vượt ngân sách
+  // online mỗi lô) nên ref phải khác nhau, nếu không vòng sau bị coi là retry (DUPLICATE_TX)
+  // → tra ra rất nhiều cell mà chỉ trừ điểm vòng đầu. Retry CÙNG vòng vẫn idempotent.
+  const roundNo = Number.isFinite(Number(roundIdx)) ? Math.max(0, Math.floor(Number(roundIdx))) : 0;
+  const chargeRef = `${batchId}:r${roundNo}`;
   const userId = req.user ? req.user.id : null;
   const onlineSources = await getEnabledOnlineSources();
   const results = [];
@@ -2292,11 +2438,13 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
       try {
         let data = null;
         if (src.type === 'opencellid') {
-          if (!ocidKey) continue;
+          if (!ocidKey) { noteSourceError('opencellid', 'Chưa cấu hình API key'); continue; }
+          let lastErr = null;
           for (const lookupId of candidatesB) {
-            try { data = await resolveOpenCellID({ ...c, cellid: lookupId }, ocidKey); break; }
-            catch (e) { /* try next candidate */ }
+            try { data = await resolveOpenCellID({ ...c, cellid: lookupId }, ocidKey); lastErr = null; break; }
+            catch (e) { lastErr = e; /* try next candidate */ }
           }
+          if (!data && lastErr) noteSourceError('opencellid', lastErr.message);
         } else if (src.type === 'opencellid_web') {
           if (webCalls >= OCID_WEB_MAX_PER_BATCH) continue;
           if (webCalls > 0) await sleep(OCID_WEB_THROTTLE_MS);
@@ -2327,8 +2475,9 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
           data.radio = storeRadio;
           saved = data;
           savedType = src.type;
+          clearSourceError(src.type);
         }
-      } catch (e) { /* not found, try next source */ }
+      } catch (e) { noteSourceError(src.type, e.message); /* not found, try next source */ }
     }
 
     if (saved) {
@@ -2350,24 +2499,129 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
     }
   }
 
+  // Phase 3: Google Geolocation cho các cell MISS hết nguồn per-cell.
+  // Google trả 1 toạ độ ước lượng cho CẢ TẬP cell (multilateration) — không phải
+  // toạ độ riêng từng trạm — nên toạ độ nhận được gán chung cho mọi cell trong nhóm,
+  // với `range = accuracy` do Google báo. Gom cell thành nhóm ≤ max_google_per_batch
+  // để tránh trộn cell của nhiều vị trí khác nhau vào 1 phép định vị.
+  // Chỉ chạy khi mọi nguồn per-cell đã miss, nên không làm chậm/đội chi phí khi
+  // nguồn khác còn trả kết quả.
+  if (onlineSources.some(s => s.type === 'google')) {
+    const gKey = await getGoogleKey();
+    const maxPerReq = await getGoogleMaxPerBatch();
+    if (!gKey) {
+      if (onlineSources.some(s => s.type === 'google')) noteSourceError('google', 'Chưa cấu hình API key');
+    } else {
+      const missIdx = [];
+      for (let i = 0; i < cells.length; i++) {
+        const r = results[i];
+        if (!r || r.source || r.stillPending) continue;
+        if (historyItems[i] && historyItems[i].found) continue;
+        // Cell vượt ngân sách online vẫn để pending cho vòng kế tiếp — đừng tốn
+        // request Google cho phần chưa trả phí.
+        if (r.pending) { hasMore = true; continue; }
+        missIdx.push(i);
+      }
+      for (let g = 0; g < missIdx.length; g += maxPerReq) {
+        const group = missIdx.slice(g, g + maxPerReq);
+        const groupCells = group.map(i => ({ ...cells[i] }));
+        let gres = null;
+        try {
+          gres = await resolveGoogleGeolocation(groupCells, gKey);
+        } catch (e) {
+          noteSourceError('google', e.message);
+          console.warn(`Google Geolocation miss (lô ${groupCells.length} cell): ${e.message}`);
+          continue;
+        }
+        if (!gres) continue;
+        clearSourceError('google');
+        for (const i of group) {
+          const c = cells[i];
+          if (!isPlausibleLatLng(gres.lat, gres.lng, c.mcc)) {
+            console.warn(`geo gate: bỏ toạ độ không hợp lệ từ google (${c.mcc}-${c.mnc}-${c.lac}-${c.cellid} → ${gres.lat},${gres.lng})`);
+            continue;
+          }
+          const storeRadio = normalizeRadio(c.radio) || inferRadio(c.cellid, c.sector, c.radio);
+          const storeCellid = cellId.cellIdCandidates(c.cellid, c.sector)[0];
+          await storeOnlineCell({
+            mcc: c.mcc, mnc: c.mnc, lac: c.lac, cellid: storeCellid,
+            lat: gres.lat, lng: gres.lng, range: gres.accuracy,
+            description: `Google Geolocation ${c.mcc}-${c.mnc}`,
+            source: 'google', radio: storeRadio, userId,
+          });
+          const r2 = {
+            source: 'google', lat: gres.lat, lon: gres.lng, range: gres.accuracy,
+            radio: storeRadio, description: `Google Geolocation ${c.mcc}-${c.mnc}`
+          };
+          for (const a of cellAliasKeys(c)) memo.set(a, r2);
+          memo.set(canonicalCellKey(c), r2);
+          results[i] = { key: results[i].key, ...r2 };
+          historyItems[i] = { ...c, lat: gres.lat, lng: gres.lng, range: gres.accuracy, source: 'google', found: true, radio: storeRadio };
+          onlineCount++;
+        }
+      }
+    }
+  }
+
   for (const r of results) delete r.pending;
 
   logLookups(userId, 'batch', batchId, historyItems, fileName);
 
   // Trừ điểm theo SỐ LẦN TRA RA KẾT QUẢ (không tính miss), 1 bút toán cho cả lô.
-  // `ref = batchId` → retry cùng uploadId không bị trừ 2 lần.
+  // Chỉ trừ trong khả năng số dư (partial charge) — hết điểm giữa lô thì chỉ trả
+  // toạ độ cho `affordable` cell ĐẦU TIÊN (thứ tự user nạp vào), phần vượt điểm bị
+  // ẩn toạ độ (`unpaid:true`) để client không hiển thị kết quả chưa trả phí.
+  // `ref = chargeRef` (batchId + số vòng) → retry cùng vòng không bị trừ 2 lần,
+  // nhưng vòng kế tiếp vẫn được trừ đúng số cell tra thêm.
   const foundCount = historyItems.filter(h => h.found).length;
   let creditInfo = null;
+  let affordable = foundCount;
   if (creditOn && creditCost > 0 && foundCount > 0) {
     try {
-      const charge = await credits.chargeLookup(userId, foundCount, batchId,
+      const charge = await credits.chargeLookupPartial(userId, foundCount, chargeRef,
         `Tra cứu lô ${foundCount} cell (${fileName || 'upload'})`);
-      creditInfo = { balance: charge.balance, charged: charge.ok ? foundCount : 0, cost: creditCost, insufficient: !charge.ok };
+      affordable = Number.isFinite(Number(charge.charged)) ? Number(charge.charged) : foundCount;
+      // Retry cùng vòng (duplicate) → số cell đã trả phí tính ở lần trước, coi như
+      // toàn bộ found đã trả phí để client không ẩn oan kết quả.
+      if (charge.duplicate) affordable = foundCount;
+      creditInfo = {
+        balance: charge.balance, charged: charge.charged, requested: foundCount,
+        cost: creditCost, insufficient: !!charge.insufficient, duplicate: !!charge.duplicate
+      };
     } catch (e) {
       console.error('batch charge failed:', e.message);
+      affordable = 0;
     }
   } else if (creditOn && creditCost > 0) {
-    creditInfo = { balance: await credits.getBalance(userId), charged: 0, cost: creditCost };
+    creditInfo = { balance: await credits.getBalance(userId), charged: 0, requested: 0, cost: creditCost };
+  }
+
+  // Cờ `charged` theo từng cell, gán theo THỨ TỰ TRA (đầu → cuối): chỉ `affordable`
+  // cell found đầu tiên được coi là đã trả phí. Cell found vượt số điểm → ẩn toạ độ
+  // (`lat/lon/range = null`, `unpaid:true`) để không rò kết quả chưa trả phí.
+  let paidLeft = affordable;
+  let missCount = 0;
+  let unpaidCount = 0;
+  for (let i = 0; i < results.length; i++) {
+    const found = !!(historyItems[i] && historyItems[i].found);
+    if (!found) { missCount++; results[i].charged = false; continue; }
+    if (paidLeft > 0) {
+      paidLeft--;
+      results[i].charged = true;
+    } else {
+      unpaidCount++;
+      results[i].charged = false;
+      results[i].unpaid = true;
+      results[i].lat = null;
+      results[i].lon = null;
+      results[i].range = null;
+      results[i].source = null;
+    }
+  }
+  if (creditInfo) {
+    creditInfo.found = foundCount;
+    creditInfo.missed = missCount;
+    creditInfo.unpaid = unpaidCount;
   }
 
   res.json({ results, onlineLookups: onlineCount, batchId, hasMore, pending: hasMore, credit: creditInfo });
@@ -2415,15 +2669,42 @@ async function getOpenCellIDKey() {
 // data_sources row (by type); a source runs only while its row is enabled.
 // OpenCellID additionally needs a key; t0stbrot needs none.
 // opencellid_web dùng endpoint web nội bộ (không key) → seed ở trạng thái TẮT.
-const ONLINE_SOURCE_TYPES = ['opencellid', 'opencellid_web', 't0stbrot', 'combain'];
+const ONLINE_SOURCE_TYPES = ['opencellid', 'opencellid_web', 't0stbrot', 'google', 'combain'];
 const ONLINE_SOURCE_DEFAULTS = {
   opencellid: { name: 'OpenCellID.org', priority: 10 },
   opencellid_web: { name: 'OpenCellID.org (web)', priority: 15 },
   t0stbrot: { name: 't0stbrot.net', priority: 20 },
+  google: { name: 'Google Geolocation', priority: 25 },
   combain: { name: 'Combain.com', priority: 30 }
 };
-// Nguồn seed sẵn nhưng mặc định tắt (admin phải tự bật) do rate limit chặt.
-const ONLINE_SOURCE_DEFAULT_DISABLED = ['opencellid_web'];
+// Nguồn seed sẵn nhưng mặc định tắt (admin phải tự bật) do rate limit chặt / tốn phí.
+// `google` tốn tiền theo request và cần API key → mặc định TẮT.
+const ONLINE_SOURCE_DEFAULT_DISABLED = ['opencellid_web', 'google'];
+
+// Google Geolocation KHÔNG tra theo từng cell: nó trả 1 toạ độ ước lượng cho cả tập
+// cell (multilateration). Vì vậy nguồn này chỉ chạy SAU khi mọi nguồn per-cell đã
+// miss, và chỉ nhận các cell miss — 1 request/lần gán chung toạ độ cho cả nhóm.
+// Số cell tối đa gửi trong 1 request (tránh trộn cell của nhiều vị trí khác nhau);
+// admin chỉnh được qua setting `max_google_per_batch`.
+const GOOGLE_DEFAULT_MAX_PER_BATCH = 10;
+
+// Lỗi gần nhất của TỪNG nguồn online (in-memory, per source type). Nguồn online miss
+// trong im lặng (catch rỗng) nên admin không có cách nào biết vì sao "bật nguồn mà
+// không ra dữ liệu". Ghi lại message gần nhất + thời điểm để hiện ở tab Nguồn dữ liệu.
+// Chỉ giữ 1 entry mỗi nguồn → không phình bộ nhớ.
+const sourceLastError = new Map();
+// Giới hạn độ dài message lưu lại (lỗi axios/mạng có thể rất dài).
+const SOURCE_ERR_MAX_LEN = 300;
+
+function noteSourceError(type, message) {
+  if (!type) return;
+  const msg = String(message == null ? '' : message).replace(/[\r\n]+/g, ' ').slice(0, SOURCE_ERR_MAX_LEN);
+  sourceLastError.set(type, { message: msg, at: new Date().toISOString() });
+}
+
+function clearSourceError(type) {
+  if (type) sourceLastError.delete(type);
+}
 
 // Seed the built-in online sources once, so admins see them in the UI.
 function seedOnlineSources() {
@@ -2576,6 +2857,155 @@ async function resolveCombain({ mcc, mnc, lac, cellid, sector, radio }, apiKey) 
     };
   }
   throw new Error(lastMsg);
+}
+
+// Resolve a Google Maps key: prefer an enabled Google source in DB, fall back to env.
+function getGoogleKeyFromDB() {
+  return new Promise((resolve) => {
+    db.get("SELECT api_key FROM data_sources WHERE type = 'google' AND enabled = 1 AND api_key IS NOT NULL AND api_key != '' ORDER BY id LIMIT 1",
+      (err, row) => resolve(err || !row ? '' : row.api_key));
+  });
+}
+
+async function getGoogleKey() {
+  const dbKey = await getGoogleKeyFromDB();
+  if (dbKey) return dbKey;
+  return process.env.GOOGLE_MAPS_API_KEY || '';
+}
+
+// Số cell tối đa gửi Google trong 1 request (setting admin chỉnh được).
+async function getGoogleMaxPerBatch() {
+  const n = parseInt(await getSetting('max_google_per_batch', String(GOOGLE_DEFAULT_MAX_PER_BATCH)), 10);
+  return Number.isFinite(n) && n > 0 ? n : GOOGLE_DEFAULT_MAX_PER_BATCH;
+}
+
+// Map RAT nội bộ (LTE/GSM/...) sang radioType của Google: gsm|cdma|wcdma|lte|nr.
+function googleRadioType(radio) {
+  const r = String(normalizeRadio(radio) || radio || '').toUpperCase();
+  if (r === 'LTE') return 'lte';
+  if (r === 'NR' || r === '5G') return 'nr';
+  if (r === 'CDMA') return 'cdma';
+  if (r === 'WCDMA' || r === 'UMTS' || r === 'HSPA' || r === 'HSPA+' || r === '3G') return 'wcdma';
+  return 'gsm';
+}
+
+// Build ONE cellTowers entry from a tracker cell, or null if Google would reject it.
+// Google validate chặt: cellId uint32 (nr dùng newRadioCellId uint64 và KHÔNG được
+// có cellId), locationAreaCode bắt buộc cho gsm/cdma và chỉ 0..65535 (nr: 0..16777215).
+// Cell vi phạm bị BỎ khỏi mảng — gửi kèm sẽ làm cả request 400 và mất luôn các cell
+// hợp lệ khác.
+// `reason` (optional) nhận lý do loại để caller log cho admin biết, thay vì miss im lặng.
+function googleTower(c, reason) {
+  const setReason = (r) => { if (reason && typeof reason === 'object') reason.value = r; return null; };
+  const radio = googleRadioType(c.radio || inferRadio(c.cellid, c.sector, c.radio));
+  const mcc = parseInt(c.mcc, 10);
+  const mnc = parseInt(c.mnc, 10);
+  if (!Number.isFinite(mcc) || !Number.isFinite(mnc)) return setReason('mcc/mnc không hợp lệ');
+  const tower = { mobileCountryCode: mcc, mobileNetworkCode: mnc };
+  const lac = parseInt(c.lac, 10);
+
+  if (radio === 'nr') {
+    // NR: chỉ newRadioCellId (uint64), KHÔNG gửi cellId.
+    const nid = parseInt(String(c.cellid == null ? '' : c.cellid).trim(), 10);
+    if (!Number.isFinite(nid) || nid < 0) return setReason('NR cellid không hợp lệ');
+    tower.newRadioCellId = nid;
+    if (Number.isFinite(lac) && lac >= 0 && lac <= 16777215) tower.locationAreaCode = lac;
+    return tower;
+  }
+
+  // LTE: nguồn ngoài index theo ECI (long) → lấy candidate ECI trước raw.
+  const candidates = cellId.cellIdCandidates(c.cellid, c.sector);
+  const sendId = parseInt(candidates[0], 10);
+  if (!Number.isFinite(sendId) || sendId < 0 || sendId > 4294967295) {
+    return setReason(`cellid ngoài uint32 (${c.cellid})`);
+  }
+  // Cell ID dạng SHORT (eNB, ≤ 2^20) KHÔNG có sector: ECI phải DỰNG bằng
+  // enbToEci(cellid, 0) — tức bịa ra sector 0. Google index theo ECI đầy đủ nên id
+  // dựng sai sẽ trỏ trạm khác hoặc miss; tệ hơn là ghi nhầm toạ độ vào bảng cells.
+  // Nguồn per-cell khác (opencellid) vẫn thử raw nên ở đây bỏ hẳn thay vì đoán.
+  const sectorRaw = c.sector == null ? '' : String(c.sector).trim();
+  const hasSector = sectorRaw !== '' && Number.isFinite(parseInt(sectorRaw, 10));
+  if (cellId.classifyCellId(c.cellid) === 'short' && !hasSector) {
+    return setReason(`cellid ${c.cellid} là eNB short, thiếu sector để dựng ECI`);
+  }
+  tower.cellId = sendId;
+  // locationAreaCode: bắt buộc cho gsm/cdma; optional cho lte/wcdma (TAC).
+  if (radio === 'gsm' || radio === 'cdma') {
+    if (!Number.isFinite(lac) || lac < 0 || lac > 65535) return setReason('gsm/cdma thiếu locationAreaCode hợp lệ');
+    tower.locationAreaCode = lac;
+  } else if (Number.isFinite(lac) && lac >= 0 && lac <= 65535) {
+    tower.locationAreaCode = lac;
+  }
+  return tower;
+}
+
+// Google Geolocation API — 1 toạ độ ước lượng cho CẢ TẬP cell (multilateration),
+// KHÔNG tra từng cell. Docs:
+// https://developers.google.com/maps/documentation/geolocation/requests-geolocation
+// POST https://www.googleapis.com/geolocation/v1/geolocate?key=KEY
+// Response: { location: { lat, lng }, accuracy }. Errors: 400 invalid arg,
+// 403 key/billing, 429 rate limit / quota.
+//
+// BẮT BUỘC considerIp: false — nếu để true, khi cell không đủ dữ liệu Google trả
+// toạ độ theo IP của SERVER, tức toạ độ rác nhưng đúng định dạng, sẽ lọt geo gate
+// và ghi bẩn bảng cells.
+async function resolveGoogleGeolocation(cells, apiKey) {
+  const key = apiKey || await getGoogleKey();
+  if (!key) throw new Error('Google Maps API key chưa cấu hình');
+
+  const list = (Array.isArray(cells) ? cells : [cells]).filter(Boolean);
+  const towers = [];
+  let first = null;
+  const reasons = [];
+  for (const c of list) {
+    const reason = { value: null };
+    const t = googleTower(c, reason);
+    if (!t) { reasons.push(`${c.mcc}-${c.mnc}-${c.lac}-${c.cellid}: ${reason.value || 'không hợp lệ'}`); continue; }
+    towers.push(t);
+    if (!first) first = c;
+  }
+  if (!towers.length) {
+    throw new Error('Google Geolocation: không có cell hợp lệ để gửi'
+      + (reasons.length ? ` (${reasons.slice(0, 3).join('; ')})` : ''));
+  }
+
+  const body = {
+    homeMobileCountryCode: towers[0].mobileCountryCode,
+    homeMobileNetworkCode: towers[0].mobileNetworkCode,
+    radioType: googleRadioType(first.radio || inferRadio(first.cellid, first.sector, first.radio)),
+    considerIp: false, // xem comment trên — chống rò toạ độ theo IP server
+    cellTowers: towers
+  };
+
+  const resp = await axios.post(
+    `https://www.googleapis.com/geolocation/v1/geolocate?key=${encodeURIComponent(key)}`,
+    body,
+    {
+      timeout: 15000,
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'cell-tracker/1.0' },
+      validateStatus: () => true
+    }
+  );
+
+  const d = resp.data || {};
+  if (resp.status >= 400) {
+    const msg = (d.error && (d.error.message || d.error.status)) || `HTTP ${resp.status}`;
+    if (resp.status === 400) throw new Error(`Google Geolocation: request không hợp lệ (${msg})`);
+    if (resp.status === 403) throw new Error(`Google Geolocation: API key/billing bị từ chối (${msg})`);
+    if (resp.status === 429) throw new Error(`Google Geolocation: vượt hạn mức/quá nhanh (${msg})`);
+    throw new Error(`Google Geolocation: lỗi ${resp.status} (${msg})`);
+  }
+
+  const loc = d.location;
+  if (!loc || loc.lat === undefined || loc.lat === null || loc.lng === undefined || loc.lng === null) {
+    throw new Error('Google Geolocation: response thiếu location');
+  }
+  const acc = parseFloat(d.accuracy);
+  return {
+    lat: parseFloat(loc.lat),
+    lng: parseFloat(loc.lng),
+    accuracy: Number.isFinite(acc) && acc > 0 ? acc : 1000
+  };
 }
 
 // ---- OpenCellID.org via web map endpoints (không cần API key) ----
@@ -2834,6 +3264,71 @@ app.post('/api/call-logs/upload', requireAuth, upload.single('file'), (req, res)
   } catch (e) {
     try { fs.unlinkSync(req.file.path); } catch(_) {}
     res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/call-logs/analyze — CHỈ ĐỌC: parse file Excel trong RAM, gom thành
+// danh sách cell duy nhất kèm số dòng/dạng dữ liệu/khoảng thời gian + toạ độ đã
+// có trong CSDL nội bộ. KHÔNG ghi DB, KHÔNG trừ điểm, KHÔNG đốt quota nguồn online
+// (điểm chỉ bị trừ khi user bấm "Tra cứu" → /api/cells/resolve-batch).
+app.post('/api/call-logs/analyze', requireAuth, upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const buffer = fs.readFileSync(req.file.path);
+    const { network, records, errors: parseErrors } = excelParser.parseWorkbook(buffer, req.file.originalname);
+
+    // Dedup theo canonical key (collapse alias short-cellid/ECI) — khớp memo server
+    // ở /api/cells/resolve-batch nên số cell ở bảng = số cell sẽ hỏi nguồn.
+    const cells = excelParser.aggregateCellsFromRecords(records, {
+      canonicalKey: canonicalCellKey,
+      inferRadio,
+      radioConfident
+    });
+
+    // Gắn toạ độ nếu cell đã có sẵn trong CSDL nội bộ (tra theo LAC, có index).
+    const lacSet = new Set();
+    for (const c of cells) if (c.lac) lacSet.add(String(c.lac));
+    if (lacSet.size) {
+      const lacList = [...lacSet];
+      const ph = lacList.map(() => '?').join(', ');
+      const localRows = await new Promise((resolve) => {
+        db.all(`SELECT mcc, lac, cellid, lat, lng, range, radio FROM cells
+                WHERE lac IN (${ph}) AND lat IS NOT NULL`, lacList,
+          (err, rows) => resolve(err ? [] : (rows || [])));
+      });
+      const idx = new Map();
+      for (const c of localRows) {
+        const k = `${c.mcc}|${String(c.lac)}|${String(c.cellid)}`;
+        if (!idx.has(k)) idx.set(k, c);
+      }
+      for (const c of cells) {
+        c.localLat = null; c.localLon = null; c.localRange = null;
+        for (const id of cellId.cellIdLookupKeys(c.cellid, c.sector)) {
+          const hit = idx.get(`${c.mcc}|${String(c.lac)}|${String(id)}`);
+          if (hit && hit.lat != null) {
+            c.localLat = hit.lat;
+            c.localLon = hit.lng;
+            c.localRange = hit.range;
+            if (!c.radio && normalizeRadio(hit.radio)) c.radio = normalizeRadio(hit.radio);
+            break;
+          }
+        }
+      }
+    }
+
+    const totalRows = cells.reduce((s, c) => s + c.rowCount, 0);
+    res.json({
+      network: network.name,
+      totalRows,
+      cellCount: cells.length,
+      cells,
+      errors: parseErrors.length,
+      errorsDetail: parseErrors.slice(0, 20)
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  } finally {
+    try { fs.unlinkSync(req.file.path); } catch (_) {}
   }
 });
 
@@ -3446,6 +3941,8 @@ app.get('/api/admin/logs', requireAuth, (req, res) => {
 // SETTINGS (admin)
 // ========================
 const SETTING_KEYS = ['max_online_resolve', 'lookup_history_retention_days',
+  // Google Geolocation: số cell tối đa gửi trong 1 request (nguồn tốn phí).
+  'max_google_per_batch',
   'credit_enabled', 'credit_cost_per_lookup', 'credit_signup_bonus', 'credit_allow_negative',
   // payOS gateway
   'payos_enabled', 'payos_client_id', 'payos_api_key', 'payos_checksum_key', 'payos_base_url',
@@ -3467,6 +3964,7 @@ const STRING_SETTING_KEYS = new Set([
 const SECRET_SETTING_KEYS = new Set(['payos_api_key', 'payos_checksum_key', 'smtp_pass']);
 const SETTING_DEFAULTS = {
   max_online_resolve: '50', lookup_history_retention_days: '90',
+  max_google_per_batch: '10',
   credit_enabled: '0', credit_cost_per_lookup: '1', credit_signup_bonus: '5', credit_allow_negative: '0',
   payos_enabled: '0', payos_client_id: '', payos_api_key: '', payos_checksum_key: '',
   payos_base_url: '', payos_webhook_url: '', payos_test_mode: '0', public_base_url: '',
@@ -3478,6 +3976,7 @@ const SETTING_DEFAULTS = {
 // Giới hạn số cho từng setting tiền tệ — chặn giá trị vô lý.
 const SETTING_NUM_MAX = {
   max_online_resolve: 1e7, lookup_history_retention_days: 1e7,
+  max_google_per_batch: 1e5,
   credit_cost_per_lookup: 1e7, credit_signup_bonus: 1e7,
   topup_min_vnd: 1e9, topup_max_vnd: 1e9, topup_vnd_per_credit: 1e7,
   smtp_port: 65535
@@ -3622,10 +4121,15 @@ app.post('/api/admin/smtp/test', requireAuth, requireAdmin, creditAdminRateLimit
 // ========================
 
 // GET /api/sources - list all sources (sorted by priority)
+// Kèm `last_error` (in-memory, do noteSourceError ghi) để admin thấy ngay vì sao nguồn
+// bật mà không ra dữ liệu (vd Google: "API key/billing bị từ chối"). null = chưa lỗi.
 app.get('/api/sources', requireAuth, requireAdmin, (req, res) => {
   db.all('SELECT * FROM data_sources ORDER BY priority ASC, id ASC', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+    res.json(rows.map(r => {
+      const le = sourceLastError.get(r.type);
+      return { ...r, last_error: le ? le.message : null, last_error_at: le ? le.at : null };
+    }));
   });
 });
 
@@ -4222,8 +4726,13 @@ const vntaAxios = axios.create({
 });
 const vntaSessions = new Map(); // sessionId -> { cookies }
 
-// Get captcha from VNTA
-app.get('/api/tools/port-check/captcha', requireAuth, async (req, res) => {
+// Get captcha from VNTA.
+// CÔNG KHAI (guest dùng được): trang /tools/port-check.html mở cho cả khách
+// (xem auth.js dropdown + _guesttrial.test.js "port-check.html bỏ redirect login").
+// Trước đây 2 route này gắn `requireAuth` nên khách gọi captcha bị 401
+// "No token provided" -> không hiển thị được captcha. Chặn lạm dụng bằng
+// `captchaRateLimit` (bucket riêng 120/5 phút/IP) thay vì bắt buộc đăng nhập.
+app.get('/api/tools/port-check/captcha', captchaRateLimit, async (req, res) => {
   try {
     // Step 1: GET search page to get session cookie
     const pageRes = await vntaAxios.get(VNTA_SEARCH, {
@@ -4300,8 +4809,9 @@ app.get('/api/tools/port-check/captcha', requireAuth, async (req, res) => {
   }
 });
 
-// Search phone number on VNTA
-app.post('/api/tools/port-check/search', requireAuth, async (req, res) => {
+// Search phone number on VNTA — CÔNG KHAI như route captcha ở trên (guest được
+// tra cứu); sessionId one-shot + captcha là điểm chặn spam, không cần token.
+app.post('/api/tools/port-check/search', captchaRateLimit, async (req, res) => {
   try {
     const { phone, captcha, sessionId } = req.body;
     if (!phone || !captcha || !sessionId) {

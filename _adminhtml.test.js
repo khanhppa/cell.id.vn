@@ -159,6 +159,23 @@ ok('có cdbEditModal', html.includes('id="cdbEditModal"'));
 ok('KHÔNG còn userFormCredit', !/id="userFormCredit"/.test(html));
 ok('KHÔNG còn userCreditGroup', !/id="userCreditGroup"/.test(html));
 
+console.log('\n== Nguồn Google Geolocation ==');
+ok('dropdown nguồn có option value="google"', /<option value="google">/.test(html));
+ok('option google nằm trong #srcType', /id="srcType"[\s\S]{0,600}<option value="google">/.test(html));
+ok('settings có input #setGoogleMax (max_google_per_batch)', /id="setGoogleMax"/.test(html));
+ok('admin.js load #setGoogleMax từ API settings', /setGoogleMax[\s\S]{0,120}max_google_per_batch/.test(adminJs));
+ok('admin.js gửi max_google_per_batch khi lưu', /settings\.max_google_per_batch = googleMax/.test(adminJs));
+ok('admin.js có nhánh hint google (cảnh báo tốn phí)', /type === 'google'/.test(adminJs) && /Tốn phí theo request/.test(adminJs));
+ok('admin.js badge google trong cdbSourceBadge', /s === 'google'/.test(adminJs));
+
+console.log('\n== Lỗi nguồn hiện cho admin (last_error) ==');
+ok('bảng nguồn có cột "Lỗi gần nhất"', /<th>Lỗi gần nhất<\/th>/.test(html));
+ok('colspan placeholder khớp 7 cột', /id="sourceTableBody"><tr><td colspan="7"/.test(html));
+ok('admin.js render s.last_error trong bảng nguồn', /s\.last_error/.test(adminJs));
+ok('admin.js hiện last_error_at làm tooltip', /esc\(s\.last_error_at/.test(adminJs));
+ok('hint google nhắc xem cột "Lỗi gần nhất"', /Lỗi gần nhất/.test(adminJs));
+ok('không còn placeholder colspan="6" trong bảng nguồn', !/id="sourceTableBody"><tr><td colspan="6"/.test(html));
+
 console.log('\n== Cân bằng thẻ ==');
 const openDiv = (html.match(/<div\b/g) || []).length;
 const closeDiv = (html.match(/<\/div>/g) || []).length;

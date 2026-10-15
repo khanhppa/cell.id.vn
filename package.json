@@ -1,6 +1,6 @@
 {
   "name": "cell-tracker",
-  "version": "2.5.0",
+  "version": "2.9.0",
   "description": "Cell.id.vn — Cell ID Call Log and SMS Location Tracker",
   "main": "server.js",
   "scripts": {

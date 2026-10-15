@@ -166,6 +166,80 @@
     width: 240px; height: 240px; border: 1px solid var(--border-color);
     border-radius: 10px; background: #fff;
   }
+  /* ---- Bước 3 (thiết kế lại): header + trust + hộp số tiền + walkthrough ---- */
+  .pay-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .pay-head-title { font-size: 14px; }
+  .pay-head-title i { color: var(--accent); }
+  .pay-head-title .mono { font-family: monospace; }
+  .pay-chip {
+    margin-left: auto; font-size: 11.5px; padding: 3px 9px; border-radius: 10px;
+    background: var(--bg-hover); color: var(--text-secondary); white-space: nowrap;
+  }
+  .pay-chip.ok { background: rgba(31,158,90,.14); color: var(--ok); font-weight: 600; }
+  .pay-chip.fail { background: rgba(224,68,68,.12); color: var(--danger); }
+  .pay-trust {
+    display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11.5px;
+    color: var(--text-faint); padding: 8px 10px; margin-bottom: 14px;
+    background: var(--bg-page); border: 1px dashed var(--border-color); border-radius: 8px;
+  }
+  .pay-trust i { color: var(--ok); margin-right: 3px; }
+  .info-col { font-size: 13px; }
+  .pay-amt-box {
+    border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-page);
+    padding: 12px 14px; margin-bottom: 14px; text-align: center;
+  }
+  .pay-amt-lbl { font-size: 11.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .04em; }
+  .pay-amt-val { font-size: 28px; font-weight: 800; color: var(--ok); line-height: 1.25; }
+  .pay-amt-sub { font-size: 12.5px; color: var(--text-secondary); }
+  .walkthrough { list-style: none; counter-reset: wz; margin: 0 0 14px; padding: 0; }
+  .walkthrough li {
+    counter-increment: wz; position: relative; padding: 0 0 10px 34px;
+    font-size: 12.8px; color: var(--text-secondary); line-height: 1.5;
+  }
+  .walkthrough li:last-child { padding-bottom: 0; }
+  .walkthrough li::before {
+    content: counter(wz); position: absolute; left: 0; top: 0;
+    width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff;
+    font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  }
+  .walkthrough li:not(:last-child)::after {
+    content: ''; position: absolute; left: 10px; top: 24px; bottom: 2px;
+    width: 2px; background: var(--border-color);
+  }
+  .walkthrough b { color: var(--text-primary); }
+  .pay-info { border-top: 1px dashed var(--border-color); padding-top: 10px; }
+  .pay-copied { font-size: 12px; margin-top: 2px; min-height: 16px; }
+  .qr-panel {
+    border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-page);
+    padding: 10px 10px 12px;
+  }
+  .qr-panel-head { font-size: 11.5px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 600; }
+  .qr-panel-head i { color: var(--accent); }
+  .qr-panel-badge {
+    margin-top: 10px; font-size: 11.5px; padding: 4px 8px; border-radius: 8px;
+    background: rgba(255,170,60,.16); color: #c98a1e; display: inline-block;
+  }
+  .qr-panel-badge.ok { background: rgba(31,158,90,.14); color: var(--ok); }
+  .qr-panel-badge.fail { background: rgba(224,68,68,.12); color: var(--danger); }
+  .pay-fallback { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .pay-fallback[hidden] { display: none; }
+  .banner {
+    display: flex; align-items: flex-start; gap: 8px; font-size: 12px; text-align: left;
+    padding: 8px 10px; border-radius: 8px; line-height: 1.45;
+  }
+  .banner-warn { background: rgba(255,170,60,.14); color: #c98a1e; border: 1px solid rgba(255,170,60,.35); }
+  .pay-live {
+    margin-top: 12px; font-size: 12.5px; color: var(--text-secondary);
+    display: flex; align-items: center; gap: 7px;
+  }
+  .pay-live.ok { color: var(--ok); font-weight: 600; }
+  .pay-live.fail { color: var(--danger); }
+  .btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+  .btn-danger:hover { filter: brightness(1.08); }
+  .cancel-body { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+  .cancel-warn { margin: 0; line-height: 1.55; color: var(--text-secondary); }
+  .cancel-warn b { color: var(--danger); }
+  .cancel-body .muted { margin: 0; font-size: 12.5px; }
   .status-badge {
     display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; white-space: nowrap;
   }
@@ -188,7 +262,7 @@
   .res-bal .num { font-size: 30px; font-weight: 800; color: var(--ok); line-height: 1; }
   .res-bal .lbl { color: var(--text-secondary); font-size: 12.5px; }
   .res-bal[hidden] { display: none; }
-  /* Popup thanh toán (QR payOS). Không dùng <dialog>/thư viện payOS:
+  /* Lớp phủ dialog (dùng cho #cancelModal). Không dùng <dialog>/thư viện payOS:
      payOS không cho ẩn tên chủ tài khoản nhận tiền. */
   .pay-modal {
     position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
@@ -202,23 +276,13 @@
   }
   .pay-modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 14px; }
   .pay-modal-head b { flex: 1; }
+  .pay-modal-head i { color: #c98a1e; }
   .pay-modal-x {
     border: none; background: none; color: var(--text-faint); cursor: pointer;
     font-size: 15px; padding: 4px 6px; border-radius: 6px;
   }
   .pay-modal-x:hover { background: var(--bg-hover); color: var(--text-primary); }
-  .pay-modal-body {
-    display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center;
-  }
-  .pay-modal-body .pay-row { justify-content: center; margin-bottom: 0; }
-  .pay-modal-amt { font-size: 26px; font-weight: 800; color: var(--ok); line-height: 1.2; }
-  .pay-modal-qr { margin: 8px 0; }
-  .pay-modal-qr[hidden] { display: none; }
-  #payModalQr {
-    width: 232px; height: 232px; border: 1px solid var(--border-color);
-    border-radius: 10px; background: #fff;
-  }
-  .pay-modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  .pay-modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -293,81 +357,98 @@
       </div>
       <div class="wz-actions">
         <button class="btn" id="wzBackBtn" onclick="confirmOrderBack()"><i class="fas fa-arrow-left"></i> Quay lại</button>
-        <button class="btn btn-primary" id="wzNextBtn" onclick="confirmOrderNext()"><i class="fas fa-credit-card"></i> Tiếp tục thanh toán</button>
+        <button class="btn btn-primary" id="wzNextBtn" onclick="confirmOrderNext()"><i class="fas fa-qrcode"></i> Xem mã QR thanh toán</button>
       </div>
       <div id="wzMsg" class="error" style="margin-top:10px"></div>
     </div>
   </div>
 
-  <!-- ===== Bước 3: thanh toán (QR ngay trên trang, không dialog/khung nhúng) ===== -->
+  <!-- ===== Bước 3: thanh toán (QR hiện NGAY trên trang — không nút "Thanh toán") =====
+       QR đã ở sẵn đây nên không cần nút mở popup: khách quét luôn. Nút "Đóng" gộp
+       vào dialog Huỷ đơn (Hủy đơn / Đóng). -->
   <div id="wzStep3" hidden>
     <div class="card" id="payCard">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-        <b style="font-size:14px">Đơn nạp <span id="payOrderCode" style="font-family:monospace"></span></b>
+      <div class="pay-head">
+        <b class="pay-head-title"><i class="fas fa-receipt"></i> Đơn nạp <span id="payOrderCode" class="mono"></span></b>
         <span class="countdown" id="payCountdown" hidden><i class="fas fa-clock"></i> <span id="payCountdownText">--:--</span></span>
-        <span class="muted" id="payStatusChip" style="font-size:12px;margin-left:auto"></span>
+        <span class="pay-chip" id="payStatusChip"></span>
+      </div>
+
+      <div class="pay-trust">
+        <span><i class="fas fa-shield-halved"></i> Thanh toán qua payOS (được NHNN cấp phép)</span>
+        <span><i class="fas fa-lock"></i> Trang không lưu thông tin thẻ/tài khoản của bạn</span>
+        <span><i class="fas fa-rotate"></i> Đơn tự huỷ khi hết hạn — không mất tiền</span>
       </div>
 
       <div class="pay-cols">
-        <div class="info-col" style="font-size:13px">
-          <div class="pay-row">Số tiền: <b id="payAmount">—</b>
-            <button class="copy-btn" onclick="copyText(document.getElementById('payAmount').textContent.replace(/[^0-9]/g,''), this)" title="Sao chép số tiền"><i class="fas fa-copy"></i></button>
+        <div class="info-col">
+          <div class="pay-amt-box">
+            <div class="pay-amt-lbl">Số tiền cần chuyển</div>
+            <div class="pay-amt-val" id="payAmount">—</div>
+            <div class="pay-amt-sub">Nhận được <b id="payCredits">—</b></div>
           </div>
-          <div class="pay-row">Điểm nhận được: <b id="payCredits">—</b></div>
-          <div class="pay-row">Số tài khoản: <b id="payAccNo" class="mono">—</b>
-            <button class="copy-btn" onclick="copyText(document.getElementById('payAccNo').textContent, this)" title="Sao chép số tài khoản"><i class="fas fa-copy"></i></button>
-          </div>
-          <div class="pay-row">Nội dung CK: <b id="payDesc" class="mono">—</b>
-            <button class="copy-btn" onclick="copyText(document.getElementById('payDesc').textContent, this)" title="Sao chép nội dung chuyển khoản"><i class="fas fa-copy"></i></button>
-          </div>
-          <div id="payCopiedHint" class="muted" style="font-size:12px;margin-top:2px"></div>
-          <div class="muted" style="font-size:12px;margin-top:10px">
-            Quét mã QR bằng app ngân hàng. Trang này tự kiểm tra trạng thái mỗi 4 giây.
+
+          <ol class="walkthrough">
+            <li>Mở app ngân hàng → chọn <b>Quét QR</b> / chuyển khoản</li>
+            <li>Quét mã bên cạnh — số tiền &amp; nội dung đã điền sẵn</li>
+            <li>Xác nhận trong app. Trang này tự cập nhật khi nhận tiền</li>
+          </ol>
+
+          <div class="pay-info">
+            <div class="pay-row">Số tài khoản: <b id="payAccNo" class="mono">—</b>
+              <button class="copy-btn" onclick="copyText(document.getElementById('payAccNo').textContent, this)" title="Sao chép số tài khoản"><i class="fas fa-copy"></i></button>
+            </div>
+            <div class="pay-row">Nội dung CK: <b id="payDesc" class="mono">—</b>
+              <button class="copy-btn" onclick="copyText(document.getElementById('payDesc').textContent, this)" title="Sao chép nội dung chuyển khoản"><i class="fas fa-copy"></i></button>
+            </div>
+            <div class="pay-row">Số tiền: <b id="payAmountCpy">—</b>
+              <button class="copy-btn" onclick="copyText(document.getElementById('payAmountCpy').textContent.replace(/[^0-9]/g,''), this)" title="Sao chép số tiền"><i class="fas fa-copy"></i></button>
+            </div>
+            <div id="payCopiedHint" class="muted pay-copied"></div>
           </div>
         </div>
+
         <div class="qr-col" id="payQrBox">
-          <img id="payQr" alt="QR thanh toán">
+          <div class="qr-panel">
+            <div class="qr-panel-head"><i class="fas fa-qrcode"></i> Quét bằng app ngân hàng</div>
+            <img id="payQr" alt="QR thanh toán">
+            <div class="qr-panel-badge" id="payQrBadge"><i class="fas fa-hourglass-half"></i> Chưa nhận thanh toán</div>
+          </div>
+          <div class="pay-fallback" id="payFallback" hidden>
+            <div class="banner banner-warn"><i class="fas fa-triangle-exclamation"></i>
+              <span>Chưa dựng được mã QR — nhờ admin kiểm tra cấu hình payOS.</span>
+            </div>
+            <a class="btn btn-primary" id="payCheckoutLink" href="#" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Mở trang thanh toán payOS</a>
+          </div>
         </div>
       </div>
 
+      <div class="pay-live" id="payLiveHint"><i class="fas fa-spinner fa-spin"></i> Đang chờ xác nhận thanh toán…</div>
+
       <div class="wz-actions">
         <button class="btn" id="payBackBtn" onclick="payBack()"><i class="fas fa-arrow-left"></i> Quay lại</button>
-        <button class="btn btn-primary" id="payNowBtn" onclick="payNow()"><i class="fas fa-qrcode"></i> Thanh toán</button>
-        <button class="btn" id="payCancelBtn" onclick="cancelOrder()"><i class="fas fa-ban"></i> Hủy đơn</button>
-        <button class="btn" onclick="closeTopupFlow()"><i class="fas fa-xmark"></i> Đóng</button>
+        <button class="btn btn-danger" id="payCancelBtn" onclick="openCancelConfirm()"><i class="fas fa-ban"></i> Hủy đơn</button>
         <button class="btn" id="payMockBtn" hidden onclick="mockPaid()"><i class="fas fa-flask"></i> Giả lập đã trả tiền (test)</button>
       </div>
       <div id="payMsg" class="error" style="margin-top:10px"></div>
     </div>
   </div>
 
-  <!-- Popup thanh toán: QR payOS (VietQR) + thông tin chuyển khoản.
-       Test mode (không có ảnh QR) → ẩn QR, hiện link mở trang payOS. -->
-  <div class="pay-modal" id="payModal" hidden>
-    <div class="pay-modal-box" role="dialog" aria-modal="true" aria-labelledby="payModalTitle">
+  <!-- Dialog xác nhận huỷ đơn: gộp "Hủy đơn" (đơn chết) + "Đóng" (giữ đơn). -->
+  <div class="pay-modal" id="cancelModal" hidden>
+    <div class="pay-modal-box" role="dialog" aria-modal="true" aria-labelledby="cancelModalTitle">
       <div class="pay-modal-head">
-        <b id="payModalTitle">Thanh toán đơn <span id="payModalCode" class="mono">—</span></b>
-        <button class="pay-modal-x" type="button" onclick="closePayModal()" title="Đóng"><i class="fas fa-xmark"></i></button>
+        <b id="cancelModalTitle"><i class="fas fa-triangle-exclamation"></i> Huỷ đơn nạp <span id="cancelModalCode" class="mono">—</span>?</b>
+        <button class="pay-modal-x" type="button" onclick="closeCancelConfirm()" title="Đóng"><i class="fas fa-xmark"></i></button>
       </div>
-      <div class="pay-modal-body">
-        <div class="muted" style="font-size:12px">Số tiền</div>
-        <div class="pay-modal-amt" id="payModalAmount">—</div>
-        <div class="muted" style="font-size:12px">Điểm nhận được: <b id="payModalCredits">—</b></div>
-        <div class="pay-row" style="justify-content:center">Số tài khoản: <b id="payModalAccNo" class="mono">—</b>
-          <button class="copy-btn" onclick="copyText(document.getElementById('payModalAccNo').textContent, this)" title="Sao chép số tài khoản"><i class="fas fa-copy"></i></button>
-        </div>
-        <div class="pay-row" style="justify-content:center">Nội dung CK: <b id="payModalDesc" class="mono">—</b>
-          <button class="copy-btn" onclick="copyText(document.getElementById('payModalDesc').textContent, this)" title="Sao chép nội dung chuyển khoản"><i class="fas fa-copy"></i></button>
-        </div>
-        <div class="pay-modal-qr" id="payModalQrBox">
-          <img id="payModalQr" alt="QR thanh toán">
-        </div>
-        <div class="muted" style="font-size:12px">Quét mã QR bằng app ngân hàng. Trang này tự kiểm tra trạng thái mỗi 4 giây và trả về bước kết quả khi đã trả tiền.</div>
-        <a class="btn" id="payModalCheckout" href="#" target="_blank" rel="noopener" hidden><i class="fas fa-external-link-alt"></i> Mở trang thanh toán payOS</a>
-        <div id="payModalMsg" class="error" style="font-size:12px"></div>
+      <div class="cancel-body">
+        <p class="cancel-warn">Mã QR của đơn này sẽ <b>ngừng hiệu lực</b>. Nếu bạn đã chuyển tiền, đừng huỷ —
+          đợi hệ thống đối soát hoặc tải lại trang.</p>
+        <p class="muted">Chọn <b>Đóng</b> để giữ đơn và tiếp tục quét mã.</p>
       </div>
       <div class="pay-modal-foot">
-        <button class="btn" type="button" onclick="closePayModal()"><i class="fas fa-xmark"></i> Đóng</button>
+        <button class="btn" type="button" id="cancelCloseBtn" onclick="closeCancelConfirm()"><i class="fas fa-xmark"></i> Đóng (giữ đơn)</button>
+        <button class="btn btn-danger" type="button" id="cancelConfirmBtn" onclick="cancelOrder()"><i class="fas fa-ban"></i> Huỷ đơn</button>
       </div>
     </div>
   </div>
@@ -419,6 +500,7 @@ const ORDER_KEY = 'ct_topup_order';     // sessionStorage: khôi phục đơn sa
 let wzStep = 1;
 let topupCfg = null;    // { available, vnd_per_credit, min_vnd, max_vnd, packages }
 let payPoll = null;     // setInterval id khi đang chờ thanh toán
+let payPollTicks = 0;   // số nhịp poll đã qua — dùng để chèn nhịp đối soát payOS
 let activeOrder = null; // đơn đang xem
 let cdTimer = null;
 let orderPaid = false;  // đơn hiện tại đã PAID → khoá thanh bước
@@ -728,7 +810,9 @@ function showPayCard(d) {
   activeOrder = d;
   document.getElementById('payCard').hidden = false;
   document.getElementById('payOrderCode').textContent = '#' + d.order_code;
-  document.getElementById('payAmount').textContent = fmtVnd(d.amount_vnd);
+  const amt = fmtVnd(d.amount_vnd);
+  document.getElementById('payAmount').textContent = amt;
+  document.getElementById('payAmountCpy').textContent = amt;
   document.getElementById('payCredits').textContent = d.credits + ' điểm';
   // Tên chủ tài khoản nhận tiền KHÔNG hiển thị (chủ đích — xem CHANGELOG).
   document.getElementById('payAccNo').textContent = d.account_number || '—';
@@ -737,82 +821,105 @@ function showPayCard(d) {
   if (hint) hint.textContent = '';
   // Ảnh QR (data-URL PNG) do server dựng từ chuỗi VietQR — payOS KHÔNG trả URL ảnh,
   // chỉ trả chuỗi QR thô nên không thể nhét thẳng vào <img src>.
+  // Có QR → quét ngay tại chỗ, KHÔNG có nút "Thanh toán" (không cần nữa).
+  // Không có QR (test mode / payOS lỗi cấu hình) → hiện link sang trang payOS.
   const qr = document.getElementById('payQr');
-  if (hasQrImage(d)) { qr.src = d.qr_image; qr.parentElement.hidden = false; }
+  const hasQr = hasQrImage(d);
+  if (hasQr) { qr.src = d.qr_image; qr.parentElement.hidden = false; }
   else { qr.removeAttribute('src'); qr.parentElement.hidden = true; }
-  // Popup QR dùng chung dữ liệu với thẻ trên trang.
-  fillPayModal(d, hasQrImage(d));
+  renderPayFallback(d, hasQr);
   document.getElementById('payMockBtn').hidden = !d.test_mode;
   setPayStatus('PENDING');
-  closePayModal();
+  closeCancelConfirm();
   wzGotoStep(3);
   document.getElementById('payCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
   startPolling(d.order_code);
 }
 
-// ============================================================================
-// Popup thanh toán (QR payOS) — mở bằng nút "Thanh toán" ở bước 3
-// ============================================================================
-/** Đổ số tiền/điểm/số TK/nội dung CK + QR vào popup. */
-function fillPayModal(d, hasQr) {
-  document.getElementById('payModalCode').textContent = '#' + d.order_code;
-  document.getElementById('payModalAmount').textContent = fmtVnd(d.amount_vnd);
-  document.getElementById('payModalCredits').textContent = d.credits + ' điểm';
-  document.getElementById('payModalAccNo').textContent = d.account_number || '—';
-  document.getElementById('payModalDesc').textContent = d.description || '—';
-  const img = document.getElementById('payModalQr');
-  const box = document.getElementById('payModalQrBox');
-  if (hasQr) { img.src = d.qr_image; box.hidden = false; }
-  else { img.removeAttribute('src'); box.hidden = true; }
-  // Có ảnh QR → khách quét tại chỗ, KHÔNG cần link. Không có QR (test mode /
-  // payOS lỗi cấu hình) → hiện link để còn đường sang trang payOS.
-  const link = document.getElementById('payModalCheckout');
+/** Nhánh dự phòng khi đơn KHÔNG dựng được ảnh QR: hiện link mở trang payOS. */
+function renderPayFallback(d, hasQr) {
+  const box = document.getElementById('payFallback');
+  const link = document.getElementById('payCheckoutLink');
+  if (!box || !link) return;
+  if (hasQr) { box.hidden = true; link.href = '#'; return; }
   const url = d.checkout_url || '';
-  if (hasQr) { link.href = '#'; link.hidden = true; }
-  else { link.href = /^https?:\/\//i.test(url) ? url : '#'; link.hidden = false; }
-  document.getElementById('payModalMsg').textContent = hasQr ? '' : 'Chưa có mã QR — nhờ admin kiểm tra cấu hình payOS.';
+  link.href = /^https?:\/\//i.test(url) ? url : '#';
+  link.hidden = !/^https?:\/\//i.test(url);
+  box.hidden = false;
 }
-
-/** Nút "Thanh toán" ở bước 3 → mở popup QR, khách quét mã bằng app ngân hàng. */
-function payNow() {
-  if (!activeOrder) { showMsg('payMsg', 'Chưa có đơn nạp hợp lệ.', true); return; }
-  const modal = document.getElementById('payModal');
-  modal.hidden = false;
-  document.getElementById('payModalQrBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  // Poll đã chạy từ showPayCard; khởi động lại nếu bị dừng (tab ẩn lúc mở đơn).
-  if (!payPoll && activeOrder.order_code) startPolling(activeOrder.order_code);
-}
-
-function closePayModal() {
-  const modal = document.getElementById('payModal');
-  if (modal) modal.hidden = true;
-}
-
 /** Bước 3 → quay lại bước 2 (đơn GIỮ NGUYÊN, không huỷ). */
 function payBack() {
-  closePayModal();
+  closeCancelConfirm();
   if (!activeOrder) { showMsg('payMsg', 'Chưa có đơn nạp hợp lệ.', true); return; }
   fillConfirmStep(activeOrder);
   wzGotoStep(2);
 }
+
+
 
 const PAY_STATUS_TEXT = {
   PENDING: 'Chờ thanh toán', PAID: 'Đã thanh toán', CANCELLED: 'Đã huỷ',
   EXPIRED: 'Hết hạn', UNDERPAID: 'Trả thiếu', FAILED: 'Thất bại'
 };
 
-// Ẩn/hiện nút huỷ theo trạng thái đơn.
+// Nội dung dải "đang chờ" dưới card, đổi theo trạng thái đơn.
+const PAY_LIVE_TEXT = {
+  PENDING: 'Đang chờ xác nhận thanh toán… Quét xong mã, hệ thống tự cập nhật trong ~15 giây.',
+  PAID: 'Đã nhận thanh toán — điểm đang được cộng.',
+  CANCELLED: 'Đơn đã huỷ. Không có khoản tiền nào bị trừ.',
+  EXPIRED: 'Đơn đã hết hạn. Hãy quay lại tạo đơn mới.',
+  UNDERPAID: 'Số tiền chuyển đến thiếu so với đơn — liên hệ admin để xử lý.',
+  FAILED: 'Thanh toán không thành công. Bạn có thể tạo đơn mới.'
+};
+
+// Ẩn/hiện nút theo trạng thái đơn (huỷ chỉ có nghĩa khi đơn còn chờ).
 function updatePayActions(status) {
   const cancelBtn = document.getElementById('payCancelBtn');
   if (cancelBtn) cancelBtn.hidden = status !== 'PENDING';
 }
 
+/** Cập nhật chip trạng thái + dải "đang chờ" + badge trên khung QR. */
 function setPayStatus(status) {
   const el = document.getElementById('payStatusChip');
-  el.textContent = PAY_STATUS_TEXT[status] || status;
-  el.className = status === 'PAID' ? 'success' : 'muted';
-  el.style.fontSize = '12px';
+  if (el) {
+    el.textContent = PAY_STATUS_TEXT[status] || status;
+    el.className = 'pay-chip' + (status === 'PAID' ? ' ok' : (status === 'PENDING' ? '' : ' fail'));
+  }
+  const live = document.getElementById('payLiveHint');
+  if (live) {
+    live.className = 'pay-live' + (status === 'PAID' ? ' ok' : (status === 'PENDING' ? '' : ' fail'));
+    const icon = status === 'PAID' ? 'fa-circle-check'
+      : (status === 'PENDING' ? 'fa-spinner fa-spin' : 'fa-circle-xmark');
+    live.innerHTML = `<i class="fas ${icon}"></i> ${PAY_LIVE_TEXT[status] || (PAY_STATUS_TEXT[status] || status)}`;
+  }
+  const badge = document.getElementById('payQrBadge');
+  if (badge) {
+    badge.className = 'qr-panel-badge' + (status === 'PAID' ? ' ok' : (status === 'PENDING' ? '' : ' fail'));
+    badge.innerHTML = status === 'PAID'
+      ? '<i class="fas fa-circle-check"></i> Đã nhận thanh toán'
+      : (status === 'PENDING'
+        ? '<i class="fas fa-hourglass-half"></i> Chưa nhận thanh toán'
+        : `<i class="fas fa-circle-xmark"></i> ${PAY_STATUS_TEXT[status] || status}`);
+  }
   updatePayActions(status);
+}
+
+// ============================================================================
+// Dialog xác nhận huỷ đơn — gộp "Hủy đơn" (đơn chết) + "Đóng" (giữ đơn)
+// ============================================================================
+function openCancelConfirm() {
+  if (!activeOrder) { showMsg('payMsg', 'Chưa có đơn nạp hợp lệ.', true); return; }
+  const code = document.getElementById('cancelModalCode');
+  if (code) code.textContent = '#' + activeOrder.order_code;
+  const modal = document.getElementById('cancelModal');
+  if (modal) modal.hidden = false;
+  const btn = document.getElementById('cancelConfirmBtn');
+  if (btn) btn.disabled = false;
+}
+
+function closeCancelConfirm() {
+  const modal = document.getElementById('cancelModal');
+  if (modal) modal.hidden = true;
 }
 
 // ---- Đếm ngược hạn thanh toán ----
@@ -862,12 +969,20 @@ function stopCountdown() {
 
 // ============================================================================
 // Poll trạng thái đơn (mỗi 4 giây) → PAID thì sang bước 4
+// Mỗi SYNC_EVERY nhịp, nếu vẫn PENDING thì gọi thêm /sync để server đối soát
+// với payOS: webhook payOS có thể chưa được đăng ký / URL chưa public → nếu
+// chỉ đọc DB thì đơn kẹt "chờ thanh toán" dù khách đã trả tiền.
 // ============================================================================
+const SYNC_EVERY = 5;   // 5 nhịp x 4s = ~20s đối soát payOS một lần
+
 function startPolling(orderCode) {
   stopPolling();
-  // Không poll khi tab ẩn — tránh spam API khi user để tab nền lâu.
-  if (document.hidden) return;
+  payPollTicks = 0;
+  // Tab ẩn vẫn giữ interval (chỉ bỏ qua việc gọi mạng) để khi khách quay lại
+  // là có nhịp ngay, không phải chờ tới sự kiện visibilitychange.
   payPoll = setInterval(async () => {
+    if (document.hidden) return;
+    payPollTicks++;
     try {
       const r = await Auth.fetch('/api/credits/topup/' + orderCode);
       if (!r.ok) return;
@@ -880,22 +995,56 @@ function startPolling(orderCode) {
         showResult({
           order_code: orderCode, status: 'PAID', amount_vnd: d.amount_vnd, credits: d.credits
         });
-      } else if (['CANCELLED', 'EXPIRED', 'UNDERPAID', 'FAILED'].includes(d.status)) {
+        return;
+      }
+      if (['CANCELLED', 'EXPIRED', 'UNDERPAID', 'FAILED'].includes(d.status)) {
         stopPolling();
         if (d.status === 'EXPIRED') stopCountdown();
+        return;
       }
+      // Vẫn PENDING → định kỳ nhờ server hỏi thẳng payOS (fallback webhook).
+      if (payPollTicks % SYNC_EVERY === 0) await syncOrderStatus(orderCode);
     } catch (e) { /* im lặng, thử lại vòng sau */ }
   }, 4000);
 }
 
+/**
+ * Gọi server đối soát đơn với payOS. Lỗi mạng/rate-limit đều bỏ qua im lặng —
+ * đây là đường phụ, không được làm gián đoạn việc khách đang quét QR.
+ */
+async function syncOrderStatus(orderCode) {
+  try {
+    const r = await Auth.fetch('/api/credits/topup/' + orderCode + '/sync', { method: 'POST' });
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (d && d.status) setPayStatus(d.status);
+    if (d && d.status === 'PAID') {
+      stopPolling();
+      stopCountdown();
+      orderPaid = true;
+      showResult({
+        order_code: orderCode, status: 'PAID',
+        amount_vnd: (activeOrder && activeOrder.amount_vnd), credits: (activeOrder && activeOrder.credits)
+      });
+    }
+    return d;
+  } catch (e) { return null; }
+}
+
 function stopPolling() {
   if (payPoll) { clearInterval(payPoll); payPoll = null; }
+  payPollTicks = 0;
 }
 
 // Tab hiện lại → kiểm tra đơn ngay, thay vì chờ tới nhịp poll kế tiếp.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
-  if (activeOrder && activeOrder.order_code) startPolling(activeOrder.order_code);
+  if (activeOrder && activeOrder.order_code) {
+    startPolling(activeOrder.order_code);
+    // Quay lại tab sau khi quét QR ở app ngân hàng là lúc dễ đã trả tiền nhất
+    // → đối soát ngay, không đợi đủ 5 nhịp.
+    syncOrderStatus(activeOrder.order_code);
+  }
 });
 
 // ============================================================================
@@ -910,9 +1059,8 @@ async function showResult(o) {
   const st = o.status || 'PENDING';
   stopPolling();
   stopCountdown();
-  // Đã có kết quả (đặc biệt khi khách vừa quét QR trong popup) → đóng popup
-  // rồi trả về bước 4 "Hoàn tất".
-  closePayModal();
+  // Đã có kết quả (khách vừa quét QR / tự huỷ) → đóng mọi dialog rồi về bước 4.
+  closeCancelConfirm();
   const icon = document.getElementById('resIcon');
   const title = document.getElementById('resTitle');
   const sub = document.getElementById('resSub');
@@ -972,11 +1120,10 @@ async function showResult(o) {
 // ============================================================================
 // Huỷ đơn · test mode · đóng luồng · nạp đơn khác
 // ============================================================================
-/** User tự huỷ đơn đang chờ thanh toán. */
+/** User tự huỷ đơn đang chờ thanh toán (đã xác nhận qua #cancelModal). */
 async function cancelOrder() {
   if (!activeOrder) return;
-  if (!confirm('Huỷ đơn nạp #' + activeOrder.order_code + '?')) return;
-  const btn = document.getElementById('payCancelBtn');
+  const btn = document.getElementById('cancelConfirmBtn');
   if (btn) btn.disabled = true;
   try {
     const r = await Auth.fetch(`/api/credits/topup/${activeOrder.order_code}/cancel`, {
@@ -986,6 +1133,7 @@ async function cancelOrder() {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || 'Không huỷ được đơn');
+    closeCancelConfirm();
     setPayStatus('CANCELLED');
     stopPolling();
     stopCountdown();
@@ -993,8 +1141,10 @@ async function cancelOrder() {
       order_code: activeOrder.order_code, status: 'CANCELLED',
       amount_vnd: activeOrder.amount_vnd, credits: activeOrder.credits
     });
-  } catch (e) { showMsg('payMsg', e.message, true); }
-  finally { if (btn) btn.disabled = false; }
+  } catch (e) {
+    closeCancelConfirm();
+    showMsg('payMsg', e.message, true);
+  } finally { if (btn) btn.disabled = false; }
 }
 
 // Test mode: cần token admin; user thường nhận 403 → báo lỗi rõ.
@@ -1016,7 +1166,7 @@ function mockPaid() {
 
 /** Đóng luồng nạp giữa chừng: dọn poll/countdown và gỡ ?order=/?step= trên URL. */
 function closeTopupFlow() {
-  closePayModal();
+  closeCancelConfirm();
   stopPolling();
   stopCountdown();
   activeOrder = null;
@@ -1093,14 +1243,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const cv = document.getElementById('customVnd');
   if (cv) cv.addEventListener('input', renderCustomPreview);
 
-  // Popup thanh toán: Esc hoặc bấm nền mờ để đóng (đơn vẫn được poll tiếp).
+  // Dialog huỷ đơn: Esc hoặc bấm nền mờ = "Đóng (giữ đơn)", KHÔNG huỷ.
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closePayModal();
+    if (e.key === 'Escape') closeCancelConfirm();
   });
-  const payModalEl = document.getElementById('payModal');
-  if (payModalEl) {
-    payModalEl.addEventListener('click', e => {
-      if (e.target === payModalEl) closePayModal();
+  const cancelModalEl = document.getElementById('cancelModal');
+  if (cancelModalEl) {
+    cancelModalEl.addEventListener('click', e => {
+      if (e.target === cancelModalEl) closeCancelConfirm();
     });
   }
 

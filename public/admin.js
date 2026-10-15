@@ -122,8 +122,10 @@ function loadSettings() {
   Auth.fetch('/api/settings').then(r => r.json()).then(s => {
     const mo = document.getElementById('setMaxOnline');
     const rt = document.getElementById('setRetention');
+    const gm = document.getElementById('setGoogleMax');
     if (mo) mo.value = s.max_online_resolve != null ? s.max_online_resolve : '';
     if (rt) rt.value = s.lookup_history_retention_days != null ? s.lookup_history_retention_days : '';
+    if (gm) gm.value = s.max_google_per_batch != null ? s.max_google_per_batch : '';
     const ce = document.getElementById('setCreditEnabled');
     const cc = document.getElementById('setCreditCost');
     const cb = document.getElementById('setCreditSignupBonus');
@@ -290,6 +292,8 @@ function saveSettings() {
     credit_enabled: creditEnabled && creditEnabled.checked ? '1' : '0',
     credit_allow_negative: creditNeg && creditNeg.checked ? '1' : '0'
   };
+  const googleMax = document.getElementById('setGoogleMax') ? document.getElementById('setGoogleMax').value.trim() : '';
+  if (googleMax !== '') settings.max_google_per_batch = googleMax;
   if (creditCost !== '') settings.credit_cost_per_lookup = creditCost;
   if (creditBonus !== '') settings.credit_signup_bonus = creditBonus;
   collectPayosSettings(settings);
@@ -1160,6 +1164,10 @@ async function loadSources() {
     </td>
     <td>${esc(s.name)}</td><td>${s.type}</td>
     <td><span class="badge ${s.enabled ? 'badge-active' : 'badge-pending'}">${s.enabled ? 'Enabled' : 'Disabled'}</span></td>
+    <td>${s.last_error
+      ? `<span class="badge" style="background:rgba(255,86,86,0.18);color:#ff6b6b" title="${esc(s.last_error_at || '')}">Lỗi</span>
+         <div class="hint" style="color:#ff8b8b;margin-top:4px;max-width:340px;white-space:normal">${esc(s.last_error)}</div>`
+      : '<span class="hint" style="color:var(--text-faint)">—</span>'}</td>
     <td>
       <button class="btn btn-sm ${s.enabled ? '' : 'btn-success'}" onclick="toggleSource(${s.id}, ${s.enabled ? 0 : 1})" title="${s.enabled ? 'Tắt' : 'Bật'}"><i class="fas ${s.enabled ? 'fa-toggle-on' : 'fa-toggle-off'}"></i> ${s.enabled ? 'Tắt' : 'Bật'}</button>
       <button class="btn btn-sm" onclick="editSourceByIndex(${i})"><i class="fas fa-pen"></i></button>
@@ -1212,6 +1220,14 @@ function onSourceTypeChange() {
     keyInput.disabled = false;
     keyInput.placeholder = 'Combain API key';
     hint.innerHTML = 'Lấy API key tại <a href="https://portal.combain.com/api/" target="_blank" rel="noopener">portal.combain.com</a>. Combain là API tra cứu theo cell (tốn credits).';
+  } else if (type === 'google') {
+    keyInput.disabled = false;
+    keyInput.placeholder = 'Google Maps API key';
+    hint.innerHTML = 'Cần bật <b>Geolocation API</b> + billing trong Google Cloud Console, lấy key tại '
+      + '<a href="https://console.cloud.google.com/google/maps-apis/credentials" target="_blank" rel="noopener">console.cloud.google.com</a>. '
+      + '<b>Tốn phí theo request</b> — Google trả 1 toạ độ cho CẢ NHÓM cell miss (không phải toạ độ riêng từng trạm), '
+      + 'số cell mỗi request giới hạn ở mục "Số cell tối đa mỗi request Google". Nguồn này mặc định TẮT. '
+      + 'Nếu bật mà vẫn không ra dữ liệu, xem cột <b>Lỗi gần nhất</b> ở bảng trên (Google trả 403 khi dự án chưa bật billing).';
   } else {
     keyInput.disabled = false;
     keyInput.placeholder = 'OpenCellID key';
@@ -1758,6 +1774,7 @@ function cdbSourceBadge(source) {
   if (s === '') return '<span class="muted-text">—</span>';
   const cls = s.indexOf('open') === 0 ? 'background:rgba(100,150,255,0.2);color:#6699ff'
     : s === 'combain' ? 'background:rgba(255,180,70,0.2);color:#e6a700'
+    : s === 'google' ? 'background:rgba(70,160,255,0.2);color:#4aa3ff'
     : 'background:rgba(180,180,180,0.2);color:#999';
   return `<span class="nav-badge" style="${cls}">${esc(s)}</span>`;
 }

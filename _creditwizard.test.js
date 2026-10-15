@@ -75,10 +75,8 @@ byId('wzSteps').querySelectorAll = sel => (sel === '.wz-step' ? WZ_STEPS : []);
 // #payQr nằm trong #payQrBox; showPayCard ẩn/hiện qua qr.parentElement.
 byId('payQr').parentElement = byId('payQrBox');
 
-// Popup thanh toán: #payModalQr nằm trong #payModalQrBox (fillPayModal ẩn/hiện
-// qua box.hidden), #payModal là overlay bật/tắt bằng .hidden.
-byId('payModalQr').parentElement = byId('payModalQrBox');
-byId('payModal').hidden = true;
+// Dialog huỷ đơn (#cancelModal) là overlay bật/tắt bằng .hidden.
+byId('cancelModal').hidden = true;
 
 // 4 mốc wizard phải khớp markup thật (#wzSteps .wz-step[data-wz]).
 const WZ_STEPS = [1, 2, 3, 4].map(n => {
@@ -124,6 +122,8 @@ sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
 
 // Auth stub: trả đơn nạp giả cho POST /api/credits/topup/create.
+const syncLog = [];
+sandbox.__syncLog = syncLog;
 sandbox.Auth = {
   isLoggedIn: () => true,
   initNavbar() {},
@@ -145,6 +145,11 @@ sandbox.Auth = {
         })
       };
     }
+    // Đối soát payOS (fallback webhook): đơn vẫn PENDING cho tới khi payOS báo.
+    if (/\/sync$/.test(url)) {
+      syncLog.push(url);
+      return { ok: true, json: async () => ({ success: true, status: 'PENDING', synced: false }) };
+    }
     return { ok: true, json: async () => [] };
   }
 };
@@ -152,7 +157,7 @@ sandbox.fetch = sandbox.Auth.fetch;
 
 const ctx = vm.createContext(sandbox);
 vm.runInContext(
-  appJs + '\n;globalThis.__t = { createOrder, confirmOrderNext, confirmOrderBack, renderWizard, showResult, showPayCard, payNow, payBack, closePayModal, fillPayModal };',
+  appJs + '\n;globalThis.__t = { createOrder, confirmOrderNext, confirmOrderBack, renderWizard, showResult, showPayCard, payBack, openCancelConfirm, closeCancelConfirm, cancelOrder, syncOrderStatus };',
   ctx, { filename: 'topup-inline.js' }
 );
 
@@ -211,59 +216,64 @@ vm.runInContext(
     byId('payQr').parentElement.hidden === false
     && /^data:image\/png;base64,/.test(byId('payQr').attrs.src || ''),
     { hidden: byId('payQr').parentElement.hidden, src: (byId('payQr').attrs.src || '').slice(0, 32) });
-  ok('đơn CÓ qr_image → popup sẵn QR (#payModalQr), ẩn link payOS',
-    byId('payModalQr').parentElement.hidden === false
-    && /^data:image\/png;base64,/.test(byId('payModalQr').attrs.src || '')
-    && byId('payModalCheckout').hidden === true,
-    { qrBox: byId('payModalQr').parentElement.hidden, checkout: byId('payModalCheckout').hidden });
+  ok('đơn CÓ qr_image → nhánh dự phòng #payFallback ẩn (không cần link payOS)',
+    byId('payFallback').hidden === true);
+  ok('KHÔNG còn nút "Thanh toán" mở popup ở bước 3 (QR hiện sẵn trên trang)',
+    !/function payNow\(/.test(appJs) && !/id="payNowBtn"/.test(html) && !/id="payModal"/.test(html));
   // Test biên: đơn không có ảnh QR (payOS trả qr_code rỗng / link lỗi / test mode)
-  // → cả thẻ #payQr lẫn popup phải ẩn QR và chuyển sang link mở trang payOS.
+  // → ẩn QR và hiện nhánh dự phòng mở trang payOS.
   T.showPayCard({
     order_code: 4242, amount_vnd: 50000, credits: 50, qr_image: '',
     account_number: '123456', description: 'NAP 4242',
-    checkout_url: '/topup.html?order=4242&mock=1',
+    checkout_url: 'https://pay.payos.vn/web/abc',
     expires_at: new Date(Date.now() + 900000).toISOString(), test_mode: true
   });
-  ok('đơn KHÔNG có qr_image → ẩn QR popup + hiện link mở trang payOS',
-    byId('payModalQr').parentElement.hidden === true && byId('payModalCheckout').hidden === false,
-    { qrBox: byId('payModalQr').parentElement.hidden, checkout: byId('payModalCheckout').hidden });
-  ok('đơn KHÔNG có qr_image → thẻ #payQr cũng ẩn QR', byId('payQr').parentElement.hidden === true);
-  ok('tạo đơn xong popup thanh toán ĐANG ĐÓNG (chờ khách bấm Thanh toán)',
-    byId('payModal').hidden === true);
+  ok('đơn KHÔNG có qr_image → ẩn QR + hiện #payFallback + link payOS có href thật',
+    byId('payQr').parentElement.hidden === true && byId('payFallback').hidden === false
+    && byId('payCheckoutLink').href === 'https://pay.payos.vn/web/abc',
+    { qrBox: byId('payQr').parentElement.hidden, fb: byId('payFallback').hidden, href: byId('payCheckoutLink').href });
   ok('bước 4 (kết quả) chưa hiện khi đơn còn PENDING', byId('wzStep4').hidden === true);
 
-  console.log('\n== Bước 3 -> popup "Thanh toán" -> Quay lại ==');
+  console.log('\n== Bước 3: huỷ đơn qua dialog gộp "Hủy đơn / Đóng" ==');
   // Đang ở bước 3 với đơn PENDING (từ createOrder + confirmOrderNext ở trên).
-  T.payNow();
-  ok('payNow(): popup #payModal MỞ', byId('payModal').hidden === false);
-  ok('payNow(): popup đổ đúng tiền + điểm + số TK + nội dung CK',
-    /50/.test(byId('payModalAmount').textContent)
-    && byId('payModalCredits').textContent === '50 điểm'
-    && byId('payModalAccNo').textContent === '123456'
-    && byId('payModalDesc').textContent === 'NAP 4242',
-    {
-      amt: byId('payModalAmount').textContent, cr: byId('payModalCredits').textContent,
-      acc: byId('payModalAccNo').textContent, desc: byId('payModalDesc').textContent
-    });
-  T.closePayModal();
-  ok('closePayModal(): popup đóng, vẫn ở bước 3', byId('payModal').hidden === true && byId('wzStep3').hidden === false);
-
-  T.payNow();
-  T.payBack();
-  ok('payBack(): đóng popup + về bước 2, KHÔNG huỷ đơn (không gọi /cancel mới)',
-    byId('payModal').hidden === true && byId('wzStep2').hidden === false
+  T.openCancelConfirm();
+  ok('openCancelConfirm(): dialog #cancelModal MỞ + đổ đúng mã đơn',
+    byId('cancelModal').hidden === false && byId('cancelModalCode').textContent === '#4242',
+    { hidden: byId('cancelModal').hidden, code: byId('cancelModalCode').textContent });
+  T.closeCancelConfirm();
+  ok('closeCancelConfirm(): dialog đóng, vẫn ở bước 3, KHÔNG gọi /cancel',
+    byId('cancelModal').hidden === true && byId('wzStep3').hidden === false
     && !callLog.some(c => /\/api\/credits\/topup\/4242\/cancel$/.test(c.url)),
-    { s2: byId('wzStep2').hidden, calls: callLog.map(c => c.url).slice(-3) });
+    { hidden: byId('cancelModal').hidden, calls: callLog.map(c => c.url).slice(-3) });
+
+  T.openCancelConfirm();
+  await T.cancelOrder();
+  ok('cancelOrder(): gọi /cancel rồi về bước 4 với trạng thái CANCELLED',
+    callLog.some(c => /\/api\/credits\/topup\/4242\/cancel$/.test(c.url))
+    && byId('cancelModal').hidden === true && byId('wzStep4').hidden === false
+    && /CANCELLED/.test(byId('resStatus').innerHTML),
+    { st: byId('resStatus').innerHTML, calls: callLog.map(c => c.url).slice(-2) });
+
+  // Về lại bước 3 để kiểm tra đối soát định kỳ.
   T.confirmOrderNext();
-  T.payNow();
-  ok('quay lại bước 3 rồi mở lại popup: vẫn mở được', byId('payModal').hidden === false);
+  ok('quay lại bước 3 sau khi huỷ: #payCard hiện, dialog đã đóng',
+    byId('wzStep3').hidden === false && byId('cancelModal').hidden === true);
+
+  console.log('\n== Đối soát payOS định kỳ (fallback webhook) ==');
+  const syncBefore = ctx.__syncLog.length;
+  const syncRes = await T.syncOrderStatus(4242);
+  ok('syncOrderStatus(): POST /api/credits/topup/<code>/sync + trả status PENDING',
+    ctx.__syncLog.length === syncBefore + 1
+    && ctx.__syncLog[ctx.__syncLog.length - 1].endsWith('/api/credits/topup/4242/sync')
+    && syncRes && syncRes.status === 'PENDING',
+    { log: ctx.__syncLog.slice(-1), res: syncRes });
 
   console.log('\n== Bước 4: showResult(PAID) ==');
   await T.showResult({ order_code: 4242, status: 'PAID', amount_vnd: 50000, credits: 50 });
   ok('showResult(PAID): #wzStep4 hiện, #wzStep3 ẩn',
     byId('wzStep4').hidden === false && byId('wzStep3').hidden === true);
-  ok('showResult(PAID): popup thanh toán tự ĐÓNG (quét QR xong trả về bước 4)',
-    byId('payModal').hidden === true);
+  ok('showResult(PAID): dialog huỷ đơn tự đóng',
+    byId('cancelModal').hidden === true);
   ok('kết quả đổ đúng mã đơn + trạng thái PAID',
     byId('resOrder').textContent === '#4242' && /PAID/.test(byId('resStatus').innerHTML),
     { code: byId('resOrder').textContent, st: byId('resStatus').innerHTML });

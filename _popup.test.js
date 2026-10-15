@@ -58,7 +58,9 @@ ok('gọi apiRequest DELETE /api/call-logs', /apiRequest\(\s*['"]DELETE['"]\s*,\
 ok('có confirm() trước khi xoá', /confirm\(/.test(rcs));
 ok('reset myLogsCache = []', /myLogsCache\s*=\s*\[\]/.test(rcs));
 ok('i18n calllogs.confirmReset tồn tại (EN)', /'calllogs\.confirmReset'/.test(app));
-ok('nút Xoá phiên gọi resetCallSession()', /onclick="resetCallSession\(\)"/.test(html));
+ok('KHÔNG còn nút Xoá phiên topbar gọi resetCallSession() (đã gỡ khỏi HTML)',
+  !/onclick="resetCallSession\(\)"/.test(html));
+ok('vẫn còn hàm resetCallSession', /async function resetCallSession/.test(app));
 
 // === 3. cellPopupTitle ===
 console.log('\n== 3. cellPopupTitle MCC-MNC-LAC/TAC-CELLID ==');
@@ -69,8 +71,13 @@ ok('dùng classifyCellId phân short/long', /classifyCellId\(/.test(cpt));
 ok('trả text + kind', /text:/.test(cpt) && /kind:/.test(cpt));
 
 console.log('\n== 4. popup dùng cellPopupTitle (bỏ nhãn "Cell:") ==');
+// Từ v2.9.0 popup dùng chung buildCellPopupHtml (gọi cellPopupTitle) cho cả
+// tra đơn lẻ lẫn marker rút list.
+const bcph = fnBody(app, 'buildCellPopupHtml');
 const scm = fnBody(app, 'showCellOnMap');
-ok('showCellOnMap dùng cellPopupTitle', /cellPopupTitle\(opts\.mcc/.test(scm));
+ok('buildCellPopupHtml dùng cellPopupTitle', /cellPopupTitle\(opts\.mcc/.test(bcph));
+ok('showCellOnMap dùng buildCellPopupHtml (tiêu đề qua cellPopupTitle)',
+  /buildCellPopupHtml\(/.test(scm));
 ok('showCellOnMap KHÔNG còn "hist.cell: mcc-mnc-lac" cũ', !/hist\.cell'\}\s*:\s*\$\{histEsc\(opts\.mcc/.test(scm));
 const hob = fnBody(app, 'histOpenBatchOnMap');
 ok('histOpenBatchOnMap dùng cellPopupTitle', /cellPopupTitle\(r\.mcc/.test(hob));

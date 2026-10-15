@@ -13,6 +13,7 @@
  *  6. Đơn thứ 2 rồi POST .../cancel -> CANCELLED, không cộng điểm
  *  7. Đơn quá hạn (expires_at trong quá khứ) -> GET tự chuyển EXPIRED
  *  8. User khác KHÔNG xem/huỷ/mock được đơn của người khác -> 403
+ *  8b. POST /api/credits/topup/:code/sync -> 200 (PENDING), 403 user khác, 404 đơn lạ
  *  9. mode=production (test_mode=0) -> mock-paid trả 400
  */
 const fs = require('fs');
@@ -231,6 +232,24 @@ async function main() {
   const mOther = await req('POST', `/api/credits/topup/${code1}/mock-paid`, undefined, otherToken);
   ok('user khác mock-paid -> 403', mOther.status === 403, mOther.body);
 
+  console.log('\n== 8b. đối soát /sync (fallback khi webhook không tới) ==');
+  const balBeforeSync = await credits.getBalance(uid);
+  // payOS test mode: không có link thật → lấy trạng thái thất bại. Route PHẢI
+  // trả 200 + synced=false (không được 400/500 làm đỏ nhịp poll của client).
+  const sync1 = await req('POST', `/api/credits/topup/${code1}/sync`, undefined, userToken);
+  ok('sync đơn PENDING -> 200 (không chặn luồng poll)', sync1.status === 200, sync1.body);
+  ok('sync đơn PENDING: trả về đúng order_code/status hiện tại',
+    sync1.body && (sync1.body.status === 'PENDING' || sync1.body.status === 'PAID'), sync1.body);
+  ok('sync KHÔNG cộng điểm khi payOS không xác nhận PAID',
+    (await credits.getBalance(uid)) === balBeforeSync, await credits.getBalance(uid));
+
+  const syncOther = await req('POST', `/api/credits/topup/${code1}/sync`, undefined, otherToken);
+  ok('user khác đối soát đơn -> 403', syncOther.status === 403, syncOther.body);
+  const syncMissing = await req('POST', '/api/credits/topup/99999999/sync', undefined, userToken);
+  ok('đối soát đơn không tồn tại -> 404', syncMissing.status === 404, syncMissing.body);
+  const syncNoAuth = await req('POST', `/api/credits/topup/${code1}/sync`, undefined, null);
+  ok('đối soát không token -> 401', syncNoAuth.status === 401, syncNoAuth.body);
+
   console.log('\n== 4. giả lập đã trả tiền ==');
   const balBefore = await credits.getBalance(uid);
   const m1 = await req('POST', `/api/credits/topup/${code1}/mock-paid`, undefined, userToken);
@@ -280,6 +299,52 @@ async function main() {
   } else {
     ok('test_mode=0 -> tạo đơn thất bại (không gọi được payOS thật)', c4.status >= 400, c4.body);
   }
+
+  console.log('\n== 10. nạp điểm xong tra cứu được (bug user báo) ==');
+  await setSetting('payos_test_mode', '1');
+  await setSetting('credit_enabled', '1');
+  await setSetting('credit_cost_per_lookup', '1');
+  await setSetting('credit_allow_negative', '0');
+  await setSetting('enable_opencellid', '0');
+  await setSetting('enable_opencellid_web', '0');
+  // User 0 điểm + 2 cell CÓ toạ độ trong CSDL nội bộ (case lỗi hay gặp).
+  await sqlRun('UPDATE users SET credit_balance = 0 WHERE id = ?', [uid]);
+  const bCells = [
+    { mcc: 452, mnc: 4, lac: 9301, cellid: 33300101 },
+    { mcc: 452, mnc: 4, lac: 9301, cellid: 33300102 },
+  ];
+  for (let i = 0; i < bCells.length; i++) {
+    await sqlRun('INSERT INTO cells (mcc, mnc, lac, cellid, lat, lng, range) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [bCells[i].mcc, bCells[i].mnc, bCells[i].lac, bCells[i].cellid, 10.0 + i * 0.01, 106.0 + i * 0.01, 500]);
+  }
+  const bUpload = 'up-topupflow-1';
+  const d1 = await req('POST', '/api/cells/resolve-batch',
+    { cells: bCells, uploadId: bUpload, fileName: 't.xlsx', roundIdx: 0 }, userToken);
+  ok('0 điểm -> 402 (chặn từ đầu, chưa đốt quota)', d1.status === 402, { s: d1.status, b: d1.body });
+  ok('0 điểm -> reason insufficient', d1.body && d1.body.reason === 'insufficient', d1.body);
+  ok('0 điểm -> số dư không bị trừ âm', Number((await sqlGet('SELECT credit_balance b FROM users WHERE id = ?', [uid])).b) === 0);
+
+  // Nạp điểm (client cũng setCreditBalance từ /api/credits/balance khi quay lại tab).
+  await sqlRun('UPDATE users SET credit_balance = 5 WHERE id = ?', [uid]);
+  const balAfterTopup = await req('GET', '/api/credits/balance', undefined, userToken);
+  ok('/api/credits/balance trả số dư MỚI = 5', Number(balAfterTopup.body && balAfterTopup.body.balance) === 5, balAfterTopup.body);
+
+  const d2 = await req('POST', '/api/cells/resolve-batch',
+    { cells: bCells, uploadId: bUpload, fileName: 't.xlsx', roundIdx: 0 }, userToken);
+  ok('nạp xong -> 200', d2.status === 200, d2.status);
+  ok('nạp xong -> trả toạ độ cả 2 cell',
+    (d2.body.results || []).filter(x => x.lat && x.lon).length === 2, d2.body.results);
+  ok('nạp xong -> results[].charged = true',
+    (d2.body.results || []).every(x => x.charged === true), d2.body.results);
+  ok('nạp xong -> credit.charged = 2', d2.body.credit && d2.body.credit.charged === 2, d2.body.credit);
+  ok('nạp xong -> số dư 5 - 2 = 3',
+    Number((await sqlGet('SELECT credit_balance b FROM users WHERE id = ?', [uid])).b) === 3);
+
+  const d3 = await req('POST', '/api/cells/resolve-batch',
+    { cells: bCells, uploadId: bUpload, fileName: 't.xlsx', roundIdx: 0 }, userToken);
+  ok('retry cùng vòng -> credit.duplicate = true', d3.body.credit && d3.body.credit.duplicate === true, d3.body.credit);
+  ok('retry cùng vòng -> không trừ lại (vẫn 3)',
+    Number((await sqlGet('SELECT credit_balance b FROM users WHERE id = ?', [uid])).b) === 3);
 
   console.log(`\n${pass} passed, ${fail} failed\n`);
   process.exitCode = fail ? 1 : 0;

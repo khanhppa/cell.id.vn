@@ -4,6 +4,357 @@ Mọi thay đổi đáng chú ý của Cell.id.vn được ghi ở đây.
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/),
 phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
 
+## [Unreleased]
+
+### Added
+- **Kéo giãn panel trái (sidebar)**: tay kéo `.sidebar-resizer` bám mép phải panel, kéo ngang
+  để đổi độ rộng `--sidebar-width` (min `260px`, max `720px` / chừa tối thiểu `360px` cho
+  bản đồ). Độ rộng lưu `localStorage['sidebarWidth']`, khôi phục lại khi mở trang.
+  - Nháy đúp tay kéo (hoặc `Home`) để đặt lại mặc định `340px` và xoá key đã lưu.
+  - Hỗ trợ bàn phím: `ArrowLeft`/`ArrowRight` đổi 20px/lần; tay kéo có
+    `role="separator"` + `tabindex="0"`.
+  - Hỗ trợ cảm ứng (`touchstart`/`touchmove`).
+  - `applySidebarWidth()` cập nhật **cả** `--sidebar-width` **và** `--sidebar-collapsed`
+    (thay vì hardcode `-340px`) nên thu gọn luôn đẩy panel ra ngoài đúng bề rộng hiện tại.
+  - Gọi `map.invalidateSize()` sau khi thả chuột và sau transition thu gọn/mở (320ms).
+  - Cửa sổ nhỏ lại thì tự clamp độ rộng về khoảng hợp lệ.
+  - i18n vi+en: `sidebar.resize`, `sidebar.resizeReset`, `sidebar.widthSaved`.
+- **Popup full-window "Nạp Excel → bảng cell" (CHỈ ĐỌC, không tốn phí)**: nút trên topbar
+  mở overlay toàn màn hình 3 bước (nạp file → xem bảng cell dedup → tra điểm & vẽ map).
+  Endpoint mới `POST /api/call-logs/analyze` (`requireAuth`, `multer` memory/disk tạm,
+  xoá file trong `finally`) parse workbook **trong RAM**, gom cell bằng
+  `excelParser.aggregateCellsFromRecords()` với cùng `canonicalKey`/`inferRadio`/
+  `radioConfident` như `/api/cells/resolve-batch` nên **số dòng bảng = đúng số cell sẽ hỏi nguồn**.
+  - **Không ghi DB, không trừ điểm, không đốt quota nguồn online**: chỉ `SELECT ... FROM cells`
+    theo `lac` (kèm `lat IS NOT NULL`) để gắn sẵn `localLat`/`localLon`/`localRange` cho cell
+    đã có trong CSDL nội bộ; điểm chỉ bị trừ khi user bấm "Tra cứu" (→ `/api/cells/resolve-batch`).
+  - Bảng hiển thị mỗi cell 1 dòng: LAC/Cell ID/Sector, RAT (`radio`; mơ hồ hiện `?` khi
+    `radioConfident === false`), số dòng dữ liệu, khoảng thời gian, số liên hệ, địa chỉ,
+    trạng thái toạ độ nội bộ. Sort mọi cột + chọn từng dòng/chọn tất cả.
+  - `radioConfident` giữ nguyên luật "không đoán bừa": `radio = ''` (UI hiện `?`) khi
+    cellid ngắn (≤ 2^20) mà không có sector/`radioHint`.
+  - i18n vi+en cho toàn bộ nhãn/nút/thông báo của popup.
+- **Nguồn online `google` (Google Geolocation API)**: nguồn thứ 5 trong chuỗi tra online.
+  Google **không tra theo từng cell** mà trả **1 toạ độ ước lượng cho cả tập cell**
+  (multilateration), nên nguồn này chạy **SAU** mọi nguồn per-cell và **chỉ nhận các cell đã
+  miss hết nguồn khác**; các cell miss được gom thành nhóm ≤ `max_google_per_batch` (mặc định
+  `10`) → **1 request/nhóm**, toạ độ trả về gán **chung** cho mọi cell trong nhóm với
+  `range = accuracy` do Google báo. Mặc định **TẮT** (tốn phí theo request) — admin phải bật
+  và nhập API key trong **Cell ID Database → Nguồn Online** (key lưu bảng `data_sources`,
+  fallback env `GOOGLE_MAPS_API_KEY`).
+  - Request: `{ homeMobileCountryCode, homeMobileNetworkCode, radioType, considerIp: false, cellTowers[] }`.
+    `considerIp: false` là **bắt buộc** — nếu để `true`, khi cell không đủ dữ liệu Google trả
+    toạ độ theo **IP của server**, tức toạ độ rác đúng định dạng sẽ lọt geo gate và ghi bẩn bảng `cells`.
+  - `cellId` uint32: LTE lấy dạng ECI (long) qua `cellIdCandidates`; cell vượt range bị **loại
+    khỏi mảng** (gửi kèm sẽ làm cả request 400 và mất luôn các cell hợp lệ khác). NR gửi
+    `newRadioCellId` (uint64) và **không** gửi `cellId`; GSM/CDMA thiếu LAC hợp lệ (0..65535) bị loại.
+  - Lỗi 400 (request sai) / 403 (key hoặc billing) / 429 (hạn mức) và response thiếu `location`
+    đều coi như **miss** (fail-soft, chuỗi nguồn không sập); toạ độ ngoài khung MCC vẫn qua
+    geo gate → không ghi DB. Không cấu hình key → **không gọi mạng**.
+  - Setting mới `max_google_per_batch` (mặc định `10`, trần `1e5`) chỉnh trong
+    **Cấu hình → Chung**; admin UI thêm option nguồn, hint cảnh báo tốn phí + link bật
+    Geolocation API/billing, badge `google` trong bảng CSDL.
+- **Tra lần lượt khi thiếu điểm + thông báo 3 số**: nạp Excel mà số điểm không đủ tra cả
+  danh sách thì tra **tuần tự từ đầu đến cuối** — 1 cell ra kết quả = trừ 1 điểm, dừng khi
+  hết điểm. Server gán `results[].charged` theo **thứ tự** (chỉ `affordable` cell found ĐẦU
+  TIÊN được trả phí) và **ẩn toạ độ** cell found vượt số dư (`lat/lon/range = null`,
+  `unpaid:true`) → không rò kết quả chưa trả phí ở tầng server, không phụ thuộc client.
+  Thông báo kết quả (`#clCreditNotice`) hiện đủ **3 số**:
+  `Đã tra {f}/{n} cell — trừ {c} điểm · {m} cell không ra kết quả · còn {z} cell chưa tra (hết điểm)`
+  (i18n vi+en). Server trả thêm `credit.found`, `credit.missed`, `credit.unpaid`.
+  Client tích luỹ `found`/`missed`/`unpaid` qua các vòng, bỏ qua cell `unpaid` khi cập nhật
+  `myLogsCache` (để lại chờ nạp điểm rồi tra tiếp).
+
+### Fixed
+- **Nguồn online miss trong im lặng — admin không biết vì sao "bật nguồn mà không ra dữ liệu"**:
+  mọi `catch` trong chuỗi nguồn per-cell (`/api/cells/resolve` + `/api/cells/resolve-batch`) đều
+  bỏ qua lỗi không lưu vết, và log chỉ ra `console.warn` (không ghi file). Nay mỗi lỗi được ghi
+  vào bộ nhớ per-nguồn (`noteSourceError`/`clearSourceError`, giữ 1 entry/nguồn, cắt 300 ký tự)
+  và `GET /api/sources` trả thêm `last_error` + `last_error_at` — bảng **Nguồn Online** hiện cột
+  **"Lỗi gần nhất"** (badge đỏ + message) nên thấy ngay ca thật đã gặp: Google trả
+  `403 PERMISSION_DENIED: You must enable Billing on the Google Cloud Project`. Lỗi cũ được
+  **xoá** khi nguồn tra thành công (không hiện cảnh báo sai).
+- **`?debug=1` cho admin khi miss single resolve**: `GET /api/cells/resolve?...&debug=1` trả thêm
+  `debug.sources[<type>] = { key: 'set'|'missing', lastError, lastErrorAt }` để biết nguồn nào thiếu
+  key / đang lỗi gì mà không phải mò log. **Chỉ admin** nhận được (user thường không có `payload.debug`).
+- **Google Geolocation gửi `cellId` bịa cho cell ID dạng short (eNB) thiếu sector**: `googleTower`
+  lấy `cellIdCandidates(cellid, sector)[0]`; với id short (≤ 2^20) không sector, candidate đầu là ECI
+  **dựng** bằng `enbToEci(id, 0)` — tức bịa sector 0, Google sẽ trỏ trạm khác hoặc miss và có thể
+  ghi **nhầm toạ độ** vào bảng `cells`. Nay cell short **không có sector hint** bị **loại khỏi request**
+  (tower rỗng → không gọi mạng, ghi `last_error` giải thích); có sector hint thì vẫn dựng ECI và gửi
+  bình thường. `googleTower` cũng nhận tham số `reason` để message lỗi nêu đích danh cell bị loại
+  (vd `cellid 662091 là eNB short, thiếu sector để dựng ECI`) thay vì "không có cell hợp lệ để gửi".
+
+
+  (GET `/api/call-logs`) gán sẵn `lat/lon` cho cell có trong bảng `cells`, mà
+  `countResolveNeeded()` lại bỏ qua mọi dòng đã có toạ độ → cell local không bao giờ được gửi
+  lên `/api/cells/resolve-batch` → tra ra kết quả nhưng **không có bút toán trừ điểm**.
+  `countResolveNeeded()` giờ chỉ bỏ qua dòng mở từ Lịch sử (`_fromHistory`) và dòng đã trả phí
+  trong phiên (`_charged`) — **cell local vẫn tính điểm** (luật: tra ra kết quả là trừ điểm,
+  không phân biệt nguồn).
+- **Nút "Đóng" lộ toạ độ cell chưa trả phí**: `skipClResolve` cũ tắt cờ hoãn rồi vẽ hết →
+  cell có sẵn trong CSDL hiện marker dù chưa trừ điểm (cảm giác "tra miễn phí"). Nay điều kiện
+  "được xem" là **bền**: `canViewRecord(r)` = có toạ độ **và** (`_charged` hoặc `_fromHistory`).
+- **Rò toạ độ cell chưa trả phí qua nhiều đường khác**: sau khi hết điểm, cell vẫn hiện toạ độ
+  khi click dòng trong panel, bấm **Hiển Thị Bản Đồ**, đổi trang/lọc, hoặc bấm **Xem lịch sử**
+  (play). Nay `canViewRecord` áp dụng đồng nhất ở `plotCallLogs`, `renderCallLogs` (chặn
+  `onclick` highlight), `playCallLogs`, `updatePlayBtn`, `updateCallSessionUi`; dòng chưa trả
+  phí hiện icon khoá thay vì icon vị trí.
+- **Trừ điểm 2 lần cho cùng cell sau F5**: cờ `_charged` là trạng thái phiên, server không lưu →
+  sau khi `loadCallLogs()` nạp lại rows từ server là mất. Thêm `restoreChargedFlags()` khôi phục
+  `_charged` từ `sessionStorage` (so khớp canonical key) ngay sau khi nạp.
+- **Nạp điểm xong vẫn không tra cứu được**: (1) `renderClConfirm` chỉ gọi
+  `Auth.refreshCreditBalance()` khi cache **null** → số dư cache cũ (0) giữ nút "Đồng ý tra cứu"
+  ở trạng thái `disabled` dù đã nạp tiền; nay **luôn** refresh (fallback cache khi lỗi mạng) và
+  tự tính lại khi cửa sổ focus lại (`focus` + `visibilitychange`) — đúng luồng quay về từ
+  `/topup.html`. (2) Sau khi rời trang (đi nạp tiền) popup xác nhận **không tự mở lại** nên
+  user không còn đường bấm tra; thêm nút cố định **`#clResolveNowBtn` ("Tra cứu ngay")** ở
+  `.cl-topbar` — chỉ hiện khi còn cell chưa trả phí, kèm số cell (`updateClResolveNowBtn()`
+  gọi trong `renderCallLogs`). (3) `showResolveResult` tự mở `#callLogFilterPanel` để user luôn
+  thấy thông báo đã trừ bao nhiêu điểm / còn bao nhiêu cell (panel trước đây đóng thì thông báo
+  bị ẩn).
+
+### Changed
+- **Server trả cờ `charged` theo từng cell**: `POST /api/cells/resolve-batch` thêm
+  `results[].charged = !!historyItems[i].found` → client biết cell nào đã tính phí trong phiên
+  (miss không tính tiền). Client đọc cờ này để đánh dấu `_charged` và có helper `keyToCell(key)`
+  tách key `mcc-mnc-lac-cellid` thành object cell.
+- `resolveUnmatchedCells` không còn bỏ qua dòng đã có toạ độ khi cập nhật `myLogsCache` — cell
+  local vẫn cần nhận `cell_range` + dấu `_resolvedOnline`.
+
+### Tests
+- `_googlesource.test.js` (76 case, +16): mock `axios.post` → kiểm request shape (`considerIp:false`,
+  `radioType` chữ thường, `cellTowers[]` số nguyên, `homeMobileCountryCode` number), NR dùng
+  `newRadioCellId` và **không** có `cellId`, cell vượt uint32 bị loại khỏi mảng, GSM LAC ngoài range
+  bị loại, lỗi 400/403/429 + response thiếu `location` → miss không ghi DB, geo gate chặn toạ độ
+  ngoài MCC, option B (chỉ 1 request cho nhóm cell miss, cell local không gửi Google), chia nhóm
+  `2+2+1` khi `max_google_per_batch=2` (đổi live qua `PUT /api/settings`), không key → không gọi mạng.
+  Bổ sung: `last_error` xuất hiện trong `GET /api/sources` sau 403 và **được xoá** khi tra thành công,
+  `?debug=1` chỉ trả `payload.debug` cho admin (kèm `key`/`lastError` per nguồn), cell short thiếu
+  sector **không** gọi Google (tránh ECI bịa) còn cell short **có** sector vẫn gửi ECI đúng.
+- `_uxtest.js`: nhóm mới `Nguồn Google Geolocation` — static assert registry/default-tắt,
+  `considerIp: false`, NR không set `cellId`, gom nhóm theo `max_google_per_batch`, fallback
+  `GOOGLE_MAPS_API_KEY`, setting có trong `SETTING_KEYS/DEFAULTS/NUM_MAX`, admin option + input
+  `#setGoogleMax` + nhánh hint + badge `google` (282 passed).
+- `_adminhtml.test.js`: nhóm mới `Nguồn Google Geolocation` — option `google` trong `#srcType`,
+  input `#setGoogleMax`, admin.js load/save `max_google_per_batch`, hint cảnh báo tốn phí,
+  badge `google` (86 passed).
+- `_batchcredit.test.js`: case 1 cập nhật theo luật "tra lần lượt" — số dư 2/3 cell found →
+  chỉ 2 cell ĐẦU có toạ độ + `charged:true`, cell thứ 3 `unpaid:true`/không toạ độ; case 7 mới
+  (lô trộn 3 found + 1 miss, số dư 2) → `credit.found = 3`, `credit.missed = 1`,
+  `credit.unpaid = 1`, `charged = 2`, số dư về 0; tra lại cùng vòng = `duplicate` không trừ thêm
+  (45 passed).
+- `_uxtest.js`: nhóm mới `Tra lần lượt khi thiếu điểm + thông báo 3 số` — client tích luỹ
+  `credit.found/missed/unpaid`, bỏ qua cell `unpaid`; `showResolveResult` dùng `{m}` (không ra
+  kết quả) + `{z}` (chưa tra); i18n vi+en có `{m}`; server gán `charged` theo thứ tự, ẩn toạ độ
+  cell vượt điểm, `duplicate` coi như đã trả phí cả lô (282 passed).
+- `_uxtest.js`: nhóm mới `Trừ điểm cell đã có trong CSDL nội bộ` — `countResolveNeeded` không
+  bỏ qua `lat/lon`, có skip `_charged`/`_fromHistory`; client đọc `results[].charged`; có
+  `keyToCell` + `restoreChargedFlags` (gọi trong `loadCallLogs`); có `canViewRecord` và được
+  áp dụng ở `plotCallLogs`/`renderCallLogs`/`playCallLogs`/`updatePlayBtn`/`updateCallSessionUi`;
+  không còn cờ `clPlotOnlyPaid`.
+- `_batchcredit.test.js`: assert `results[].charged === true` cho cell found (khớp
+  `credit.requested`) + case 6 mới — cell miss → `charged:false`, `credit.charged = 0`, số dư
+  giữ nguyên.
+- `_topupflow.js`: case 10 mới — **nạp điểm xong tra cứu được**: user 0 điểm + 2 cell có toạ độ
+  trong CSDL nội bộ → `resolve-batch` 402 (`reason:insufficient`, không trừ âm) → nạp 5 điểm →
+  `GET /api/credits/balance` trả 5 → tra LẠI cùng `uploadId`/`roundIdx` → 200 + toạ độ 2 cell +
+  `results[].charged:true` + `credit.charged:2` + số dư còn 3; retry cùng vòng không trừ lại
+  (64 passed).
+
+## [2.9.0] - 2026-10-13
+
+### Fixed
+- **Rút list trừ điểm sai (chỉ trừ vòng đầu)**: bút toán trừ điểm dùng `ref = batchId` cho
+  MỌI vòng resolve → vòng 2+ gặp `DUPLICATE_TX` nên `charged:0`; tra ra rất nhiều cell mà
+  chỉ bị trừ vài điểm. Server giờ nhận `roundIdx` và dùng `ref = batchId + ':r' + roundNo`
+  → mỗi vòng trừ riêng, retry CÙNG vòng vẫn idempotent.
+- **Kết quả tra không hiện trên bản đồ sau khi Đồng ý/Bỏ qua**: `resolveUnmatchedCells`
+  trả sớm khi không còn cell cần tra và nuốt lỗi trong `catch` → bản đồ trống tới khi bấm
+  "Hiển Thị Bản Đồ". Giờ luôn `clMapDeferred = false` + `renderCallLogs()` cả ở nhánh
+  early-return lẫn `catch`.
+- **Vào trang chủ tự bật popup nạp danh sách cuộc gọi**: init gọi `loadCallLogs()` với
+  `prompt` mặc định → `showResolvePrompt()` mở popup đè tab Tra cứu. Init giờ gọi
+  `loadCallLogs({ prompt: false })`; popup chỉ mở khi user thao tác (Load Excel / mở phiên).
+
+### Changed
+- **Kết quả tra cứu rút list nằm trong panel bộ lọc**: `#clCreditNotice` (đã trừ bao nhiêu
+  điểm / còn bao nhiêu cell chưa tra) chuyển vào `#callLogFilterPanel` → chỉ hiện khi user
+  mở bộ lọc, không chiếm chỗ trên danh sách.
+- **Đồng bộ ô tìm kiếm**: `.cl-search-box` bọc input + icon kính lúp + nút xoá nhanh
+  (`#logSearchClear`, `clearLogSearch`); placeholder dùng i18n
+  `calllogs.searchPlaceholder`; `syncLogSearchClear` bật/tắt nút xoá theo nội dung.
+  Ô tìm kiếm nằm NGOÀI `.form-group` nên CSS khai báo đầy đủ tại `.cl-search-box`
+  (height 30px, border, background, `:focus-within`) và `#logSearchInput`
+  (`border:0`, transparent, font-size 12px, `::placeholder`); nút lọc ép `height:30px`
+  để thẳng hàng.
+- **Tab "Xem rút list": gọn topbar + search row** — topbar chỉ còn **Load Excel** +
+  **Hướng dẫn** (bỏ nút *Lịch sử tra cứu* và *Xoá phiên* — xoá phiên vẫn ở dòng
+  `#clCurrentSession`). Ô tìm kiếm chuyển sang `.cl-search-row` (input co giãn + nút
+  bộ lọc chỉ-icon ngang hàng), bỏ nhãn `cells.search` riêng của tab này.
+- **Popup hướng dẫn mới `#clGuideModal`** (`openClGuideModal/closeClGuideModal`) — 7 bước
+  giải thích luồng nạp Excel → xác nhận tra → trừ điểm, mở từ topbar. Empty-state cuối
+  panel chỉ còn hint text (bỏ nút *Load Excel* + *Hướng dẫn* trùng với topbar).
+  i18n `calllogs.guideBtn/guideTitle/guide1..7` (vi + en).
+- **Hoãn vẽ bản đồ tới khi xác nhận**: cờ `clMapDeferred` (mặc định `false`).
+  `uploadCallLogExcel` bật cờ → `plotCallLogs` **clear overlay rồi return** (không lộ kết
+  quả tra trước khi user đồng ý). `confirmClResolve`/`skipClResolve`/`resolveUnmatchedCells`
+  tắt cờ → mới vẽ. Cell chưa tra (thiếu toạ độ) tự động không hiện.
+- **`resolveUnmatchedCells` dừng ngay khi hết điểm**: `break` ngay khi
+  `resp.credit.insufficient` — không gọi vòng kế tiếp (vòng sau cũng không đủ điểm).
+- **`renderClConfirm` cảnh báo thiếu điểm tổng**: khi `balance < total` (nhưng còn đủ
+  cho 1 cell) hiện `calllogs.notEnoughTotal` + link **Nạp điểm** → `/topup.html`; nút
+  confirm chỉ disable khi `balance < cost`.
+- **Popup marker dùng chung `buildCellPopupHtml(opts)`** — tách từ `showCellOnMap`, dùng
+  cho cả tra đơn lẻ lẫn `plotCallLogs`. `opts.extra` cho phép rút list thêm "Số bản ghi"
+  + list timestamp (giữ nguyên output cũ của tra đơn lẻ). `SOURCE_LABELS` nâng thành hằng
+  dùng chung; popup giờ có nhãn nguồn/bán kính/toạ độ như tra đơn lẻ.
+- **Phục hồi từ Lịch sử / phiên đã lưu KHÔNG mở popup nữa** (`openClResolveForRestore`
+  chỉ tắt cờ hoãn + `renderCallLogs`) — hiện ngay kết quả đã tra trước đó, không trừ điểm.
+  `openCallLogsFromHistory`/`openCallLogSession` tương ứng.
+- **Bỏ panel phiên bản ở chân trái**: gỡ `#cellPanelVer` + `#cellPanelVerNote`;
+  `renderPanelVersion()` chỉ còn vẽ số lượt thử của khách (`#cellPanelTrial`).
+- Tests cập nhật: `_uxtest.js` (topbar, search row, guide modal, `clMapDeferred`,
+  `buildCellPopupHtml`, restore không popup), `_version.test.js`, `_guesttrial.test.js`,
+  `_popup.test.js` (popup dùng chung).
+
+## [2.8.0] - 2026-10-13
+
+### Changed
+- **Tab "Xem rút list": nạp Excel chuyển thành popup (modal)** — bỏ nhóm thu gọn
+  `<details id="clUploadTools">` và hộp inline `#clResolvePrompt`; thanh hành động gọn
+  `.cl-topbar` (nút **Load Excel** mở popup + **Lịch sử** + **Xoá phiên**) thay cho khối cũ.
+  Popup `#clUploadModal` chạy 3 bước `pick → busy → confirm`
+  (`setClUpStep`): chọn mạng + **dropzone kéo-thả** (`initClUpDrop`) → tiến trình upload →
+  xác nhận. `openClUploadModal/closeClUploadModal`.
+- **Popup dùng chung cho luồng phục hồi từ Lịch sử**: `showResolvePrompt()` giờ mở thẳng popup
+  ở bước `confirm` (`renderClConfirm`) thay vì vẽ hộp inline. Dữ liệu `_fromHistory` vẫn được
+  `countResolveNeeded()` bỏ qua → **không trừ điểm khi phục hồi**; nếu toàn bộ phiên đến từ
+  Lịch sử thì `renderClConfirm` **ẩn nút tra** và chỉ báo `calllogs.nothingToResolve`.
+- `uploadCallLogExcel`: không tự `loadCallLogs()` nữa — nạp list bằng
+  `loadCallLogs({ prompt: false })` rồi `renderClConfirm({total, inserted, errors})`. `loadCallLogs`
+  nhận `opts.prompt` (`false` = bỏ hỏi tra). `renderClConfirm` hiện lưới thống kê
+  (Tổng/Đã chèn/Lỗi), chi phí `K cell × cost = tổng · số dư`, disable nút khi không đủ điểm.
+- Đổi tên nút/hàm: `openClUploadPicker` → `openClUploadModal`; `skipResolve` giờ đóng popup;
+  `confirmClResolve`/`skipClResolve` cho 2 nút trong popup. CSS mới `.cl-topbar/.cl-up-*`,
+  bỏ `.cl-tools*/.cl-prompt*`. i18n thêm
+  `calllogs.loadExcel/uploadTitle/chooseFile/dropHint/confirmResolve/closeBtn/statTotal/statInserted/statErrors/nothingToResolve`
+  (vi + en).
+
+### Removed
+- Banner phiên `#callSessionBanner` + thanh tổng kết `#callLogSummaryBar` khỏi HTML (thông tin
+  phiên gọn trong `#clCurrentSession`). `updateCallSessionUi` giữ nguyên (no-op khi thiếu node).
+
+### Tests
+- `_uxtest.js`: nhóm mới `Popup nạp Excel (modal)` — assert không còn `<details id="clUploadTools">`,
+  có `#clUploadModal` + 3 bước + dropzone + `#clUpStats/#clUpResolve/confirmClResolve`, CSS
+  `.cl-topbar/.cl-up-*`, các hàm `openClUploadModal/closeClUploadModal/setClUpStep/confirmClResolve/
+  skipClResolve/renderClConfirm`, `uploadCallLogExcel` gọi `loadCallLogs({ prompt: false })`,
+  empty-state gọi `openClUploadModal`, i18n mới; assert `showResolvePrompt` mở popup bước confirm,
+  `loadCallLogs` đọc `opts.prompt`; cập nhật assert bỏ banner/summary bar.
+
+## [2.7.0] - 2026-10-13
+
+### Added
+- **Tab "Xem rút list": ước tính điểm + xác nhận trước khi tra (chống cháy tài khoản)**:
+  sau khi nạp Excel, client **không tự động trừ điểm** nữa. Hàm `countResolveNeeded()`
+  đếm số cell **duy nhất** cần tra (dedup theo `canonicalClientKey`, bỏ dòng đã có toạ độ,
+  bỏ dòng mở từ Lịch sử, bỏ dòng thiếu mcc/lac/cellid) rồi `showResolvePrompt()` hiện hộp
+  `#clResolvePrompt`: `N cell × cost điểm = tổng · số dư hiện tại` kèm 2 nút **Tra cứu ngay**
+  (`startResolveFromPrompt`) / **Bỏ qua** (`skipResolve`). Không đủ điểm cho 1 lần tra thì nút
+  bị **disable** + cảnh báo nạp thêm. Giá + số dư lấy từ `Auth.getCreditConfig()`
+  (`/api/credits/config`, cache) và `Auth.getCreditBalance()/refreshCreditBalance()`.
+- **Tab "Xem rút list": nhóm công cụ Nạp Excel thu gọn được**: khối chọn mạng + nút tải Excel +
+  thanh tiến trình + kết quả upload + banner phiên + summary giờ nằm trong `<details
+  id="clUploadTools">` (mở sẵn mặc định, caret `fa-chevron-down` xoay khi mở). `.cl-tools*`.
+  Bấm **Tải Excel** (kể cả empty-state) gọi `openClUploadPicker()` — mở nhóm rồi mới mở hộp chọn
+  file.
+- **Trừ điểm một phần khi hết điểm giữa lô** (`credits.chargeLookupPartial`): thay vì hỏng cả lô,
+  chỉ trừ **tối đa số điểm còn lại** (`affordable = min(requested, floor(balance/cost))`), phần
+  vượt báo `insufficient:true`; số dư ≤ 0 thì `charged:0` và **không ghi bút toán**. Vẫn
+  idempotent theo `(type, ref)` (`duplicate:true` khi retry cùng `uploadId`).
+  `POST /api/cells/resolve-batch` dùng hàm này và trả `credit:{balance, charged, requested, cost,
+  insufficient}`.
+- **Thông báo kết quả trừ điểm sau khi tra** (`showResolveResult` → `#clCreditNotice`): hiện
+  `Đã tra f/n cell — trừ c điểm` và khi hết điểm giữa lô thì `còn z cell chưa tra (hết điểm)` +
+  link **Nạp thêm** → `/topup.html`. `resolveUnmatchedCells` tích luỹ `resp.credit` qua các vòng.
+  i18n `calllogs.tools/resolveNeed/resolveBtn/skipBtn/notEnough/creditCharged/creditPartial/topupNow`
+  (vi + en).
+- `Auth.getCreditConfig()` (`public/auth.js`) — đọc + cache `/api/credits/config`.
+
+### Tests
+- `_credittest.js`: nhóm `chargeLookupPartial` (trừ 3/5 dư 3; dư 0 → charged 0, không bút toán;
+  dư đủ → charged = requested; retry cùng ref → `duplicate` không trừ lại); wiring server dùng
+  `chargeLookupPartial(userId, foundCount, batchId...)` + credit trả `requested/insufficient`.
+- `_uxtest.js`: assert `<details id="clUploadTools">` (open, bọc upload/progress/result), CSS
+  `.cl-tools/.cl-prompt/.cl-credit-notice`, `openClUploadPicker`, các hàm
+  `countResolveNeeded/showResolvePrompt/startResolveFromPrompt/skipResolve/showResolveResult`,
+  `loadCallLogs` gọi `showResolvePrompt` (không auto-resolve), `resolveUnmatchedCells` tích luỹ
+  `resp.credit.charged` + `insufficient`, `Auth.getCreditConfig`, i18n keys mới (vi+en).
+- `_batchcredit.test.js` (MỚI, runtime): boot server thật trên DB tạm — số dư 2 < 3 cell found →
+  trừ đúng 2 + `insufficient:true` + 1 bút toán -2; hết điểm → pre-check 402 không đốt quota;
+  dư ≥ found → trừ đủ `insufficient:false`; retry cùng `uploadId` → `charged:0` không trừ lần 2.
+
+### Fixed
+- **Tra cứu chuyển mạng giữ số hỏng với khách (lỗi "No token provided")**: hai route
+  proxy VNTA `GET /api/tools/port-check/captcha` và `POST /api/tools/port-check/search`
+  trước đây gắn `requireAuth`, nên tài khoản chưa đăng nhập gọi captcha bị
+  **401 `No token provided`** → `loadCaptcha()` trong `public/tools/port-check.html`
+  ném lỗi, ảnh captcha không bao giờ hiển thị. Trang `/tools/port-check.html` vốn mở
+  cho cả khách (dropdown Công cụ ở `auth.js` hiện link vô điều kiện, và
+  `_guesttrial.test.js` chốt "bỏ redirect login") nên server phải khớp: **bỏ
+  `requireAuth`** ở cả hai route, thay bằng `captchaRateLimit` (bucket riêng
+  120 request/5 phút/IP). Không đọc `req.user` ở đâu trong proxy nên không rơi
+  chức năng nào; chặn lạm dụng dựa vào captcha + `sessionId` one-shot.
+- **Link điều khoản ở phần đăng ký mở tab mới thay vì hiện trong popup**:
+  `public/auth-popup.js` render `<a href="/terms.html" target="_blank">` → nhảy sang
+  tab khác, mất ngữ cảnh form. Nay link gọi `AuthPopup.view('terms')`: thêm **view
+  `terms`** ngay trong popup, nạp nội dung từ `/terms.html` rồi trích ruột
+  `#termsCard` (một nguồn văn bản duy nhất, không chép lại vào JS), có nút
+  "← Về đăng ký". CSS `.ap-terms` ăn biến theme của trang (`--text-*`,
+  `--border-focus`, `--accent`) nên tự khớp **giao diện sáng/tối**.
+- **Tab "Xem rút list": chip lọc trắng icon (SMS + gọi)**: bốn chip trong
+  `#callLogFilterPanel` dùng icon **Pro-only** của Font Awesome Free
+  (`fa-envelope-arrow-down/up`, `fa-phone-arrow-down-left/right`) nên render trống (ô
+  vuông rỗng) trong bản Free 6.5.1 mà trang nạp. Nay đổi sang bộ **free**:
+  `fa-comment-sms` (SMS) / `fa-phone` (gọi) + mũi tên nhỏ `fa-arrow-down`/`fa-arrow-up`
+  (`.cl-chip-dir` ở góc phải) để vẫn phân biệt rõ Đến/Đi.
+- **Tab "Xem rút list": lọc theo ngày không mở được bảng chọn**: cách cũ (nút gọi
+  `input.showPicker()` trên `<input>` offscreen 1×1 `opacity:0`) bị trình duyệt chặn
+  (`showPicker()` yêu cầu phần tử render được + transient activation) nên bấm không ra
+  lịch. Hai ô `datetime-local` luôn hiện cũng chiếm chỗ. Nay thay bằng **2 ô from → to**
+  (`#clDateFromField`/`#clDateToField`, icon `fa-calendar-days` + nhãn ngày `dd/mm`),
+  trong đó `<input type="date">` **phủ khít toàn ô, trong suốt** (`opacity:0`,
+  `inset:0`) nên bấm vào ô là bấm thẳng input → trình duyệt mở bảng chọn ngày native,
+  không cần JS (bỏ hẳn `openCallLogDate`/`showPicker`). Giữ nguyên id
+  `#dateFrom`/`#dateTo` để `getFilteredLogs`/`updateClFilterBadge` không đổi, kèm nút ✕
+  xoá nhanh mỗi đầu (`clearCallLogDate`). `getFilteredLogs` so `dateTo` trọn ngày cuối
+  (`<= 'YYYY-MM-DD 23:59:59'`) vì `timestamp` có kèm giờ.
+
+### Changed
+- **`public/terms.html` theo theme sáng/tối**: trước đây hardcode nền gradient tối
+  (`#1a1a2e…#0f3460`) + chữ sáng nên khi hệ thống đang ở giao diện sáng thì trang
+  vẫn tối. Nay thay bằng cặp biến `:root`/`[data-theme="light"]` +
+  `[data-theme="dark"]` theo đúng palette `topup.html`/`version.html`, kèm 5 biến
+  navbar chung (`--header-bg`, `--bg-surface`, `--bg-surface2`, `--bg-btn-primary`,
+  `--border-focus`) để navbar ăn theo `data-theme`; thêm script đọc `localStorage
+  'theme'` (dùng chung `app.js`/`auth.js`) lúc tải trang. Nội dung bọc trong
+  `#termsCard`; nút "Đăng ký" của trang mở popup tại chỗ khi `AuthPopup` sẵn có.
+
+### Tests
+- `_authpopup.test.js`: thêm 6 assert (link điều khoản gọi `AuthPopup.view('terms')`
+  và bỏ `target="_blank"`; có view `terms` trong `render()`; `termsHtml()`/`loadTerms()`;
+  `loadTerms` nạp `/terms.html` + trích `#termsCard`; i18n đủ `termsTitle`/`termsBack`
+  cho vi/en; CSS `.ap-terms` dùng biến theme).
+- `_guesttrial.test.js`: thêm 2 assert chốt hai route VNTA công khai
+  (`captchaRateLimit`, không `requireAuth`); thêm `terms.html` vào `THEMED_PAGES`.
+- `_uxtest.js`: thêm assert cho panel bộ lọc — chip SMS/gọi dùng icon free
+  (`fa-comment-sms`/`fa-phone` + `.cl-chip-dir`, không còn `fa-envelope-arrow-*`/
+  `fa-phone-arrow-*`); `clearCallLogDate`/`syncClDateButtons`, so sánh `dateTo` trọn
+  ngày; ô `#clDateFromField`/`#clDateToField` bọc `<input type="date">` trong suốt
+  `.cl-date-native`, không còn `datetime-local`; CSS `.cl-date-*`/`.cl-chip-dir`; i18n
+  `calllogs.dateFrom/dateTo`.
+
 ### Security
 - **Giới hạn của captcha chữ (đã cân nhắc, chấp nhận)**: captcha hiện trả cả `id` lẫn
   `text` trong JSON nên **không** chống được bot đọc được response. Giá trị thực tế là
@@ -14,6 +365,153 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
   rồi buộc xin mã mới; captcha và token đều one-shot, so sánh bằng `crypto.timingSafeEqual`.
 - `smtp_pass` là secret: API admin chỉ trả bản che `••••1234`, gửi lại bản che nghĩa là
   "giữ nguyên" (không ghi đè).
+
+## [2.6.4] - 2026-10-13
+
+### Changed
+- **Popup đăng nhập/đăng ký gọn hơn, hết scrollbar** (`public/auth-popup.js`). Form dài
+  (đăng ký: 5 ô + điều khoản) trước đây vượt `max-height:92vh` → thanh cuộn dọc trong
+  `#apBody`. Nay nén khoảng cách + thay nhãn bằng placeholder:
+  - **Bỏ 11 `<label class="ap-label">`** — mọi nhãn đã trùng y hệt `placeholder` của ô
+    tương ứng nên xoá là an toàn. Giữ **accessibility** bằng `aria-label` + `title` trên
+    từng input (screen reader vẫn đọc đúng tên ô).
+  - **Thêm icon SVG inline** bên trái mỗi ô để nhận diện nhanh khi không còn nhãn:
+    `user` (`apUser`), `mail` (`apEmail`), `lock` (`apPass`/`apPass2`), `shield`
+    (`apCaptcha`), `key` (`apCode`). SVG `stroke="currentColor"` 17×17 nên tự ăn màu
+    theme, không thêm thư viện icon nào. Helper `ic(name)` + `field(icon, innerHTML)`;
+    wrapper `.ap-iw` (relative) + `.ap-ic` (absolute, `pointer-events:none`) + input
+    `padding-left:36px`.
+  - **Nén CSS**: `#authPopupBox` padding `22px 24px 24px` → `18px 22px 20px`;
+    `.ap-field` margin-bottom `12px` → `9px`; `.ap-input` padding `10px 12px` → `9px 11px`;
+    `.ap-tabs` margin `14px 0 16px` → `10px 0 12px`; `.ap-brand`/`.ap-sub`/`.ap-foot`/
+    `.ap-btn`/`.ap-btn-ghost` giảm nhẹ. Thêm `.ap-msg:empty{display:none}` để khối thông
+    báo rỗng không chiếm ~26px.
+  - **Bỏ gutter scrollbar**: xoá `margin:0 -8px 0 0;padding-right:8px` trên `#apBody`;
+    thanh cuộn (chỉ còn cần trên màn rất thấp) mặc định `transparent`, hiện khi hover
+    (`#apBody:hover::-webkit-scrollbar-thumb`) nên không chiếm chỗ, không chồng viền bo góc.
+  - Hành vi giữ nguyên: id ô nhập, `onclick` handler, canvas captcha (118×42), checkbox
+    điều khoản và luồng login/register/verify/forgot/reset không đổi.
+
+### Tests
+- Thêm `_authpopup.test.js` (39 assert, static regex trên `public/auth-popup.js`): không
+  còn `class="ap-label"`; có CSS `.ap-iw`/`.ap-ic` + lề trái input; ICON đủ 5 khoá
+  `user/mail/lock/shield/key` và dùng `stroke="currentColor"`; đúng 12 lời gọi `field(`;
+  ≥ 11 `aria-label` và ≥ 11 `title`; id input giữ nguyên; CSS nén đúng
+  (`padding:18px 22px 20px`, `.ap-field{margin-bottom:9px}`, `.ap-input{padding:9px 11px}`,
+  `.ap-msg:empty{display:none}`, không còn gutter, scrollbar ẩn/hover); 7 handler +
+  canvas + checkbox điều khoản còn nguyên.
+
+## [2.6.3] - 2026-10-13
+
+### Fixed
+- **`/version.html` không hiện lịch sử phiên bản, chỉ hiện version + ngày build rồi
+  báo "Chưa có lịch sử phiên bản"** dù `CHANGELOG.md` có đủ dữ liệu. Nguyên nhân:
+  `renderChangelog()` trong `public/version.js` gọi `fetch('/api/version/changelog')`
+  **trần, không kèm token**, trong khi route server đăng ký
+  `app.get('/api/version/changelog', requireAuth, requireAdmin, …)` → server trả
+  **401 No token provided** → `res.ok === false` → `list` rỗng, fallback
+  `cached().changelog` cũng rỗng (payload `/api/version` công khai **không chứa**
+  `changelog`) → trang in nhầm "Chưa có lịch sử phiên bản". Phần đầu trang (số phiên
+  bản, ngày build) vẫn hiện vì `/api/version` là route công khai. Nay:
+  - Gọi qua **`Auth.fetch()`** — hàm này tự gắn `Authorization: Bearer <token>`
+    (xem `public/auth.js`) — nên route admin trả 200 kèm danh sách changelog.
+  - Tách **lỗi** khỏi **rỗng thật**: request thất bại (401/403/5xx/mạng) hiện
+    `"Không tải được lịch sử phiên bản (HTTP <status>)."` thay vì che thành
+    "Chưa có lịch sử phiên bản"; chỉ khi server trả 200 mà `changelog` rỗng mới hiện
+    "Chưa có lịch sử phiên bản".
+  - Fallback `fetch` trần chỉ dùng khi trang không nạp `auth.js` (vd test DOM giả).
+
+### Tests
+- `_version.test.js`: +3 assert — `renderChangelog` gọi `/api/version/changelog` qua
+  `Auth.fetch`, nhánh chọn request kiểm tra `window.Auth && window.Auth.fetch`, và có
+  tách thông báo lỗi HTTP (`loadError = 'HTTP ' + res.status`) khỏi nhánh "Chưa có
+  lịch sử" (chống tái phát việc che lỗi 401 thành "rỗng").
+
+## [2.6.2] - 2026-10-13
+
+### Fixed
+- **Sửa `CHANGELOG.md` xong mở `/version.html` vẫn thấy nội dung CŨ** (phải restart
+  server mới thấy). Có **3 lớp cache** độc lập cùng giữ bản cũ, đã chặn cả 3:
+  - **Cache RAM trong server** (nguyên nhân chính): `version.load()` chỉ đọc
+    `CHANGELOG.md` **một lần lúc start**, giữ mãi trong biến `cache`. Sửa file sau đó
+    không có tác dụng vì không code nào gọi `reload()`. Nay `load()` so **mtime** của
+    `CHANGELOG.md` + `package.json` với lần nạp trước → file đổi là tự nạp lại ở lần
+    gọi API kế tiếp, **không cần restart**.
+  - **HTTP cache**: 2 route `GET /api/version` và `GET /api/version/changelog` không set
+    `Cache-Control` → browser/proxy có thể giữ JSON cũ. Nay trả `Cache-Control: no-store`.
+  - **Static cache**: `express.static` phục vụ `public/version.js` / `version.html` không
+    kèm `Cache-Control`, mà 2 file này không có tên gắn hash → trình duyệt giữ bản JS/HTML
+    cũ (renderer changelog vẫn là bản cũ nên không hiện bullet con). Nay `setHeaders`
+    trong `express.static` ép `Cache-Control: no-cache` cho đúng 2 file này (vẫn cho
+    `304` nếu chưa đổi), các asset khác giữ nguyên `max-age=0`.
+
+### Tests
+- `_version.test.js`: +3 assert — `load()` có so mtime (`loadedMtime` / `mtimeOf`),
+  `express.static` ép `no-cache` cho `version.js`/`version.html`
+  (`ALWAYS_REVALIDATE` + `setHeaders`), và 2 route version có `Cache-Control: no-store`.
+
+## [2.6.1] - 2026-10-13
+
+### Fixed
+- **Trang `/version.html` (lịch sử phiên bản, chỉ admin) hiện nội dung CHANGELOG bị cụt**:
+  `version.parseChangelog()` cũ cắt mỗi bullet ở **dòng đầu tiên** (regex `^[-*]\s+(.+?)\s*$`
+  khớp từng dòng, không gộp dòng nối) — bullet viết nhiều dòng cho dễ đọc (đúng kiểu file
+  CHANGELOG.md này) bị mất đuôi, và **bullet con** (thụt lề, vd `  - Thêm route ...`) bị đổ
+  phẳng thành mục cùng cấp nên sai nghĩa. Nay parser:
+  - Nối dòng tiếp nối vào bullet/bullet con đang mở (dùng `childIdx`, không dùng biến chuỗi
+    rời — nếu không dòng nối của bullet con bị nuốt mất).
+  - Nhận diện bullet con theo **thụt lề** (sâu hơn bullet cha) → gom vào `items[].children`.
+  - Giữ nguyên dạng `string` cho bullet không có con → **không phá UI cũ** (admin panel,
+    `renderChangelog` cũ vẫn chạy); bullet có con là object `{ text, children }`.
+- `public/version.js`: `renderChangelog` render bullet con thành `<p class="ver-sub">` bên
+  trong `<li>` (thay vì nhét thẳng string) và **escape HTML** phần text/version/date (trước
+  đây chèn thô — CHANGELOG có `<`, `>` từ ví dụ code sẽ vỡ layout).
+- `version.html`: thêm CSS `.ver-sub` (kẻ trái, chữ nhỏ hơn) để phân biệt bullet con với mục
+  cùng cấp.
+
+### Tests
+- `_version.test.js`: +5 assert cho parser (gộp dòng nối, không dính bullet kế tiếp, gom
+  bullet con + nối dòng của con, bullet cùng cấp sau bullet có con, và entry thật `2.6.0`
+  phải có bullet `Fixed` dài > 100 ký tự — chống tái phát lỗi cụt).
+
+## [2.6.0] - 2026-10-13
+
+### Fixed
+- **Đơn nạp kẹt `PENDING` dù khách đã trả tiền (không tự sang bước Hoàn tất)**. Nguyên nhân:
+  điểm chỉ được cộng khi webhook payOS gọi vào `POST /api/payos/webhook`; nếu webhook chưa
+  đăng ký / `public_base_url` chưa public thì payOS không gọi, còn client chỉ poll
+  `GET /api/credits/topup/:code` — route này **chỉ đọc DB**, không hỏi payOS. Nay:
+  - Thêm route user **`POST /api/credits/topup/:orderCode/sync`** (`requireAuth` +
+    `topupSyncRateLimit` 30 lần/5 phút/user) đối soát đơn với payOS. Rủi ro được chặn vì
+    điểm vẫn chỉ cộng khi payOS báo `PAID` và `topup.creditOrder()` idempotent theo `ledgerRef`.
+  - Tách lõi đối soát thành helper `syncOrderFromPayos(order)` dùng chung cho route admin
+    (`POST /api/admin/payments/:code/sync`) và route user.
+  - Đơn đã ở trạng thái cuối (`PAID`/`CANCELLED`/…) trả về ngay, **không gọi payOS** và không
+    hạ cấp trạng thái. payOS lỗi tạm thời → trả HTTP 200 kèm `synced:false` để nhịp poll của
+    client không đỏ.
+  - `topup.html`: poll vẫn 4 giây, nhưng cứ **5 nhịp (~20 giây)** thì gọi `/sync` khi đơn còn
+    `PENDING`; nhảy về tab (`visibilitychange`) thì đối soát ngay. Bỏ nhánh thoát sớm
+    `if (document.hidden) return;` trong `startPolling` (bug: interval chết hẳn khi tab bị ẩn
+    lúc tạo đơn → quay lại tab không còn nhịp nào).
+
+### Changed
+- **Bước 3 thanh toán thiết kế lại** (`topup.html`): QR hiện sẵn trên trang nên **bỏ nút
+  "Thanh toán"** cùng popup `#payModal` (và `payNow()`/`fillPayModal()`/`closePayModal()`).
+  Thêm hộp số tiền nổi bật, hướng dẫn 3 bước (`.walkthrough`), dải tín hiệu tin cậy
+  (`.pay-trust`), khung QR có badge trạng thái và dải trạng thái sống `#payLiveHint`.
+  Đơn không dựng được ảnh QR → nhánh dự phòng `#payFallback` với link mở trang payOS.
+- **Gộp "Hủy đơn" + "Đóng" thành 1 nút `Hủy đơn`** mở dialog `#cancelModal` với 2 lựa chọn
+  rõ ràng: **Đóng (giữ đơn)** và **Huỷ đơn**; Esc/bấm nền mờ = giữ đơn. Bỏ `window.confirm()`
+  của trình duyệt. Nhãn nút bước 2 đổi thành "Xem mã QR thanh toán".
+
+### Tests
+- `_topupflow.js`: +6 assert cho `/sync` (PENDING → 200 không cộng điểm, user khác → 403,
+  đơn lạ → 404, không token → 401).
+- `_creditwizard.test.js`: thay case popup bằng case dialog huỷ + nhánh dự phòng QR và
+  `syncOrderStatus()` gọi đúng `/sync`.
+- `_credittest.js`: assert tĩnh mới (không còn `#payModal`/`payNow`, có `#cancelModal`,
+  `.walkthrough`, `.pay-trust`, `SYNC_EVERY`, poll không thoát khi tab ẩn).
+- `_version.test.js`: khoá version `package-lock.json` khớp `package.json`.
 
 ## [2.5.0] - 2026-10-12
 

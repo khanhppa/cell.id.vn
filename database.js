@@ -461,6 +461,7 @@ db.serialize(() => {
 
   // Seed default settings (only when missing — never overwrite admin changes).
   db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('max_online_resolve', '50')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('max_google_per_batch', '10')`);
   db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('lookup_history_retention_days', '90')`);
 
   // Credit system settings. `credit_enabled` mặc định TẮT (0) để không khoá

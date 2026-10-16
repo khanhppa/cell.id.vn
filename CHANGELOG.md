@@ -66,6 +66,15 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
   `myLogsCache` (để lại chờ nạp điểm rồi tra tiếp).
 
 ### Fixed
+- **Mất nút "Xoá phiên" khi mở lại phiên rút list từ tab Lịch sử**: `currentCallLogBatchId()`
+  loại mọi bản ghi có `_fromHistory` (di chứng từ v2.6 khi nút xoá nằm ở header từng nhóm batch,
+  còn bản ghi lịch sử tra cứu hàng loạt thì không xoá được) → mở phiên từ khối **Phiên rút list**
+  trả về `''` nên dòng `#clCurrentSession` bị ẩn cùng nút xoá. Nay có biến `currentOpenBatchId`
+  lưu `batch_id` của phiên đang xem (ưu tiên hơn suy từ rows), `openCallLogSession()` giữ nguyên
+  `batch_id` trong từng row, và `currentCallLogBatchId()` không còn loại theo `_fromHistory`.
+  Phiên lịch sử của phiên rút list vẫn xoá được đúng batch; dữ liệu phục hồi từ **lịch sử tra cứu
+  hàng loạt** (`lookup_batches`) thì cố ý KHÔNG gán `currentOpenBatchId` để không gọi API xoá nhầm.
+  `currentOpenBatchId` cũng được lưu vào phiên `sessionStorage` nên F5 vẫn giữ nút xoá.
 - **Nguồn online miss trong im lặng — admin không biết vì sao "bật nguồn mà không ra dữ liệu"**:
   mọi `catch` trong chuỗi nguồn per-cell (`/api/cells/resolve` + `/api/cells/resolve-batch`) đều
   bỏ qua lỗi không lưu vết, và log chỉ ra `console.warn` (không ghi file). Nay mỗi lỗi được ghi

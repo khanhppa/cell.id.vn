@@ -111,7 +111,17 @@ ok('renderCallLogs gọi updateClFilterBadge', /updateClFilterBadge\(\)/.test(re
 ok('có hàm renderCurrentSessionBar', /function renderCurrentSessionBar\(\)/.test(appSrc));
 ok('dòng phiên hiện tại có nút xoá phiên', /deleteCallLogSession\('\$\{histJsSafe\(bId\)\}'\)/.test(fnBody('renderCurrentSessionBar')));
 ok('có hàm currentCallLogBatchId', /function currentCallLogBatchId\(\)/.test(appSrc));
-ok('currentCallLogBatchId bỏ qua row _fromHistory', /!l\._fromHistory\s*&&\s*l\.batch_id/.test(fnBody('currentCallLogBatchId')));
+ok('currentCallLogBatchId trả batch_id kể cả row _fromHistory', /l\.batch_id\)\s*return\s*l\.batch_id/.test(fnBody('currentCallLogBatchId')));
+ok('currentCallLogBatchId ưu tiên currentOpenBatchId', /if \(currentOpenBatchId\) return currentOpenBatchId/.test(fnBody('currentCallLogBatchId')));
+ok('currentCallLogBatchId KHÔNG còn loại row _fromHistory', !/_fromHistory/.test(fnBody('currentCallLogBatchId')));
+ok('có biến currentOpenBatchId', /let currentOpenBatchId = ''/.test(appSrc));
+ok('openCallLogSession lưu currentOpenBatchId', /currentOpenBatchId = batchId/.test(fnBody('openCallLogSession')));
+ok('openCallLogSession giữ batch_id trong row', /batch_id: r\.batch_id \|\| batchId/.test(fnBody('openCallLogSession')));
+ok('openCallLogsFromHistory reset currentOpenBatchId (dữ liệu lookup không xoá được)', /currentOpenBatchId = ''/.test(fnBody('openCallLogsFromHistory')));
+ok('resetCallSession xoá currentOpenBatchId', /myLogsCache = \[\];[\s\S]{0,60}currentOpenBatchId = ''/.test(fnBody('resetCallSession')));
+ok('loadCallLogs gán currentOpenBatchId từ phiên mới nhất', /currentOpenBatchId = \(myLogsCache\[0\] && myLogsCache\[0\]\.batch_id\)/.test(fnBody('loadCallLogs')));
+ok('saveCallSession lưu batchId', /batchId: currentOpenBatchId/.test(fnBody('saveCallSession')));
+ok('loadCallLogs khôi phục currentOpenBatchId từ sessionStorage', /currentOpenBatchId = sess\.batchId/.test(fnBody('loadCallLogs')));
 ok('có hàm loadCallLogSessions', /async function loadCallLogSessions\(\)/.test(appSrc));
 ok('loadCallLogSessions gọi GET /api/call-log-sessions', /apiRequest\('GET', '\/api\/call-log-sessions\?page=1/.test(fnBody('loadCallLogSessions')));
 ok('có hàm renderCallLogSessions', /function renderCallLogSessions\(\)/.test(appSrc));

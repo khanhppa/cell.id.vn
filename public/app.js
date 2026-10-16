@@ -1249,6 +1249,10 @@ let histBatchCache = {};
 let histOpenBatch = null;
 // Tên file Excel của lần upload gần nhất → gắn vào metadata nhóm lịch sử.
 let currentUploadFileName = '';
+// batch_id của phiên đang mở ở tab Xem rút list — kể cả khi mở lại từ Lịch sử
+// (nút "Xoá phiên" cần biết xoá batch nào; dữ liệu lịch sử tra cứu hàng loạt
+//  dùng lookup_batches nên KHÔNG gán biến này).
+let currentOpenBatchId = '';
 
 function histEsc(s) {
   return String(s === undefined || s === null ? '' : s)
@@ -2671,6 +2675,7 @@ function saveCallSession() {
     const payload = {
       v: 1, at: Date.now(),
       fileName: currentUploadFileName || '',
+      batchId: currentOpenBatchId || '',
       rows: myLogsCache.slice(0, SESSION_LOGS_MAX)
     };
     sessionStorage.setItem(SESSION_LOGS_KEY, JSON.stringify(payload));
@@ -2767,6 +2772,8 @@ async function loadCallLogs(opts) {
     if (rows.length) {
       myLogsCache = rows;
       myLogsCache._restored = false;
+      // Phiên mới nhất trên server → đây là phiên đang xem (nút "Xoá phiên" xoá nó).
+      currentOpenBatchId = (myLogsCache[0] && myLogsCache[0].batch_id) || '';
       logPageIndex = 1;
       // Server không lưu cờ `_charged` (nó là trạng thái của phiên làm việc) →
       // khôi phục từ sessionStorage để F5 không bị trừ điểm lần 2 cho cùng cell.
@@ -2783,6 +2790,7 @@ async function loadCallLogs(opts) {
       if (sess) {
         myLogsCache = sess.rows;
         myLogsCache._restored = true;
+        currentOpenBatchId = sess.batchId || (myLogsCache[0] && myLogsCache[0].batch_id) || '';
         currentUploadFileName = sess.fileName || currentUploadFileName;
         logPageIndex = 1;
         renderCallLogs();
@@ -2802,6 +2810,7 @@ async function resetCallSession() {
   if (!confirm(t('calllogs.confirmReset'))) return;
   clearCallSession();
   myLogsCache = [];
+  currentOpenBatchId = '';
   logPageIndex = 1;
   skipResolve();
   const notice = document.getElementById('clCreditNotice');
@@ -2830,6 +2839,9 @@ function openCallLogsFromHistory(rows, fileName) {
   }));
   myLogsCache._restored = true;
   myLogsCache._fromHistoryOpened = true;
+  // Dữ liệu lịch sử tra cứu hàng loạt KHÔNG nằm trong call_logs → không có phiên
+  // để xoá, nên không gán batch_id (tránh gọi API xoá nhầm 0 bản ghi).
+  currentOpenBatchId = '';
   currentUploadFileName = fileName || '';
   logPageIndex = 1;
   clActionFilter = 'all';
@@ -3486,9 +3498,12 @@ async function deleteCallLogBatch(batchId) {
 }
 
 // batch_id của phiên đang mở trên list (để highlight + biết xoá cái nào).
+// Phiên mở lại từ tab Lịch sử cũng có batch_id thật (rows lấy từ call_logs)
+// nên KHÔNG được loại theo `_fromHistory`, nếu không nút "Xoá phiên" sẽ mất.
 function currentCallLogBatchId() {
+  if (currentOpenBatchId) return currentOpenBatchId;
   for (const l of myLogsCache) {
-    if (!l._fromHistory && l.batch_id) return l.batch_id;
+    if (l.batch_id) return l.batch_id;
   }
   return '';
 }
@@ -3563,9 +3578,11 @@ async function openCallLogSession(batchId) {
     const list = Array.isArray(rows) ? rows : [];
     if (!list.length) { showToast(t('hist.clSessionEmpty'), 'error'); return; }
     // Map shape call_logs → shape dùng trong tab (giữ nguyên field, đánh dấu nguồn).
-    myLogsCache = list.map(r => Object.assign({}, r, { _fromHistory: true }));
+    // Giữ `batch_id` để dòng "phiên đang xem" biết phiên nào + nút xoá phiên hoạt động.
+    myLogsCache = list.map(r => Object.assign({}, r, { _fromHistory: true, batch_id: r.batch_id || batchId }));
     myLogsCache._restored = true;
     myLogsCache._fromHistoryOpened = true;
+    currentOpenBatchId = batchId;
     const meta = (clSessionsState.rows || []).find(s => s.batch_id === batchId);
     currentUploadFileName = (meta && meta.file_name) || batchLabelText(batchId);
     logPageIndex = 1;

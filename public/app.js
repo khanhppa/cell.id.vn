@@ -1221,6 +1221,37 @@ function invalidateMapSize() {
   if (window.map && typeof window.map.invalidateSize === 'function') window.map.invalidateSize();
 }
 
+// Overlay (bảng cell, modal, menu khách, panel chú thích) phủ lên sidebar.
+// Khi ấy mép phải panel bị che nên handle kéo phải ngừng nhận chuột — nếu không nó
+// vẫn chiếm 6px ở mép trái màn hình và lần chuột rơi đúng đó sẽ bị nuốt (không kéo
+// được panel / không bấm được thứ phía dưới).
+function syncSidebarResizeBlock() {
+  const handle = document.getElementById('sidebarResizer');
+  if (!handle) return;
+  const blocking = !!document.querySelector('.cl-fullsheet.show, .modal-overlay.show, .legend-panel.show');
+  handle.classList.toggle('blocked', blocking);
+}
+
+function initSidebarResizeBlock() {
+  const handle = document.getElementById('sidebarResizer');
+  if (!handle) return;
+
+  const update = () => syncSidebarResizeBlock();
+  // Overlay bật/tắt bằng class `.show` → theo dõi mọi thay đổi attribute.
+  // Môi trường không có DOM thật (test chạy app.js trong vm) thì bỏ qua observer.
+  if (typeof MutationObserver === 'function') {
+    const obs = new MutationObserver(update);
+    obs.observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+    const sheet = document.getElementById('clTableOverlay');
+    if (sheet) obs.observe(sheet, { attributes: true, attributeFilter: ['class'] });
+    document.querySelectorAll('.modal-overlay, .legend-panel').forEach((el) => {
+      obs.observe(el, { attributes: true, attributeFilter: ['class'] });
+    });
+  }
+  window.addEventListener('resize', update);
+  update();
+}
+
 // ============================================
 // Tab switching
 // ============================================
@@ -3910,3 +3941,4 @@ loadCallLogs({ prompt: false });
 loadAnnotations();
 updateSidebarState();
 initSidebarResize();
+initSidebarResizeBlock();

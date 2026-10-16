@@ -707,7 +707,7 @@ ok('--sidebar-collapsed vẫn khai báo trong :root',
 ok('có hàm initSidebarResize',
   /function initSidebarResize\(\)/.test(appSrc));
 ok('initSidebarResize gọi ở cuối file (init)',
-  /\ninitSidebarResize\(\);\s*$/.test(appSrc));
+  /\ninitSidebarResize\(\);\s*\ninitSidebarResizeBlock\(\);/.test(appSrc));
 ok('có hàm applySidebarWidth ghi --sidebar-width',
   /function applySidebarWidth\(/.test(appSrc) &&
   /setProperty\('--sidebar-width',\s*w\s*\+\s*'px'\)/.test(fnBody('applySidebarWidth')));
@@ -773,6 +773,34 @@ ok('sidebarMaxWidth chừa chỗ cho map (SIDEBAR_MIN_MAP_WIDTH)',
   /window\.innerWidth\s*-\s*SIDEBAR_MIN_MAP_WIDTH/.test(fnBody('sidebarMaxWidth')));
 ok('sidebarMaxWidth không trả dưới MIN_WIDTH kể cả màn hình hẹp',
   /Math\.max\(SIDEBAR_MIN_WIDTH/.test(fnBody('sidebarMaxWidth')));
+
+console.log('\n== Handle kéo panel không nuốt chuột khi overlay đang phủ ==');
+ok('index.html có CSS .sidebar-resizer.blocked tắt pointer-events',
+  /\.sidebar-resizer\.blocked\s*\{\s*pointer-events:\s*none/.test(htmlSrc));
+ok('có hàm syncSidebarResizeBlock', /function syncSidebarResizeBlock\(\)/.test(appSrc));
+ok('syncSidebarResizeBlock toggle class blocked theo overlay đang mở',
+  (function () {
+    const b = fnBody('syncSidebarResizeBlock');
+    return /cl-fullsheet\.show/.test(b) && /modal-overlay\.show/.test(b) &&
+      /classList\.toggle\('blocked'/.test(b);
+  })());
+ok('có hàm initSidebarResizeBlock theo dõi overlay bằng MutationObserver',
+  /function initSidebarResizeBlock\(\)/.test(appSrc) &&
+  /new MutationObserver\(/.test(fnBody('initSidebarResizeBlock')));
+ok('MutationObserver theo dõi class của overlay bảng cell + body',
+  (function () {
+    const b = fnBody('initSidebarResizeBlock');
+    return /attributeFilter:\s*\['class'\]/.test(b) &&
+      /document\.body/.test(b) && /clTableOverlay/.test(b);
+  })());
+ok('initSidebarResizeBlock được gọi khi khởi động (sau initSidebarResize)',
+  /initSidebarResize\(\);\s*\ninitSidebarResizeBlock\(\);/.test(appSrc));
+ok('initSidebarResizeBlock chỉ dùng MutationObserver khi có (không crash vm thiếu DOM)',
+  (function () {
+    const b = fnBody('initSidebarResizeBlock');
+    return /typeof MutationObserver === 'function'/.test(b) &&
+      /^\s*if \(typeof MutationObserver === 'function'\) \{$/m.test(b);
+  })());
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

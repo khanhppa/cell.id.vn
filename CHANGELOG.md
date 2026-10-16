@@ -66,6 +66,9 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
   `myLogsCache` (để lại chờ nạp điểm rồi tra tiếp).
 
 ### Fixed
+- **Handle kéo giãn panel trái nuốt chuột khi overlay đang phủ**: `.sidebar-resizer` là `position:absolute` **trong** `.sidebar` nên khi mở overlay toàn màn hình (bảng cell cần tra `.cl-fullsheet.show`, modal, panel chú thích) nó vẫn nằm trên cùng ở mép phải panel và **vẫn nhận `mousedown`** — chuột rơi vào 6px mép trái màn hình bị nó nuốt nên không bấm/kéo được thứ phía trên/dưới. Nay `syncSidebarResizeBlock()` gắn class `.sidebar-resizer.blocked` (`pointer-events: none`) mỗi khi có `.cl-fullsheet.show` / `.modal-overlay.show` / `.legend-panel.show`, `initSidebarResizeBlock()` theo dõi bằng `MutationObserver` (class của `body` + các overlay) và theo `window.resize` để bật/tắt lại ngay. `initSidebarResizeBlock()` chỉ tạo `MutationObserver`
+  khi môi trường có (guard `typeof MutationObserver === 'function'`) — trước đó test chạy `app.js`
+  trong `node:vm` không có DOM thật bị `ReferenceError: MutationObserver is not defined` ngay khi nạp script.
 - **Mất nút "Xoá phiên" khi mở lại phiên rút list từ tab Lịch sử**: `currentCallLogBatchId()`
   loại mọi bản ghi có `_fromHistory` (di chứng từ v2.6 khi nút xoá nằm ở header từng nhóm batch,
   còn bản ghi lịch sử tra cứu hàng loạt thì không xoá được) → mở phiên từ khối **Phiên rút list**

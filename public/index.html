@@ -108,6 +108,8 @@
     .sidebar-resizer:hover::before, .sidebar-resizer.dragging::before { background: var(--border-focus); }
     /* Panel thu gọn thì không kéo được. */
     .sidebar.collapsed .sidebar-resizer { display: none; }
+    /* Handle bị overlay (bảng cell / modal) che thì thôi nhận chuột. */
+    .sidebar-resizer.blocked { pointer-events: none; }
     /* Đang kéo: chặn bôi đen text và map nuốt pointer. */
     body.resizing-sidebar { cursor: col-resize; user-select: none; }
     body.resizing-sidebar #map { pointer-events: none; }

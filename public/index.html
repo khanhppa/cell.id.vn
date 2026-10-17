@@ -532,6 +532,58 @@
       display: inline-block; vertical-align: bottom; color: var(--text-secondary);
     }
     .cl-tbl .cl-tbl-unknown { color: var(--text-faint); }
+    /* Bề rộng cột cố định (colgroup) → bảng dài không nhảy cột khi render lại. */
+    .cl-tbl .cl-col-idx { width: 62px; }
+    .cl-tbl .cl-col-cell { width: 190px; }
+    .cl-tbl .cl-col-sec { width: 56px; }
+    .cl-tbl .cl-col-rows { width: 64px; }
+    .cl-tbl .cl-col-radio { width: 62px; }
+    .cl-tbl .cl-col-time { width: 210px; }
+    .cl-tbl .cl-col-loc { width: 190px; }
+    .cl-tbl .cl-col-status { width: 180px; }
+    /* Hàng kẻ sọc cho dễ dò theo hàng (bảng nhiều cột). */
+    .cl-tbl tbody tr.cl-row:nth-child(even) { background: rgba(127,127,127,0.05); }
+    .cl-tbl tbody tr.cl-row:hover { background: var(--bg-hover); }
+    .cl-tbl tbody tr.cl-row-sel { background: rgba(51,102,255,0.12); }
+    /* Viền trái theo trạng thái (found/miss/unpaid...) — thấy ngay cell nào chưa có. */
+    .cl-tbl tbody tr.cl-row { box-shadow: inset 3px 0 0 transparent; }
+    .cl-tbl tbody tr.st-found { box-shadow: inset 3px 0 0 #22aa44; }
+    .cl-tbl tbody tr.st-miss { box-shadow: inset 3px 0 0 #ee6666; }
+    .cl-tbl tbody tr.st-unpaid { box-shadow: inset 3px 0 0 #ff8800; }
+    .cl-tbl tbody tr.st-busy { box-shadow: inset 3px 0 0 #3d7ce0; }
+    .cl-show-more-wrap { padding: 8px; text-align: center; }
+    .cl-show-more {
+      padding: 6px 14px; border-radius: 999px; cursor: pointer;
+      border: 1px solid var(--border-color); background: var(--bg-surface);
+      color: var(--text-primary); font-size: 11.5px;
+    }
+    .cl-show-more:hover { border-color: var(--accent, #3d7ce0); color: var(--accent, #3d7ce0); }
+    /* Nút CTA Tra cứu: to, rõ hơn nút phụ (tránh bấm nhầm/không thấy). */
+    .cl-resolve-cta { padding: 9px 16px; font-size: 13px; font-weight: 600; }
+    .cl-up-reuse { color: #22aa44; }
+    /* Trạng thái dạng "viên thuốc" cho dễ quét mắt. */
+    .cl-row-status {
+      display: inline-block; padding: 1px 8px; border-radius: 999px;
+      border: 1px solid currentColor; background: rgba(127,127,127,0.06);
+    }
+    /* Modal xác nhận tra cứu */
+    .cl-cfm { max-width: 420px; }
+    .cl-cfm-body { display: flex; flex-direction: column; gap: 6px; }
+    .cl-cfm-row {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+      padding: 6px 10px; border-radius: 6px; background: var(--bg-surface2);
+      font-size: 12.5px; color: var(--text-secondary);
+    }
+    .cl-cfm-row b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+    .cl-cfm-row.free { color: #22aa44; }
+    .cl-cfm-row.total { border: 1px solid var(--border-color); }
+    .cl-cfm-row.bad { color: var(--bg-btn-danger, #dd3333); }
+    .cl-cfm-note {
+      margin-top: 4px; padding: 7px 10px; border-radius: 6px; font-size: 11.5px;
+      background: rgba(34,170,68,0.1); color: var(--text-secondary);
+    }
+    .cl-cfm-note.bad { background: rgba(221,51,51,0.1); color: var(--bg-btn-danger, #dd3333); }
+    .cl-cfm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
     .cl-tbl-check { width: 14px; height: 14px; cursor: pointer; }
     /* Trạng thái từng dòng */
     .cl-row-status { white-space: nowrap; font-size: 11px; }
@@ -1298,9 +1350,11 @@
             <div class="cl-sheet-meta" id="clSheetMeta"></div>
             <div class="cl-tbl-wrap">
               <table class="cl-tbl">
+                <colgroup id="clTableCols"></colgroup>
                 <thead id="clTableHead"></thead>
                 <tbody id="clTableBody"></tbody>
               </table>
+              <div class="cl-show-more-wrap" id="clShowMoreWrap" hidden></div>
             </div>
           </div>
         </div>
@@ -1314,10 +1368,26 @@
           <button class="btn btn-sm" id="clMapAllBtn" onclick="plotClTableOnMap()">
             <i class="fas fa-map-location-dot"></i> <span data-i18n="calllogs.mapAllBtn">Hiển thị tất cả trên bản đồ</span>
           </button>
-          <button class="btn btn-sm btn-primary" id="clResolveSelectedBtn" onclick="resolveClSelected()">
+          <button class="btn btn-lg btn-primary cl-resolve-cta" id="clResolveSelectedBtn" onclick="resolveClSelectedClick()">
             <i class="fas fa-satellite-dish"></i> <span data-i18n="calllogs.resolveBtn">Tra cứu</span>
           </button>
           <div class="cl-sheet-resolve" id="clSheetResolve"></div>
+        </div>
+      </div>
+
+      <!-- Modal xác nhận tra cứu: chỉ trừ điểm khi user bấm Đồng ý. -->
+      <div class="modal-overlay" id="clConfirmResolveModal">
+        <div class="modal-box cl-cfm">
+          <h2><i class="fas fa-satellite-dish"></i> <span data-i18n="calllogs.confirmTitle">Xác nhận tra cứu</span></h2>
+          <div class="cl-cfm-body" id="clConfirmResolveBody"></div>
+          <div class="cl-cfm-actions">
+            <button class="btn" id="clConfirmResolveCancel" onclick="closeClConfirmResolveModal()">
+              <i class="fas fa-xmark"></i> <span data-i18n="calllogs.confirmCancel">Huỷ</span>
+            </button>
+            <button class="btn btn-primary" id="clConfirmResolveOk" onclick="confirmClResolveModal()">
+              <i class="fas fa-satellite-dish"></i> <span data-i18n="calllogs.confirmOk">Xác nhận tra cứu</span>
+            </button>
+          </div>
         </div>
       </div>
 

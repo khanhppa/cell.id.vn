@@ -211,15 +211,16 @@ async function main() {
 
   // Vòng kế của CÙNG uploadId phải được trừ riêng (ref khác) — đây là bug "tra nhiều
   // cell mà chỉ trừ ít điểm": cùng ref bị coi là retry nên vòng sau không bị trừ.
-  console.log('\n== 5. cùng uploadId nhưng VÒNG khác → trừ riêng ==');
+  console.log('\n== 5. cùng uploadId + vòng khác → cell đã trả phí KHÔNG bị trừ lại ==');
   const r5 = await req('POST', '/api/cells/resolve-batch',
     { cells, uploadId: 'bc-test-3', fileName: 't.xlsx', roundIdx: 1 }, token);
-  ok('vòng 1 charged = 3 (không bị dedup)', r5.body.credit && r5.body.credit.charged === 3, r5.body.credit);
+  ok('vòng 1: cell đã trả phí → charged = 0', r5.body.credit && r5.body.credit.charged === 0, r5.body.credit);
+  ok('vòng 1: reused = 3 (trả toạ độ miễn phí)', r5.body.credit && r5.body.credit.reused === 3, r5.body.credit);
   const bal5 = (await sqlGet('SELECT credit_balance AS b FROM users WHERE id = ?', [userId])).b;
-  ok('số dư 7 → 4', bal5 === 4, bal5);
-  ok('2 bút toán riêng theo vòng',
+  ok('số dư giữ nguyên 7 (không trừ lần 2)', bal5 === 7, bal5);
+  ok('vẫn chỉ 1 bút toán cho batch (không ghi thêm)',
     (await sqlGet('SELECT COUNT(*) AS c FROM credit_transactions WHERE user_id = ? AND ref LIKE ?',
-      [userId, 'bc-test-3:r%'])).c === 2);
+      [userId, 'bc-test-3:r%'])).c === 1);
 
   console.log('\n== 6. cell tra không ra (miss) → không trừ, charged = false ==');
   await setBalance(5);
@@ -261,12 +262,16 @@ async function main() {
   ok('credit.insufficient = true', r7.body.credit && r7.body.credit.insufficient === true, r7.body.credit);
   const bal7 = (await sqlGet('SELECT credit_balance AS b FROM users WHERE id = ?', [userId])).b;
   ok('số dư về 0', bal7 === 0, bal7);
-  // Nạp thêm điểm rồi tra lại CÙNG vòng → cell unpaid phải được tra tiếp (tra lần lượt).
+  // Nạp thêm điểm rồi tra lại: cell đã trả phí trả toạ độ MIỄN PHÍ, chỉ cell còn thiếu
+  // (unpaid) mới bị trừ điểm → không bao giờ trừ 2 lần cho cùng cell trong 1 lần nạp.
   await setBalance(5);
   const r7b = await req('POST', '/api/cells/resolve-batch',
-    { cells: mixCells, uploadId: 'bc-test-7', fileName: 'mix.xlsx', roundIdx: 0 }, token);
-  ok('tra lại cùng vòng = duplicate, không trừ thêm',
-    r7b.body.credit && r7b.body.credit.duplicate === true, r7b.body.credit);
+    { cells: mixCells, uploadId: 'bc-test-7', fileName: 'mix.xlsx', roundIdx: 1 }, token);
+  ok('tra lại: charged = 0 (không trừ thêm cho cell đã trả phí)',
+    r7b.body.credit && r7b.body.credit.charged === 0, r7b.body.credit);
+  ok('tra lại: reused = 3', r7b.body.credit && r7b.body.credit.reused === 3, r7b.body.credit);
+  const bal7b = (await sqlGet('SELECT credit_balance AS b FROM users WHERE id = ?', [userId])).b;
+  ok('số dư giữ nguyên 5', bal7b === 5, bal7b);
   ok('tra lại cùng vòng vẫn giữ toạ độ cell đã trả phí',
     !!(r7b.body.results[0].lat && r7b.body.results[2].lat), r7b.body.results.map(x => !!x.lat));
 
@@ -331,6 +336,66 @@ async function main() {
     ok('analyze KHÔNG ghi call_logs', logsAfter === logsBefore, { before: logsBefore, after: logsAfter });
     const txAfter = (await sqlGet('SELECT COUNT(*) AS c FROM credit_transactions WHERE user_id = ?', [userId])).c;
     ok('analyze KHÔNG tạo bút toán', txAfter === txBefore, { before: txBefore, after: txAfter });
+  }
+
+  console.log('\n== 9. /cells endpoints: ghép trạng thái found/miss/unpaid, không rò toạ độ ==');
+  {
+    const bcrypt2 = require('bcryptjs');
+    const hash2 = await bcrypt2.hash('pw', 4);
+    await sqlRun('INSERT INTO users (username, password, role, status) VALUES (?, ?, ?, ?)',
+      ['bc_state', hash2, 'user', 'active']);
+    const uid2 = (await sqlGet('SELECT id FROM users WHERE username = ?', ['bc_state'])).id;
+    const stateToken = (await req('POST', '/api/login', { username: 'bc_state', password: 'pw' })).body.token;
+    const settle = (ms) => new Promise(r => setTimeout(r, ms));
+    const batchId = 'clstate9';
+    const rows9 = [
+      { cellid: '11100101', action_type: 'CALL_OUT' },
+      { cellid: '11100102', action_type: 'CALL_IN' },
+      { cellid: '11100303', action_type: 'SMS_IN' },
+      { cellid: '11100404', action_type: 'CALL_OUT' },
+    ];
+    for (const r of rows9) {
+      await sqlRun('INSERT INTO call_logs (user_id, network, action_type, mcc, mnc, lac, cellid, batch_id)' +
+        ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [uid2, 'Viettel', r.action_type, '452', '04', '9101', r.cellid, batchId]);
+    }
+    await sqlRun('INSERT INTO call_log_batches (batch_id, user_id, file_name, network, row_count) VALUES (?, ?, ?, ?, ?)',
+      [batchId, uid2, 'state.xlsx', 'Viettel', rows9.length]);
+    const hist = (cellid, found, lat) => sqlRun(
+      'INSERT INTO lookup_history (user_id, mode, mcc, mnc, lac, cellid, sector, lat, lng, range, source, found, batch_id, radio)' +
+      ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [uid2, 'batch', '452', '04', '9101', cellid, '', lat ? lat : null, lat ? 105.8 : null, 500,
+        lat ? 'local' : '', found ? 1 : 0, batchId, 'LTE']);
+    await hist('11100101', true, 21.01);
+    await hist('11100102', true, 21.02);
+    await hist('11100303', false, null);
+    await settle(150);
+
+    const bySession = await req('GET', '/api/call-log-sessions/' + batchId + '/cells', undefined, stateToken);
+    ok('GET /api/call-log-sessions/:id/cells → 200', bySession.status === 200, bySession.status);
+    ok('trả đủ 4 cell của FILE (không co cồn theo số có toạ độ)',
+      bySession.body && bySession.body.summary && bySession.body.summary.total === 4,
+      bySession.body && bySession.body.summary);
+    ok('summary 4 · 2 found · 1 miss · 1 unpaid',
+      bySession.body.summary.found === 2 && bySession.body.summary.miss === 1 && bySession.body.summary.unpaid === 1,
+      bySession.body.summary);
+    const cellOf = (id) => (bySession.body.cells || []).find(c => String(c.cellid) === id) || {};
+    ok('cell found có toạ độ', cellOf('11100101').state === 'found' && cellOf('11100101').lat === 21.01,
+      cellOf('11100101'));
+    ok('cell miss state=miss, KHÔNG có toạ độ', cellOf('11100303').state === 'miss' && !cellOf('11100303').lat,
+      cellOf('11100303'));
+    ok('cell chưa tra state=unpaid, KHÔNG có toạ độ (kể cả có trong CSDL nội bộ)',
+      cellOf('11100404').state === 'unpaid' && !cellOf('11100404').lat, cellOf('11100404'));
+
+    const byLookup = await req('GET', '/api/lookup-history/batch/' + batchId + '/cells', undefined, stateToken);
+    ok('GET /api/lookup-history/batch/:id/cells cùng số liệu với phiên',
+      byLookup.status === 200 && byLookup.body.summary.total === 4 &&
+      byLookup.body.summary.found === 2, byLookup.body && byLookup.body.summary);
+
+    ok('route /cells cần đăng nhập (401 khi không có token)',
+      (await req('GET', '/api/call-log-sessions/' + batchId + '/cells')).status === 401);
+    ok('user khác không thấy toạ độ của batch này',
+      ((await req('GET', '/api/call-log-sessions/' + batchId + '/cells', undefined, token)).body.summary || {}).found === 0);
   }
 
   console.log(`\n${pass} passed, ${fail} failed\n`);

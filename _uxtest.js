@@ -82,7 +82,7 @@ ok('renderCallLogs dòng có toạ độ gắn onclick highlightCellOnMap', /onc
 ok('renderCallLogs nút xoá có event.stopPropagation', /event\.stopPropagation\(\);deleteCallLog\(/.test(renderBody));
 
 console.log('\n== 4. Lịch sử hàng loạt → tab Xem rút list ==');
-ok('có hàm openCallLogsFromHistory', /function openCallLogsFromHistory\(rows, fileName\)/.test(appSrc));
+ok('có hàm openCallLogsFromHistory', /async function openCallLogsFromHistory\(rows, fileName, batchId\)/.test(appSrc));
 const ocBody = fnBody('openCallLogsFromHistory');
 ok('openCallLogsFromHistory gọi switchTab(calllogs)', /switchTab\('calllogs'\)/.test(ocBody));
 ok('map lng -> lon', /lon:\s*r\.lng/.test(ocBody));
@@ -521,7 +521,7 @@ ok('có bảng #clTableHead + #clTableBody + khối meta',
 ok('footer có chọn tất cả + đếm + nút map + nút tra',
   /id="clSelectAll"/.test(htmlSrc) && /id="clSheetCount"/.test(htmlSrc) &&
   /id="clMapAllBtn"/.test(htmlSrc) && /id="clResolveSelectedBtn"/.test(htmlSrc) &&
-  /onclick="plotClTableOnMap\(\)"/.test(htmlSrc) && /onclick="resolveClSelected\(\)"/.test(htmlSrc));
+  /onclick="plotClTableOnMap\(\)"/.test(htmlSrc) && /onclick="resolveClSelectedClick\(\)"/.test(htmlSrc));
 ok('nút topbar Load Excel mở overlay mới (openClTableOverlay)',
   /id="tab-calllogs"[\s\S]{0,600}onclick="openClTableOverlay\(\)"/.test(htmlSrc));
 ok('CSS .cl-fullsheet nằm DƯỚI navbar (inset top 48px) + z-index 4900',
@@ -548,8 +548,8 @@ ok('có hàm closeClTableOverlay đóng (.remove show)', /function closeClTableO
 ok('có hàm clSheetStep chuyển 3 bước', /function clSheetStep\(name\)[\s\S]{0,420}clSheetStepTable/.test(appSrc));
 ok('uploadCallLogAnalyze POST /api/call-logs/analyze',
   /async function uploadCallLogAnalyze\(event\)[\s\S]{0,1400}'\/api\/call-logs\/analyze'/.test(appSrc));
-ok('uploadCallLogAnalyze tạo clAnalyze + chọn hết mặc định',
-  /clAnalyze = \{[\s\S]{0,400}selected: new Set\(\)/.test(fnBody('uploadCallLogAnalyze')) &&
+ok('uploadCallLogAnalyze tạo clAnalyze qua clCellsFromSource + chọn hết mặc định',
+  /clAnalyze = clCellsFromSource\(/.test(fnBody('uploadCallLogAnalyze')) &&
   /clAnalyze\.selected\.add\(c\.key\)/.test(fnBody('uploadCallLogAnalyze')));
 ok('uploadCallLogAnalyze KHÔNG gọi resolve/trừ điểm khi nạp',
   !/resolve-batch/.test(fnBody('uploadCallLogAnalyze')) &&
@@ -572,13 +572,15 @@ ok('updateClTableRow cập nhật toạ độ + trạng thái tại chỗ',
 // F5 sau khi trả phí: khôi phục cờ `_charged` từ sessionStorage.
 
 ok('resolveClSelected tra tuần tự theo THỨ TỰ bảng (clSortedRows)',
-  /async function resolveClSelected\(\)/.test(appSrc) &&
-  /clSortedRows\(\)\.filter\(c => selected\.has\(c\.key\)\)/.test(fnBody('resolveClSelected')));
+  /async function resolveClSelected\(opts\)/.test(appSrc) &&
+  /clSortedRows\(\)\.filter\(c => \{/.test(fnBody('resolveClSelected')));
 ok('resolveClSelected dừng khi hết điểm (insufficient)',
   /resp\.credit\.insufficient/.test(fnBody('resolveClSelected')) &&
   /state: 'unpaid'/.test(fnBody('resolveClSelected')));
-ok('resolveClSelected gửi roundIdx + uploadId chung 1 lần tra',
-  /roundIdx: round/.test(fnBody('resolveClSelected')) && /uploadId = 'up'/.test(fnBody('resolveClSelected')));
+ok('resolveClSelected gửi roundIdx + uploadId bền vững (không Date.now/random)',
+  /roundIdx: round/.test(fnBody('resolveClSelected')) &&
+  /clBatchUploadId\(/.test(fnBody('resolveClSelected')) &&
+  !/Date\.now\(\)/.test(fnBody('resolveClSelected')));
 ok('resolveClSelected truyền các cell đang chọn vào /api/cells/resolve-batch',
   /'\/api\/cells\/resolve-batch'/.test(fnBody('resolveClSelected')));
 ok('plotClTableOnMap đẩy cell đã tra vào myLogsCache',
@@ -801,6 +803,121 @@ ok('initSidebarResizeBlock chỉ dùng MutationObserver khi có (không crash vm
     return /typeof MutationObserver === 'function'/.test(b) &&
       /^\s*if \(typeof MutationObserver === 'function'\) \{$/m.test(b);
   })());
+
+// ==========================================================
+// 5. Tra cứu chuyển mạng giữ số: số liệu khớp, không trừ điểm 2 lần,
+//    không rò toạ độ cell chưa trả phí, màu theo RAT, bảng gọn + modal xác nhận.
+// ==========================================================
+console.log('\n== 5. Call-log import → resolve → map/table ==');
+
+// --- 1 nguồn số duy nhất cho bảng / footer / bản đồ ---
+ok('có hàm clCellsFromSource (pipeline dựng bảng dùng chung)',
+  /function clCellsFromSource\(src, opts\)/.test(appSrc));
+ok('clCellsFromSource map state found/miss/unpaid từ server',
+  /c\.state === 'found'/.test(fnBody('clCellsFromSource')) &&
+  /c\.state === 'miss'/.test(fnBody('clCellsFromSource')) &&
+  /c\.state === 'unpaid'/.test(fnBody('clCellsFromSource')));
+ok('clCellsFromSource chuẩn hoá key (canonicalClientKey) — không nhân đôi cell',
+  /canonicalClientKey\(keyToCell\(c\.key\)\)/.test(fnBody('clCellsFromSource')));
+ok('có hàm clCellsSummary (đếm total/found/miss/unpaid)',
+  /function clCellsSummary\(\)/.test(appSrc) && /s\.unpaid\+\+/.test(fnBody('clCellsSummary')));
+ok('renderClTableSummary dùng clCellsSummary + sumFound/sumMiss/sumUnpaid',
+  /clCellsSummary\(\)/.test(fnBody('renderClTableSummary')) &&
+  /calllogs\.sumFound/.test(fnBody('renderClTableSummary')) &&
+  /calllogs\.sumMiss/.test(fnBody('renderClTableSummary')) &&
+  /calllogs\.sumUnpaid/.test(fnBody('renderClTableSummary')));
+ok('plotClTableOnMap báo "f/t" khi còn cell chưa có kết quả (không im lặng bỏ)',
+  /calllogs\.mapAllPartial/.test(fnBody('plotClTableOnMap')) &&
+  /clCellsSummary\(\)/.test(fnBody('plotClTableOnMap')));
+ok('i18n calllogs.sumFound/sumMiss/sumUnpaid/mapAllPartial/showMore/allResolved (vi+en)',
+  ['sumFound', 'sumMiss', 'sumUnpaid', 'mapAllPartial', 'showMore', 'allResolved'].every(k =>
+    (appSrc.match(new RegExp("'calllogs\\." + k + "'", 'g')) || []).length >= 2));
+
+// --- 3 đường mở đều qua clCellsFromSource ---
+ok('uploadCallLogAnalyze dựng clAnalyze qua clCellsFromSource',
+  /clAnalyze = clCellsFromSource\(/.test(fnBody('uploadCallLogAnalyze')));
+ok('openCallLogsFromHistory dựng clAnalyze qua clCellsFromSource + mở overlay',
+  /clAnalyze = clCellsFromSource\(/.test(fnBody('openCallLogsFromHistory')) &&
+  /clSheetStep\('table'\)/.test(fnBody('openCallLogsFromHistory')));
+ok('openCallLogSession dựng clAnalyze qua clCellsFromSource + mở overlay',
+  /clAnalyze = clCellsFromSource\(/.test(fnBody('openCallLogSession')) &&
+  /clSheetStep\('table'\)/.test(fnBody('openCallLogSession')));
+ok('có helper clLoadBatchCells gọi endpoint /cells của phiên + lịch sử',
+  /function clLoadBatchCells\(batchId, kind\)/.test(appSrc) &&
+  /call-log-sessions\/' \+[\s\S]{0,90}\/cells/.test(fnBody('clLoadBatchCells')) &&
+  /lookup-history\/batch\/' \+[\s\S]{0,90}\/cells/.test(fnBody('clLoadBatchCells')));
+
+// --- Không rò toạ độ cell chưa trả phí ---
+ok('openCallLogSession KHÔNG tự gắn toạ độ nội bộ (_fromHistory bypass)',
+  !/attachCellCoords|localLat/.test(fnBody('openCallLogSession')));
+ok('openCallLogSession chỉ nhận toạ độ từ cell state=found',
+  /c\.state === 'found' && c\.lat != null/.test(fnBody('openCallLogSession')));
+ok('openCallLogsFromHistory lọc bản ghi có toạ độ (đã trả phí)',
+  /filter\(r => r\.lat != null && r\.lng != null\)/.test(fnBody('openCallLogsFromHistory')));
+
+// --- Không trừ điểm 2 lần ---
+ok('có hàm clBatchUploadId (uploadId bền vững theo nội dung lô)',
+  /function clBatchUploadId\(fileName, cells\)/.test(appSrc) &&
+  /clHash\(/.test(fnBody('clBatchUploadId')));
+ok('resolveClSelected bỏ qua cell đã found (không trả phí lại)',
+  /return !\(r && r\.state === 'found'\)/.test(fnBody('resolveClSelected')));
+ok('resolveClSelected tăng roundsDone (ref batchId:rN không trùng)',
+  /roundsDone/.test(fnBody('resolveClSelected')));
+ok('resolveClSelected ghi toạ độ ngược vào dòng cell (cell.lat = r.lat)',
+  /cell\.lat = r\.lat/.test(fnBody('resolveClSelected')));
+ok('resolveClSelected tích luỹ credit.reused (cell trả lại miễn phí)',
+  /credit\.reused/.test(fnBody('resolveClSelected')));
+ok('renderClSheetResolve chỉ tính cell CHƯA có kết quả (clClSelectedNeed)',
+  /clClSelectedNeed\(\)/.test(fnBody('renderClSheetResolve')));
+ok('saveCallSession giữ lat/lon/_charged khi lưu phiên',
+  /lat: r\.lat, lon: r\.lon/.test(fnBody('saveCallSession')) &&
+  /_charged: !!r\._charged/.test(fnBody('saveCallSession')) &&
+  /_fromHistory: !!r\._fromHistory/.test(fnBody('saveCallSession')));
+ok('có restoreSessionCoords + gọi trong loadCallLogs',
+  /function restoreSessionCoords\(\)/.test(appSrc) &&
+  /restoreSessionCoords\(\)/.test(fnBody('loadCallLogs')));
+
+// --- Màu vòng tròn theo RAT ---
+ok('plotCallLogs tô vòng tròn theo radioStyle(r.radio)',
+  /radioStyle\(r\.radio\)/.test(fnBody('plotCallLogs')) &&
+  /rs\.key \? rs\.color/.test(fnBody('plotCallLogs')));
+
+// --- Bảng gọn + modal xác nhận ---
+ok('renderClTable có <colgroup id="clTableCols">',
+  /id="clTableCols"/.test(htmlSrc) && /clTableCols/.test(fnBody('renderClTable')));
+ok('renderClTable giới hạn CL_TBL_PAGE dòng + nút "Xem thêm"',
+  /const CL_TBL_PAGE = 300/.test(appSrc) &&
+  /slice\(0, limit\)/.test(fnBody('renderClTable')) &&
+  /clShowMore/.test(fnBody('renderClTable')) &&
+  /id="clShowMoreWrap"/.test(htmlSrc) && /function clShowMore\(\)/.test(appSrc));
+ok('dòng bảng có class trạng thái st-found/st-miss/st-unpaid (viền màu)',
+  /cl-row st-\$\{st\.cls\}/.test(fnBody('clTableRowHtml')) &&
+  /\.cl-tbl tbody tr\.st-found/.test(htmlSrc) &&
+  /\.cl-tbl tbody tr\.st-miss/.test(htmlSrc));
+ok('bảng có hàng kẻ sọc (nth-child(even)) + cột số tabular-nums',
+  /tr\.cl-row:nth-child\(even\)/.test(htmlSrc) &&
+  /font-variant-numeric: tabular-nums/.test(htmlSrc));
+ok('có modal xác nhận #clConfirmResolveModal + body + nút OK/Cancel',
+  /class="modal-overlay" id="clConfirmResolveModal"/.test(htmlSrc) &&
+  /id="clConfirmResolveBody"/.test(htmlSrc) &&
+  /id="clConfirmResolveOk"/.test(htmlSrc) && /id="clConfirmResolveCancel"/.test(htmlSrc));
+ok('nút Tra cứu mở modal trước khi trừ điểm (resolveClSelectedClick)',
+  /onclick="resolveClSelectedClick\(\)"/.test(htmlSrc) &&
+  /function resolveClSelectedClick\(\)/.test(appSrc) &&
+  /openClConfirmResolveModal\(\)/.test(fnBody('resolveClSelectedClick')));
+ok('openClConfirmResolveModal hiện chi phí mới/miễn phí/tổng/số dư',
+  ['confirmNew', 'confirmFree', 'confirmCost', 'confirmBalance'].every(k =>
+    new RegExp('calllogs\\.' + k).test(fnBody('openClConfirmResolveModal'))));
+ok('modal xác nhận: không đủ điểm → nút chuyển sang nạp điểm',
+  /topup\.html/.test(fnBody('openClConfirmResolveModal')) &&
+  /okBtn\.disabled/.test(fnBody('openClConfirmResolveModal')));
+ok('confirmClResolveModal đóng modal rồi chạy resolveClSelected',
+  /closeClConfirmResolveModal\(\)/.test(fnBody('confirmClResolveModal')) &&
+  /resolveClSelected\(/.test(fnBody('confirmClResolveModal')));
+ok('i18n calllogs.confirm* (vi+en)',
+  ['confirmTitle', 'confirmOk', 'confirmCancel', 'confirmNew', 'confirmFree', 'confirmCost', 'confirmBalance']
+    .every(k => (appSrc.match(new RegExp("'calllogs\\." + k + "'", 'g')) || []).length >= 2));
+
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

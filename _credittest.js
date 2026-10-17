@@ -309,10 +309,11 @@ async function main() {
   ok('resolve charge sau khi có kết quả', /chargeLookup\(userId, 1, chargeRef/.test(srvSrc));
   ok('resolve trả 402 khi hết điểm', /402/.test(srvSrc) && /Không đủ điểm/.test(srvSrc));
   ok('batch pre-check điểm trước khi tra online', /creditOn && creditCost > 0[\s\S]{0,300}insufficient/.test(srvSrc));
-  ok('batch charge partial theo foundCount', /chargeLookupPartial\(userId, foundCount, chargeRef/.test(srvSrc));
+  ok('batch charge partial theo số cell MỚI (newFound, dedup theo batch)', /chargeLookupPartial\(userId, newFound, chargeRef/.test(srvSrc));
+  ok('batch dedup chargedBefore theo batch_id (không trừ lại cell đã trả phí)', /batch_id = \? AND found = 1/.test(srvSrc) && /chargedBefore\.has\(a\)/.test(srvSrc));
   ok('batch chargeRef tách theo vòng (roundIdx)', /const chargeRef = `\$\{batchId\}:r\$\{roundNo\}`/.test(srvSrc));
   ok('batch đọc roundIdx từ body', /const \{ cells, uploadId, fileName, roundIdx \} = req\.body/.test(srvSrc));
-  ok('batch credit trả requested + insufficient', /requested: foundCount[\s\S]{0,120}insufficient/.test(srvSrc));
+  ok('batch credit trả requested + insufficient', /requested: newFound[\s\S]{0,160}insufficient/.test(srvSrc));
   ok('foundCount = số cell found', /const foundCount = historyItems\.filter\(h => h\.found\)\.length/.test(srvSrc));
 
   ok('register cấp signup bonus', /\/api\/register'[\s\S]{0,3000}grantSignupBonus/.test(srvSrc));

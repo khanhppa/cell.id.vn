@@ -342,7 +342,8 @@ async function main() {
 
   const d3 = await req('POST', '/api/cells/resolve-batch',
     { cells: bCells, uploadId: bUpload, fileName: 't.xlsx', roundIdx: 0 }, userToken);
-  ok('retry cùng vòng -> credit.duplicate = true', d3.body.credit && d3.body.credit.duplicate === true, d3.body.credit);
+  ok('retry cùng vòng -> không trả phí lại (charged = 0, reused = 2)',
+    d3.body.credit && d3.body.credit.charged === 0 && d3.body.credit.reused === 2, d3.body.credit);
   ok('retry cùng vòng -> không trừ lại (vẫn 3)',
     Number((await sqlGet('SELECT credit_balance b FROM users WHERE id = ?', [uid])).b) === 3);
 

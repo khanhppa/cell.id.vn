@@ -180,7 +180,21 @@ const I18N = {
     'calllogs.noSelection': 'Select at least one cell.',
     'calllogs.noResolved': 'No cell has a coordinate yet — resolve first.',
     'calllogs.mapAllDone': 'Showing {n} cell(s) on the map.',
+    'calllogs.mapAllPartial': 'Showing {f}/{t} cell(s) on the map · {m} cell(s) have no result yet.',
     'calllogs.stopNoCredit': 'Stopped: out of credits.',
+    'calllogs.sumFound': '{n} found',
+    'calllogs.sumMiss': '{n} no result',
+    'calllogs.sumUnpaid': '{n} not resolved',
+    'calllogs.showMore': 'Show more ({n} left)',
+    'calllogs.allResolved': 'All selected cells already have a result in this session — no credits used.',
+    'calllogs.confirmTitle': 'Confirm lookup',
+    'calllogs.confirmNew': 'Cells to resolve now: {n}',
+    'calllogs.confirmFree': 'Already paid in this load: {q} cell(s) (free)',
+    'calllogs.confirmCost': 'Cost: {n} × {c} pt = {t} pt',
+    'calllogs.confirmBalance': 'Balance: {b} pt → {a} after lookup',
+    'calllogs.confirmOk': 'Confirm lookup',
+    'calllogs.confirmCancel': 'Cancel',
+    'calllogs.reusedNote': '{q} cell(s) already paid in this load — map shown without extra credits.',
   },
   vi: {
     'app.title': 'Cell.id.vn',
@@ -366,7 +380,21 @@ const I18N = {
     'calllogs.noSelection': 'Chọn ít nhất 1 cell.',
     'calllogs.noResolved': 'Chưa cell nào có toạ độ — hãy tra trước.',
     'calllogs.mapAllDone': 'Đang hiển thị {n} cell trên bản đồ.',
+    'calllogs.mapAllPartial': 'Đang hiển thị {f}/{t} cell trên bản đồ · {m} cell chưa có kết quả.',
     'calllogs.stopNoCredit': 'Đã dừng: hết điểm.',
+    'calllogs.sumFound': '{n} có kết quả',
+    'calllogs.sumMiss': '{n} không ra kết quả',
+    'calllogs.sumUnpaid': '{n} chưa tra',
+    'calllogs.showMore': 'Xem thêm ({n} còn lại)',
+    'calllogs.allResolved': 'Các cell đang chọn đều đã có kết quả trong phiên này — không trừ điểm.',
+    'calllogs.confirmTitle': 'Xác nhận tra cứu',
+    'calllogs.confirmNew': 'Cell cần tra lúc này: {n}',
+    'calllogs.confirmFree': 'Đã trả phí trong lần nạp này: {q} cell (miễn phí)',
+    'calllogs.confirmCost': 'Chi phí: {n} × {c} điểm = {t} điểm',
+    'calllogs.confirmBalance': 'Số dư: {b} điểm → còn {a} điểm sau khi tra',
+    'calllogs.confirmOk': 'Xác nhận tra cứu',
+    'calllogs.confirmCancel': 'Huỷ',
+    'calllogs.reusedNote': '{q} cell đã trả phí trong lần nạp này — hiển thị lại không tốn thêm điểm.',
   }
 };
 
@@ -1508,7 +1536,7 @@ async function histOpenOnMap(id) {
     try {
       const arr = await histLoadBatch(r.batch_id);
       if (!arr.length) { showToast(t('hist.batchEmpty'), 'error'); return; }
-      openCallLogsFromHistory(arr, r.file_name || r.cell_label || '');
+      openCallLogsFromHistory(arr, r.file_name || r.cell_label || '', r.batch_id);
     } catch (e) {
       showToast(e.message, 'error');
     }
@@ -1892,7 +1920,10 @@ function plotCallLogs(records) {
       const lon = parseFloat(r.lon);
       if (isNaN(lat) || isNaN(lon)) return;
       const range = parseFloat(r.range || r.cell_range || 0);
-      const color = getCellColor(group[0].action_type);
+      // Màu vòng tròn = màu RAT (2G/3G/4G/5G…) giống marker tra đơn lẻ + tra hàng loạt.
+      // Trước đây tô theo action_type nên cell rút list (action_type rỗng) luôn xám '#888'.
+      const rs = radioStyle(r.radio);
+      const color = rs.key ? rs.color : getCellColor(group[0].action_type);
       const radius = range > 0 ? range : 500;
       const circle = L.circle([lat, lon], {
         radius: radius,
@@ -2176,8 +2207,13 @@ async function loadAnnotations() {
 // ============================================
 // Popup full-window: bảng CELL sau khi nạp Excel (đọc-only → tra theo lựa chọn)
 // ============================================
-// clAnalyze: { fileName, network, totalRows, rows[], sort:{key,dir}, selected:Set<key>, results:{key:obj} }
+// clAnalyze: { fileName, network, totalRows, rows[], sort:{key,dir}, selected:Set<key>, results:{key:obj},
+//             batchId, uploadId, roundsDone, limit, mapShown, summary:{total,found,miss,unpaid} }
+// `uploadId` BỀN VỮNG theo nội dung lô (cùng file/cùng phiên ⇒ cùng uploadId ⇒ cùng
+// bút toán `batchId:rN`), nhờ vậy bấm "Tra cứu" lần 2 không bị trừ điểm lần nữa.
 let clAnalyze = null;
+// Số dòng vẽ mỗi lần (bảng rất dài → "Xem thêm" nới thêm từng đợt).
+const CL_TBL_PAGE = 300;
 
 const CL_TBL_COLS = [
   { key: 'idx', label: '#', sortable: false, cls: 'cl-tbl-num' },
@@ -2190,6 +2226,90 @@ const CL_TBL_COLS = [
   { key: 'loc', label: 'calllogs.colLoc', sortable: false, cls: 'cl-tbl-loc' },
   { key: 'status', label: 'calllogs.colStatus', sortable: true }
 ];
+
+// Hash nội dung 32-bit (djb2) → đuôi uploadId ổn định giữa các lần bấm/F5.
+function clHash(str) {
+  let h = 5381;
+  const s = String(str || '');
+  for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+// uploadId của 1 lô = hash(tên file | số dòng | danh sách cell đã sort).
+// Cùng dữ liệu ⇒ cùng uploadId kể cả sau F5 → server dedup theo batch (không trừ
+// điểm lần 2). Khác file ⇒ khác uploadId ⇒ lịch sử vẫn tách nhóm đúng.
+function clBatchUploadId(fileName, cells) {
+  const keys = (cells || []).map(c => `${c.mcc}-${c.mnc}-${c.lac}-${c.cellid}`).sort();
+  return 'cl' + clHash([fileName || '', keys.length, keys.join(',')].join('|'));
+}
+
+// Dựng clAnalyze từ server (analyze / cells của phiên / cells của lịch sử).
+// `src`: { cells[], fileName, network, totalRows, batchId }
+//   cells[].state: 'found' | 'miss' | 'unpaid' (analyze chưa tra → không có state).
+// Mỗi cell → results[key] = { state, lat, lon, range, radio, source, sourceLabel }.
+// Nhờ vậy bảng, bộ đếm và bản đồ dùng CHUNG một nguồn số.
+function clCellsFromSource(src, opts) {
+  const o = opts || {};
+  const rows = Array.isArray(src && src.cells) ? src.cells : [];
+  // `key` chuẩn (mcc-mnc-lac-ECI) để 1 physical cell không bị nhân đôi khi mở lại
+  // phiên (short-cellid vs ECI trong dữ liệu gốc).
+  for (const c of rows) {
+    if (!c.key) c.key = canonicalClientKey(c);
+    else c.key = canonicalClientKey(keyToCell(c.key));
+  }
+  const results = {};
+  for (const c of rows) {
+    if (c.state === 'found' && c.lat != null && c.lng != null) {
+      results[c.key] = {
+        state: 'found', lat: c.lat, lon: c.lng, range: c.range, radio: c.radio,
+        source: c.source || '', sourceLabel: SOURCE_LABELS[c.source] || (c.source || '')
+      };
+    } else if (c.state === 'miss') {
+      results[c.key] = { state: 'miss', reason: '' };
+    } else if (c.state === 'unpaid') {
+      results[c.key] = { state: 'unpaid' };
+    }
+  }
+  clAnalyze = {
+    fileName: (src && src.fileName) || o.fileName || '',
+    network: (src && src.network) || '',
+    totalRows: Number(src && src.totalRows) || 0,
+    rows,
+    sort: o.sort || { key: 'rowCount', dir: 'desc' },
+    selected: new Set(),
+    results,
+    batchId: (src && src.batchId) || o.batchId || '',
+    uploadId: clBatchUploadId((src && src.fileName) || o.fileName || '', rows),
+    roundsDone: 0,
+    limit: CL_TBL_PAGE,
+    mapShown: false
+  };
+  // Mặc định chọn các cell CHƯA có kết quả (cell đã trả phí không cần tra lại).
+  // analyze (chưa tra) không có `state` ⇒ chọn hết như cũ.
+  for (const c of rows) {
+    const r = results[c.key];
+    if (!r || r.state === 'unpaid' || (o.selectUnpaidOnly && r.state !== 'found')) clAnalyze.selected.add(c.key);
+  }
+  return clAnalyze;
+}
+
+// Đếm cùng một nguồn số cho bảng/footer/bản đồ/toast: { total, found, miss, unpaid }.
+// analyze chưa tra (không có state) → `pending` = số cell chưa tra.
+function clCellsSummary() {
+  const s = { total: 0, found: 0, miss: 0, unpaid: 0, pending: 0, selected: 0 };
+  if (!clAnalyze) return s;
+  s.total = clAnalyze.rows.length;
+  s.selected = clAnalyze.selected.size;
+  for (const c of clAnalyze.rows) {
+    const r = clAnalyze.results[c.key];
+    if (!r) { s.pending++; continue; }
+    if (r.state === 'found') s.found++;
+    else if (r.state === 'miss') s.miss++;
+    else if (r.state === 'unpaid') s.unpaid++;
+    else s.pending++;
+  }
+  return s;
+}
 
 // Mở overlay bảng cell ở bước chọn file.
 function openClTableOverlay() {
@@ -2250,23 +2370,18 @@ async function uploadCallLogAnalyze(event) {
     if (!r.ok) throw new Error(data.error || 'Analyze failed');
 
     const rows = Array.isArray(data.cells) ? data.cells : [];
-    clAnalyze = {
-      fileName,
-      network: data.network || '',
-      totalRows: Number(data.totalRows) || 0,
-      rows,
-      sort: { key: 'rowCount', dir: 'desc' },
-      selected: new Set(),
-      results: {}
-    };
-    // Mặc định chọn hết để bấm tra được ngay; user vẫn bỏ chọn từng dòng được.
-    for (const c of rows) clAnalyze.selected.add(c.key);
-
     if (!rows.length) {
       showToast(t('calllogs.noCells'), 'error');
       clSheetStep('pick');
       return;
     }
+    // 1 pipeline chung cho MỌI đường mở (analyze / phiên / lịch sử) → cùng số liệu.
+    clAnalyze = clCellsFromSource({
+      cells: rows, fileName, network: data.network || '', totalRows: data.totalRows
+    });
+    // Mặc định chọn hết để bấm tra được ngay; user vẫn bỏ chọn từng dòng được.
+    for (const c of clAnalyze.rows) clAnalyze.selected.add(c.key);
+
     clSheetStep('table');
     renderClTable();
     renderClSheetResolve().catch(() => {});
@@ -2360,10 +2475,44 @@ function renderClTable() {
     return `<th class="${cls}"${click}>${c.key === 'idx' ? '' : histEsc(t(c.label))}${ico}</th>`;
   }).join('') + '</tr>';
 
-  body.innerHTML = clSortedRows().map((c, i) => clTableRowHtml(c, i + 1)).join('');
+  // <colgroup> cố định bề rộng cột → bảng dài không bị "nhảy" cột khi render lại.
+  const colgroup = document.getElementById('clTableCols');
+  if (colgroup) {
+    colgroup.innerHTML = '<col class="cl-col-idx"><col class="cl-col-cell"><col class="cl-col-sec">' +
+      '<col class="cl-col-rows"><col class="cl-col-radio"><col class="cl-col-time">' +
+      '<col class="cl-col-addr"><col class="cl-col-loc"><col class="cl-col-status">';
+  }
+
+  // File lớn (hàng nghìn cell) → chỉ vẽ CL_TBL_PAGE dòng đầu, "Xem thêm" nới dần.
+  const sorted = clSortedRows();
+  const limit = Math.max(CL_TBL_PAGE, Number(clAnalyze.limit) || CL_TBL_PAGE);
+  const shown = sorted.slice(0, limit);
+  body.innerHTML = shown.map((c, i) => clTableRowHtml(c, i + 1)).join('');
+
+  const more = document.getElementById('clShowMoreWrap');
+  if (more) {
+    const left = sorted.length - shown.length;
+    if (left > 0) {
+      more.hidden = false;
+      more.innerHTML = `<button type="button" class="cl-show-more" onclick="clShowMore()">` +
+        `<i class="fas fa-chevron-down"></i> ${histEsc(fmtTpl('calllogs.showMore', { n: left }))}</button>`;
+    } else {
+      more.hidden = true;
+      more.innerHTML = '';
+    }
+  }
+
   renderClTableSummary();
   updateClResolveSelBtn();
 }
+
+// Nới thêm 1 đợt dòng cho bảng.
+function clShowMore() {
+  if (!clAnalyze) return;
+  clAnalyze.limit = (Number(clAnalyze.limit) || CL_TBL_PAGE) + CL_TBL_PAGE;
+  renderClTable();
+}
+
 
 // HTML 1 dòng bảng (index = số thứ tự theo thứ tự đang hiển thị).
 function clTableRowHtml(cell, index) {
@@ -2381,7 +2530,7 @@ function clTableRowHtml(cell, index) {
   const addr = (cell.addresses && cell.addresses[0])
     ? `<span class="cl-tbl-addr" title="${histEsc(cell.addresses.join(' · '))}">${histEsc(cell.addresses[0])}</span>`
     : unknown;
-  return `<tr class="${selected ? 'cl-row-sel' : ''}" data-key="${histEsc(cell.key)}">` +
+  return `<tr class="cl-row st-${st.cls}${selected ? ' cl-row-sel' : ''}" data-key="${histEsc(cell.key)}">` +
     `<td class="cl-tbl-num"><input type="checkbox" class="cl-tbl-check" ${selected ? 'checked' : ''} ` +
       `onchange="clToggleRow('${histEsc(cell.key)}', this.checked)"> ${index}</td>` +
     `<td>${histEsc(formatCellId(cell.cellid, cell.enb_id, cell.sector))}<br>` +
@@ -2413,15 +2562,20 @@ function clRowLocHtml(cell) {
 function renderClTableSummary() {
   if (!clAnalyze) return;
   const meta = document.getElementById('clSheetMeta');
-  const done = clAnalyze.rows.filter(c => {
-    const r = clAnalyze.results[c.key];
-    return r && (r.state === 'found' || r.state === 'miss' || r.state === 'unpaid');
-  }).length;
-  const msg = fmtTpl('calllogs.stepDone', {
-    c: clAnalyze.rows.length, r: clAnalyze.totalRows, net: clAnalyze.network || ''
-  }) + (done ? ` · ${done}/${clAnalyze.rows.length}` : '');
+  const s = clCellsSummary();
+  let msg = fmtTpl('calllogs.stepDone', {
+    c: s.total, r: clAnalyze.totalRows, net: clAnalyze.network || ''
+  });
+  // Cùng một nguồn số cho bảng / footer / bản đồ: "4 cell · 3 có kết quả · 1 không ra".
+  if (s.found || s.miss || s.unpaid) {
+    const parts = [];
+    if (s.found) parts.push(fmtTpl('calllogs.sumFound', { n: s.found }));
+    if (s.miss) parts.push(fmtTpl('calllogs.sumMiss', { n: s.miss }));
+    if (s.unpaid) parts.push(fmtTpl('calllogs.sumUnpaid', { n: s.unpaid }));
+    msg += ` — ${parts.join(' · ')}`;
+  }
   if (meta) {
-    meta.innerHTML = `<span><i class="fas fa-file-excel"></i> ${histEsc(clAnalyze.fileName)}</span>` +
+    meta.innerHTML = `<span><i class="fas fa-file-excel"></i> ${histEsc(clAnalyze.fileName || '')}</span>` +
       `<span>${histEsc(msg)}</span>`;
   }
   renderClSheetCount();
@@ -2476,6 +2630,7 @@ function updateClTableRow(key) {
   const tr = document.querySelector(`#clTableBody tr[data-key="${key}"]`);
   if (!cell || !tr) return;
   const st = clRowStatusFor(cell);
+  tr.className = `cl-row st-${st.cls}` + (clAnalyze.selected.has(key) ? ' cl-row-sel' : '');
   const locTd = tr.querySelector('.cl-tbl-loc');
   if (locTd) locTd.innerHTML = clRowLocHtml(cell);
   const stEl = tr.querySelector('.cl-row-status');
@@ -2485,16 +2640,25 @@ function updateClTableRow(key) {
 
 
 // Khối thông báo điểm dưới bảng: ước tính chi phí của các cell đang chọn so với số dư.
-// Tái dùng style/i18n của popup cũ (calllogs.resolveNeed / notEnoughTotal / topupBtn).
+// CHỈ tính các cell CHƯA có kết quả — cell đã tra trong lần nạp này không trừ lại.
 async function renderClSheetResolve() {
   const box = document.getElementById('clSheetResolve');
   const btn = document.getElementById('clResolveSelectedBtn');
   if (!box || !clAnalyze) return;
-  const n = clAnalyze.selected.size;
-  if (!n) { box.hidden = true; box.innerHTML = ''; if (btn) btn.disabled = false; return; }
+  const n = clClSelectedNeed();
+  const free = clClSelectedFree();
+  if (!clAnalyze.selected.size) { box.hidden = true; box.innerHTML = ''; if (btn) btn.disabled = false; return; }
+  if (n <= 0) {
+    // Chọn toàn cell đã có kết quả → không có gì để trừ điểm.
+    box.hidden = false;
+    box.className = 'cl-up-resolve ok';
+    box.innerHTML = `<i class="fas fa-circle-check"></i> ${histEsc(t('calllogs.allResolved'))}`;
+    if (btn) btn.disabled = false;
+    return;
+  }
 
   const cfg = (typeof Auth !== 'undefined' && Auth.getCreditConfig) ? Auth.getCreditConfig() : null;
-  const cost = cfg && Number.isFinite(Number(cfg.cost)) ? Number(cfg.cost) : ((cfg && Number(cfg.default_cost)) || 0);
+  const cost = clCreditCost(cfg);
   let balance = (typeof Auth !== 'undefined' && Auth.refreshCreditBalance)
     ? await Auth.refreshCreditBalance() : null;
   if (balance == null && typeof Auth !== 'undefined' && Auth.getCreditBalance) balance = Auth.getCreditBalance();
@@ -2504,14 +2668,111 @@ async function renderClSheetResolve() {
   box.hidden = false;
   box.className = 'cl-up-resolve' + (enough ? '' : ' warn');
   box.innerHTML = `<i class="fas fa-circle-info"></i> ${histEsc(fmtTpl('calllogs.resolveNeed', { n, c: cost, t: total, b: balance == null ? '?' : balance }))}` +
+    (free > 0 ? ` · <span class="cl-up-reuse">${histEsc(fmtTpl('calllogs.confirmFree', { q: free }))}</span>` : '') +
     (enough ? '' : `<div class="cl-up-warn"><i class="fas fa-triangle-exclamation"></i> ${
       histEsc(fmtTpl('calllogs.notEnoughTotal', { b: balance, n, t: total }))}` +
       ` <a href="/topup.html" style="color:inherit;text-decoration:underline"><i class="fas fa-wallet"></i> ${histEsc(t('calllogs.topupBtn'))}</a></div>`);
   if (btn) btn.disabled = false;
 }
+
+// Giá điểm/cell từ cấu hình Auth (fallback 0).
+function clCreditCost(cfg) {
+  const c = (cfg || ((typeof Auth !== 'undefined' && Auth.getCreditConfig) ? Auth.getCreditConfig() : null)) || {};
+  return Number.isFinite(Number(c.cost)) ? Number(c.cost) : (Number(c.default_cost) || 0);
+}
+
+// Cell đang chọn mà lần tra này PHẢI trả phí (chưa có kết quả trong lần nạp này).
+function clClSelectedNeed() {
+  if (!clAnalyze) return 0;
+  let n = 0;
+  for (const c of clAnalyze.rows) {
+    if (!clAnalyze.selected.has(c.key)) continue;
+    const r = clAnalyze.results[c.key];
+    if (!r || r.state !== 'found') n++;
+  }
+  return n;
+}
+
+// Cell đang chọn đã trả phí (state=found) → tra lại MIỄN PHÍ (server dedup theo batch).
+function clClSelectedFree() {
+  if (!clAnalyze) return 0;
+  let n = 0;
+  for (const c of clAnalyze.rows) {
+    if (!clAnalyze.selected.has(c.key)) continue;
+    const r = clAnalyze.results[c.key];
+    if (r && r.state === 'found') n++;
+  }
+  return n;
+}
+// Modal xác nhận trước khi trừ điểm: chi tiết mới / miễn phí / tổng điểm / số dư.
+// Chỉ gọi resolveClSelected() khi user bấm "Xác nhận tra cứu".
+async function openClConfirmResolveModal() {
+  if (!clAnalyze) return;
+  if (!clAnalyze.selected.size) { showToast(t('calllogs.noSelection'), 'error'); return; }
+  const modal = document.getElementById('clConfirmResolveModal');
+  const body = document.getElementById('clConfirmResolveBody');
+  const okBtn = document.getElementById('clConfirmResolveOk');
+  const cost = clCreditCost();
+  let balance = (typeof Auth !== 'undefined' && Auth.refreshCreditBalance)
+    ? await Auth.refreshCreditBalance() : null;
+  if (balance == null && typeof Auth !== 'undefined' && Auth.getCreditBalance) balance = Auth.getCreditBalance();
+  const n = clClSelectedNeed();
+  const free = clClSelectedFree();
+  const total = n * cost;
+  const enough = n <= 0 || balance == null || balance >= total;
+
+  if (body) {
+    const rows = [];
+    rows.push(`<div class="cl-cfm-row"><span>${histEsc(fmtTpl('calllogs.confirmNew', { n }))}</span><b>${n}</b></div>`);
+    if (free > 0) {
+      rows.push(`<div class="cl-cfm-row free"><span><i class="fas fa-gift"></i> ${histEsc(fmtTpl('calllogs.confirmFree', { q: free }))}</span><b>0</b></div>`);
+    }
+    rows.push(`<div class="cl-cfm-row total"><span>${histEsc(fmtTpl('calllogs.confirmCost', { n, c: cost, t: total }))}</span><b>${total}</b></div>`);
+    if (balance != null) {
+      rows.push(`<div class="cl-cfm-row ${enough ? '' : 'bad'}"><span>${histEsc(fmtTpl('calllogs.confirmBalance', {
+        b: balance, a: Math.max(0, balance - total)
+      }))}</span><b>${balance}</b></div>`);
+    }
+    if (n <= 0) rows.push(`<div class="cl-cfm-note"><i class="fas fa-circle-check"></i> ${histEsc(t('calllogs.allResolved'))}</div>`);
+    if (!enough) {
+      rows.push(`<div class="cl-cfm-note bad"><i class="fas fa-triangle-exclamation"></i> ${
+        histEsc(fmtTpl('calllogs.notEnoughTotal', { b: balance, n, t: total }))}` +
+        ` <a href="/topup.html" style="color:inherit;text-decoration:underline"><i class="fas fa-wallet"></i> ${histEsc(t('calllogs.topupBtn'))}</a></div>`);
+    }
+    body.innerHTML = rows.join('');
+  }
+  if (okBtn) {
+    // Không đủ điểm → nút đổi thành lối nạp điểm thay vì chặn im lặng.
+    okBtn.disabled = false;
+    okBtn.innerHTML = enough
+      ? `<i class="fas fa-satellite-dish"></i> ${histEsc(t('calllogs.confirmOk'))}`
+      : `<i class="fas fa-wallet"></i> ${histEsc(t('calllogs.topupBtn'))}`;
+    okBtn.onclick = enough ? confirmClResolveModal : () => { location.href = '/topup.html'; };
+  }
+  if (modal) modal.classList.add('show');
+}
+
+function closeClConfirmResolveModal() {
+  document.getElementById('clConfirmResolveModal')?.classList.remove('show');
+}
+
+// Bấm "Xác nhận tra cứu" trong modal → đóng modal rồi chạy tra thật.
+function confirmClResolveModal() {
+  closeClConfirmResolveModal();
+  resolveClSelected({ confirmed: true });
+}
+
+// Nút "Tra cứu N" ở footer bảng → mở modal xác nhận (không trừ điểm ngay).
+function resolveClSelectedClick() {
+  if (!clAnalyze) return;
+  if (!clAnalyze.selected.size) { showToast(t('calllogs.noSelection'), 'error'); return; }
+  openClConfirmResolveModal().catch(() => resolveClSelected({ confirmed: true }));
+}
+
 // Tra cứu các cell ĐANG CHỌN theo đúng thứ tự bảng (trên → dưới), lần lượt tới khi
 // hết điểm thì dừng; mỗi dòng tự cập nhật toạ độ/kết quả ngay khi có kết quả.
-async function resolveClSelected() {
+// `opts.confirmed` = user đã xác nhận ở modal.
+async function resolveClSelected(opts) {
   if (!clAnalyze) return;
   const selected = clAnalyze.selected;
   if (!selected.size) { showToast(t('calllogs.noSelection'), 'error'); return; }
@@ -2521,18 +2782,32 @@ async function resolveClSelected() {
   if (btn) btn.disabled = true;
   // Thống kê điểm của lần tra (tích luỹ qua các vòng, cùng shape với luồng cũ để
   // tái dùng calllogs.creditCharged / creditPartial + nút Nạp điểm).
-  const credit = { charged: 0, requested: 0, found: 0, missed: 0, unpaid: 0, balance: null, insufficient: false };
-  const uploadId = 'up' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+  const credit = { charged: 0, requested: 0, found: 0, missed: 0, unpaid: 0, balance: null, insufficient: false, reused: 0 };
+  // uploadId BỀN VỮNG theo nội dung lô (không phải Date.now) → bấm "Tra cứu" lần 2
+  // trong cùng phiên rơi vào CÙNG batch ⇒ server trả toạ độ lại MIỄN PHÍ.
+  const uploadId = clAnalyze.uploadId || clBatchUploadId(clAnalyze.fileName, clAnalyze.rows);
+  clAnalyze.uploadId = uploadId;
   const keyOf = (c) => `${c.mcc}-${c.mnc}-${c.lac}-${c.cellid}`;
   const findCell = (k) => clAnalyze.rows.find(c => c.key === k) || clAnalyze.rows.find(c => canonicalClientKey(c) === k);
 
   try {
-    let batch = clSortedRows().filter(c => selected.has(c.key))
-      .map(c => ({ mcc: c.mcc, mnc: c.mnc, lac: c.lac, cellid: c.cellid, sector: c.sector }));
-    if (!batch.length) return;
+    // Bỏ qua cell ĐÃ có kết quả trong lần nạp này → không gửi lại, không trả phí lại.
+    let batch = clSortedRows().filter(c => {
+      if (!selected.has(c.key)) return false;
+      const r = clAnalyze.results[c.key];
+      return !(r && r.state === 'found');
+    }).map(c => ({ mcc: c.mcc, mnc: c.mnc, lac: c.lac, cellid: c.cellid, sector: c.sector }));
+    if (!batch.length) {
+      showToast(t('calllogs.allResolved'), 'error');
+      renderClTableSummary();
+      return;
+    }
 
+    // Vòng bắt đầu từ số vòng ĐÃ chạy (roundsDone) → ref `batchId:rN` không trùng với
+    // lần tra trước của cùng file, nên kết quả mới vẫn được ghi bút toán đúng.
     const MAX_ROUNDS = 5;
-    for (let round = 0; round < MAX_ROUNDS && batch.length > 0; round++) {
+    const startRound = Number(clAnalyze.roundsDone) || 0;
+    for (let round = startRound; round < startRound + MAX_ROUNDS && batch.length > 0; round++) {
       // Đánh dấu "đang tra" cho cả lô để user thấy tiến trình.
       for (const c of batch) {
         const cell = findCell(keyOf(c)) || clAnalyze.rows.find(c2 => canonicalClientKey(c2) === keyOf(c));
@@ -2541,16 +2816,18 @@ async function resolveClSelected() {
         updateClTableRow(cell.key);
       }
       const resp = await apiRequest('POST', '/api/cells/resolve-batch',
-        { cells: batch, uploadId, fileName: clAnalyze.fileName, roundIdx: round });
+        { cells: batch, uploadId: uploadId, fileName: clAnalyze.fileName, roundIdx: round });
       if (resp && resp.credit) {
         credit.charged += Number(resp.credit.charged) || 0;
         credit.requested += Number(resp.credit.requested) || 0;
         credit.found += Number(resp.credit.found) || 0;
         credit.missed += Number(resp.credit.missed) || 0;
         credit.unpaid = Math.max(credit.unpaid, Number(resp.credit.unpaid) || 0);
+        credit.reused += Number(resp.credit.reused) || 0;
         if (resp.credit.balance != null) credit.balance = resp.credit.balance;
         if (resp.credit.insufficient) credit.insufficient = true;
       }
+      if (resp && resp.batchId) clAnalyze.batchId = resp.batchId;
       if (!resp || !resp.results) break;
 
       const stillPending = [];
@@ -2568,6 +2845,10 @@ async function resolveClSelected() {
             state: 'found', lat: r.lat, lon: r.lon, range: r.range, radio: r.radio,
             sourceLabel: SOURCE_LABELS[r.source] || (r.source || ''), source: r.source
           };
+          // Ghi toạ độ vào chính dòng cell → "Hiển thị trên bản đồ"/lưu phiên dùng lại.
+          cell.lat = r.lat; cell.lng = r.lon; cell.range = r.range;
+          if (!cell.radio && r.radio) cell.radio = r.radio;
+          cell.state = 'found';
           updateClTableRow(cell.key);
         } else {
           stillPending.push(r.key);
@@ -2592,6 +2873,7 @@ async function resolveClSelected() {
           const cell = findCell(k);
           if (!cell) continue;
           clAnalyze.results[cell.key] = { state: 'miss', reason: '' };
+          cell.state = 'miss';
           updateClTableRow(cell.key);
         }
         break;
@@ -2599,6 +2881,9 @@ async function resolveClSelected() {
       const pendingSet = new Set(stillPending);
       batch = batch.filter(c => pendingSet.has(keyOf(c)));
     }
+    clAnalyze.roundsDone = startRound + 1;
+    // Bảng đã có dữ liệu → cho bản đồ vẽ (không hoãn nữa).
+    clMapDeferred = false;
 
     renderClTableSummary();
     showClSheetResolveResult(credit, box);
@@ -2641,15 +2926,24 @@ function plotClTableOnMap() {
   // Ghi vào list đang xem để bản đồ + danh sách dùng chung một nguồn.
   const seen = new Set(myLogsCache.map(r => `${r.mcc}-${r.mnc}-${r.lac}-${r.cellid}`));
   for (const r of rows) {
-    if (!seen.has(`${r.mcc}-${r.mnc}-${r.lac}-${r.cellid}`)) myLogsCache.push(r);
+    if (!seen.has(`${r.mcc}-${r.mnc}-${r.lac}-${r.cellid}`)) { myLogsCache.push(r); seen.add(`${r.mcc}-${r.mnc}-${r.lac}-${r.cellid}`); }
   }
   clMapDeferred = false;
+  clAnalyze.mapShown = true;
   closeClTableOverlay();
   switchTab('calllogs');
   renderCallLogs();
   saveCallSession();
-  showToast(fmtTpl('calllogs.mapAllDone', { n: rows.length }), 'success');
+  // Nói rõ "vẽ được bao nhiêu / còn bao nhiêu chưa có kết quả" — không im lặng
+  // bỏ qua cell miss như trước (user tưởng mất cell).
+  const s = clCellsSummary();
+  if (s.total > rows.length) {
+    showToast(fmtTpl('calllogs.mapAllPartial', { f: rows.length, t: s.total, m: s.total - rows.length }), 'info');
+  } else {
+    showToast(fmtTpl('calllogs.mapAllDone', { n: rows.length }), 'success');
+  }
 }
+
 
 // Kéo-thả file vào dropzone của overlay bảng cell → nạp qua luồng phân tích.
 (function initClSheetDrop() {
@@ -2700,14 +2994,24 @@ function showClSheetResolveResult(credit, box) {
 const SESSION_LOGS_KEY = 'ct_session_logs';
 const SESSION_LOGS_MAX = 2000;
 
+// Lưu phiên: GIỮ NGUYÊN toạ độ + cờ `_charged` / `_fromHistory` (trước đây bị lược bỏ
+// → F5 xong mất kết quả đã trả phí và bị trừ điểm lại).
 function saveCallSession() {
   try {
     if (!myLogsCache.length) return;
+    const rows = myLogsCache.slice(0, SESSION_LOGS_MAX).map(r => ({
+      mcc: r.mcc, mnc: r.mnc, lac: r.lac, cellid: r.cellid, sector: r.sector,
+      lat: r.lat, lon: r.lon, cell_range: r.cell_range, radio: r.radio, source: r.source,
+      timestamp: r.timestamp, network: r.network, action_type: r.action_type,
+      phone_number: r.phone_number, contact_number: r.contact_number,
+      cell_address: r.cell_address, duration: r.duration, batch_id: r.batch_id,
+      _charged: !!r._charged, _fromHistory: !!r._fromHistory, _resolvedOnline: !!r._resolvedOnline
+    }));
     const payload = {
-      v: 1, at: Date.now(),
+      v: 2, at: Date.now(),
       fileName: currentUploadFileName || '',
       batchId: currentOpenBatchId || '',
-      rows: myLogsCache.slice(0, SESSION_LOGS_MAX)
+      rows
     };
     sessionStorage.setItem(SESSION_LOGS_KEY, JSON.stringify(payload));
   } catch (e) { /* quota / chế độ riêng tư: bỏ qua */ }
@@ -2741,6 +3045,29 @@ function restoreChargedFlags() {
     if (charged.has(`${row.mcc}-${row.mnc}-${row.lac}-${row.cellid}`) || charged.has(canonicalClientKey(row))) {
       row._charged = true;
     }
+  }
+}
+
+// Khôi phục toạ độ của các cell ĐÃ TRẢ PHÍ từ phiên đang giữ sau F5: server không
+// lưu toạ độ trong call_logs, nếu không gắn lại thì list mất kết quả và bản đồ trống.
+function restoreSessionCoords() {
+  const sess = loadCallSession();
+  if (!sess || !Array.isArray(sess.rows) || !myLogsCache.length) return;
+  const byKey = new Map();
+  for (const r of sess.rows) {
+    if (!r || (r.lat == null && r.lon == null)) continue;
+    byKey.set(`${r.mcc}-${r.mnc}-${r.lac}-${r.cellid}`, r);
+    byKey.set(canonicalClientKey(r), r);
+  }
+  if (!byKey.size) return;
+  for (const row of myLogsCache) {
+    const hit = byKey.get(`${row.mcc}-${row.mnc}-${row.lac}-${row.cellid}`) || byKey.get(canonicalClientKey(row));
+    if (!hit) continue;
+    if (row.lat == null) {
+      row.lat = hit.lat; row.lon = hit.lon; row.cell_range = hit.cell_range;
+      if (hit.source) row.source = hit.source;
+    }
+    if (hit._charged) row._charged = true;
   }
 }
 
@@ -2805,10 +3132,14 @@ async function loadCallLogs(opts) {
       myLogsCache._restored = false;
       // Phiên mới nhất trên server → đây là phiên đang xem (nút "Xoá phiên" xoá nó).
       currentOpenBatchId = (myLogsCache[0] && myLogsCache[0].batch_id) || '';
+      if (!currentUploadFileName) currentUploadFileName = myLogsCache[0] ? (myLogsCache[0].file_name || '') : '';
       logPageIndex = 1;
       // Server không lưu cờ `_charged` (nó là trạng thái của phiên làm việc) →
       // khôi phục từ sessionStorage để F5 không bị trừ điểm lần 2 cho cùng cell.
       restoreChargedFlags();
+      // Cell đã trả phí trong phiên này → giữ toạ độ từ session (server call_logs
+      // không có cột toạ độ) để không phải tra lại.
+      restoreSessionCoords();
       document.getElementById('logSearchInput').value = '';
       renderCallLogs();
       saveCallSession();
@@ -2858,15 +3189,18 @@ async function resetCallSession() {
 }
 
 // Mở tab Xem rút list từ 1 dòng lịch sử tra cứu hàng loạt.
-// Map shape lookup_history → shape call-log để dùng lại toàn bộ công cụ (lọc/bản đồ/play).
-function openCallLogsFromHistory(rows, fileName) {
-  myLogsCache = (rows || []).map(r => ({
+// Server đã ghép sẵn trạng thái từng cell (found/miss/unpaid) — KHÔNG tự gắn toạ độ
+// nội bộ cho cell chưa trả phí nữa; đồng thời dựng luôn BẢNG cell (overlay) để user
+// thấy đủ số cell của file (trước đây bảng 4 cell, bản đồ chỉ 3).
+async function openCallLogsFromHistory(rows, fileName, batchId) {
+  const arr = Array.isArray(rows) ? rows : [];
+  myLogsCache = arr.filter(r => r.lat != null && r.lng != null).map(r => ({
     mcc: r.mcc, mnc: r.mnc, lac: r.lac, cellid: r.cellid, sector: r.sector,
     lat: r.lat, lon: r.lng, cell_range: r.range,
     radio: r.radio, source: r.source,
-    timestamp: r.created_at, network: r.source === 'local' ? 'CSDL nội bộ' : 'Online',
+    timestamp: r.created_at || '', network: currentUploadFileName || '',
     action_type: '', phone_number: '', contact_number: '', cell_address: '', duration: '',
-    _fromHistory: true, _resolvedOnline: r.source !== 'local'
+    _fromHistory: true, _charged: true, _resolvedOnline: r.source !== 'local'
   }));
   myLogsCache._restored = true;
   myLogsCache._fromHistoryOpened = true;
@@ -2887,7 +3221,35 @@ function openCallLogsFromHistory(rows, fileName) {
   switchTab('calllogs');
   // Không mở popup: hiện ngay kết quả đã tra trước đó (không trừ điểm).
   openClResolveForRestore();
+
+  // Dựng bảng cell từ CÙNG nguồn đã ghép trạng thái ở server → số liệu khớp bản đồ.
+  const cells = await clLoadBatchCells(batchId || currentUploadFileName, 'lookup');
+  if (cells && cells.length) {
+    clAnalyze = clCellsFromSource({
+      cells, fileName: fileName || '', network: '', totalRows: cells.reduce((n, c) => n + (Number(c.rowCount) || 0), 0),
+      batchId: batchId || ''
+    });
+    clSheetStep('table');
+    document.getElementById('clTableOverlay')?.classList.add('show');
+    renderClTable();
+    renderClSheetResolve().catch(() => {});
+  }
   showToast(t('hist.openedAsCallLogs').replace('{n}', myLogsCache.length), 'success');
+}
+
+// Lấy bảng cell của 1 batch từ server. `kind`: 'lookup' (Lịch sử tra cứu) hoặc
+// 'session' (Phiên rút list). Trả mảng cells (rỗng nếu lỗi).
+async function clLoadBatchCells(batchId, kind) {
+  if (!batchId) return [];
+  const base = kind === 'session'
+    ? '/api/call-log-sessions/' + encodeURIComponent(batchId) + '/cells'
+    : '/api/lookup-history/batch/' + encodeURIComponent(batchId) + '/cells';
+  try {
+    const data = await apiRequest('GET', base);
+    return Array.isArray(data && data.cells) ? data.cells : [];
+  } catch (e) {
+    return [];
+  }
 }
 
 // Mở lại dữ liệu phục hồi (từ Lịch sử / phiên đã lưu): hiện NGAY kết quả đã tra
@@ -3601,16 +3963,33 @@ function renderCallLogSessions() {
   }).join('');
 }
 
-// Mở lại 1 phiên đã lưu trong CSDL → hiển thị ở tab Xem rút list.
+// Mở lại 1 phiên đã lưu trong CSDL → hiển thị ở tab Xem rút list + BẢNG cell.
+// Trạng thái từng cell lấy từ server (`/cells`), KHÔNG tự gắn toạ độ nội bộ cho cell
+// chưa trả phí → không rò kết quả và số liệu khớp với màn hình sau khi nạp file.
 async function openCallLogSession(batchId) {
   if (!batchId) return;
   try {
-    const rows = await apiRequest('GET', '/api/call-log-sessions/' + encodeURIComponent(batchId));
+    // Bảng cell (kèm toạ độ CHỈ của cell đã trả phí) + danh sách bản ghi, song song.
+    const [cells, rows] = await Promise.all([
+      clLoadBatchCells(batchId, 'session'),
+      apiRequest('GET', '/api/call-log-sessions/' + encodeURIComponent(batchId))
+    ]);
     const list = Array.isArray(rows) ? rows : [];
-    if (!list.length) { showToast(t('hist.clSessionEmpty'), 'error'); return; }
-    // Map shape call_logs → shape dùng trong tab (giữ nguyên field, đánh dấu nguồn).
-    // Giữ `batch_id` để dòng "phiên đang xem" biết phiên nào + nút xoá phiên hoạt động.
-    myLogsCache = list.map(r => Object.assign({}, r, { _fromHistory: true, batch_id: r.batch_id || batchId }));
+    if (!list.length && !(cells && cells.length)) { showToast(t('hist.clSessionEmpty'), 'error'); return; }
+    // Map shape call_logs → shape dùng trong tab (giữ `batch_id` để nút xoá phiên
+    // hoạt động). Toạ độ lấy từ bảng cell (chỉ cell state=found mới có).
+    const coords = new Map();
+    for (const c of (cells || [])) {
+      if (c.state === 'found' && c.lat != null && c.lng != null) coords.set(c.key, c);
+    }
+    myLogsCache = list.map(r => {
+      const hit = coords.get(canonicalClientKey(r)) || coords.get(`${r.mcc}-${r.mnc}-${r.lac}-${r.cellid}`);
+      return Object.assign({}, r, {
+        lat: hit ? hit.lat : null, lon: hit ? hit.lng : null, cell_range: hit ? hit.range : null,
+        radio: r.radio || (hit && hit.radio) || '', source: hit ? hit.source : '',
+        _charged: !!hit, _fromHistory: true, batch_id: r.batch_id || batchId
+      });
+    });
     myLogsCache._restored = true;
     myLogsCache._fromHistoryOpened = true;
     currentOpenBatchId = batchId;
@@ -3626,6 +4005,20 @@ async function openCallLogSession(batchId) {
     switchTab('calllogs');
     // Phiên đã có toạ độ (hoặc `_fromHistory`) → hiện ngay, không mở popup, không trừ điểm.
     openClResolveForRestore();
+
+    // Mở THẲNG bảng cell (không phải bấm nút): user thấy đủ cell của file kể cả
+    // cell miss / chưa tra — đúng thứ họ vừa nạp.
+    if (cells && cells.length) {
+      clAnalyze = clCellsFromSource({
+        cells, fileName: currentUploadFileName, network: (meta && meta.network) || '',
+        totalRows: (meta && meta.row_count) || 0, batchId
+      });
+      clMapDeferred = false;
+      clSheetStep('table');
+      document.getElementById('clTableOverlay')?.classList.add('show');
+      renderClTable();
+      renderClSheetResolve().catch(() => {});
+    }
     showToast(t('hist.openedAsCallLogs').replace('{n}', myLogsCache.length), 'success');
   } catch (e) {
     showToast('Lỗi: ' + e.message, 'error');

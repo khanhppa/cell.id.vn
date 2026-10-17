@@ -1649,6 +1649,124 @@ app.get('/api/lookup-history', requireAuth, (req, res) => {
   });
 });
 
+// ==========================================================
+// Trạng thái cell của MỘT lần upload (nguồn sự thật duy nhất)
+// ==========================================================
+// Excel (đã lưu trong call_logs) cho biết file có BAO NHIÊU cell; lookup_history
+// cho biết cell nào đã tra, ra kết quả hay miss. Ghép 2 nguồn ở SERVER để client
+// không tự suy ra (trước đây gây lệch số: bảng đếm 4 cell theo file, bản đồ vẽ 3
+// cell có toạ độ; mở từ "Phiên rút list" lại gắn toạ độ nội bộ chưa trả phí).
+//
+// Mỗi cell trả về 1 trong 3 trạng thái:
+//   found   — đã tra RA kết quả (đã trả phí) → có lat/lng/range/source/radio.
+//   miss    — đã tra nhưng không nguồn nào có kết quả.
+//   unpaid  — chưa có bản ghi found (chưa trả phí) → KHÔNG trả toạ độ.
+function buildBatchCellState(userId, batchId) {
+  const q = (sql, params) => new Promise((resolve) => db.all(sql, params, (err, rows) => resolve(err ? [] : (rows || []))));
+  return new Promise(async (resolve) => {
+    try {
+      const [records, hist, batchRow] = await Promise.all([
+        q('SELECT mcc, mnc, lac, cellid, sector, cell_address, action_type, timestamp FROM call_logs WHERE user_id = ? AND batch_id = ?',
+          [userId, batchId]),
+        q(`SELECT h.mcc, h.mnc, h.lac, h.cellid, h.sector, h.lat, h.lng, h.range, h.source, h.found, h.radio
+           FROM lookup_history h
+           JOIN (SELECT MAX(id) AS id FROM lookup_history
+                 WHERE user_id = ? AND batch_id = ?
+                 GROUP BY ifnull(mcc, ''), ifnull(mnc, ''), ifnull(lac, ''), ifnull(cellid, '')) m ON m.id = h.id`,
+          [userId, batchId]),
+        new Promise((res2) => db.get('SELECT file_name, network FROM call_log_batches WHERE user_id = ? AND batch_id = ?',
+          [userId, batchId], (err, row) => res2(err ? null : row)))
+      ]);
+
+      // Alias → trạng thái tra đã biết (short-cellid và ECI trỏ cùng 1 trạm).
+      const histByKey = new Map();
+      for (const h of hist) {
+        const st = {
+          state: h.found && h.lat != null && h.lng != null ? 'found' : 'miss',
+          lat: h.lat, lng: h.lng, range: h.range, source: h.source, radio: h.radio || ''
+        };
+        for (const a of cellAliasKeys(h)) if (!histByKey.has(a)) histByKey.set(a, st);
+      }
+
+      const cells = excelParser.aggregateCellsFromRecords(records, {
+        canonicalKey: canonicalCellKey, inferRadio, radioConfident
+      });
+
+      let totalRows = 0;
+      for (const c of cells) {
+        totalRows += c.rowCount;
+        let st = null;
+        for (const a of cellAliasKeys(c)) { if (histByKey.has(a)) { st = histByKey.get(a); break; } }
+        if (st && st.state === 'found') {
+          c.state = 'found';
+          c.lat = st.lat; c.lng = st.lng; c.range = st.range;
+          c.source = st.source || '';
+          if (!c.radio && normalizeRadio(st.radio)) c.radio = normalizeRadio(st.radio);
+        } else if (st) {
+          c.state = 'miss';
+          c.lat = null; c.lng = null; c.range = null; c.source = '';
+        } else {
+          // Chưa trả phí: KHÔNG gắn toạ độ nội bộ — chỉ báo "có sẵn trong CSDL".
+          c.state = 'unpaid';
+          c.lat = null; c.lng = null; c.range = null; c.source = '';
+        }
+      }
+
+      const summary = { total: cells.length, found: 0, miss: 0, unpaid: 0 };
+      for (const c of cells) summary[c.state]++;
+      resolve({
+        batchId,
+        fileName: (batchRow && batchRow.file_name) || '',
+        network: (batchRow && batchRow.network) || '',
+        totalRows,
+        cells,
+        summary
+      });
+    } catch (e) {
+      console.error('buildBatchCellState error:', e && e.message);
+      resolve({ batchId, fileName: '', network: '', totalRows: 0, cells: [],
+        summary: { total: 0, found: 0, miss: 0, unpaid: 0 } });
+    }
+  });
+}
+
+// GET /api/lookup-history/batch/:batchId/cells - cell của 1 lần tra hàng loạt (owner only)
+// Dùng chung với /api/call-log-sessions/:batchId/cells để mọi đường mở đều ra CÙNG
+// một bảng, cùng số liệu (không còn "4 cell" ở bảng và "3 cell" ở bản đồ).
+app.get('/api/lookup-history/batch/:batchId/cells', requireAuth, async (req, res) => {
+  try {
+    const data = await buildBatchCellState(req.user.id, req.params.batchId);
+    // Mở từ Lịch sử tra cứu: có thể là batch của luồng Excel (có call_logs) hoặc
+    // batch ghi từ luồng "tra cứu danh sách" cũ (chỉ có lookup_history).
+    if (!data.cells.length) {
+      const rows = await new Promise((resolve) => db.all(
+        'SELECT * FROM lookup_history WHERE user_id = ? AND batch_id = ? ORDER BY id ASC',
+        [req.user.id, req.params.batchId], (err, r) => resolve(err ? [] : (r || []))));
+      return res.json({
+        batchId: req.params.batchId, fileName: '', network: '', totalRows: rows.length,
+        cells: rows.map(r => ({
+          key: canonicalCellKey(r), mcc: r.mcc, mnc: r.mnc, lac: r.lac, cellid: r.cellid,
+          sector: r.sector || '', rowCount: 1, firstTs: r.created_at || '', lastTs: '',
+          radio: r.radio || '', addresses: [],
+          state: r.found && r.lat != null ? 'found' : 'miss',
+          lat: r.found && r.lat != null ? r.lat : null,
+          lng: r.found && r.lng != null ? r.lng : null,
+          range: r.range, source: r.source || ''
+        })),
+        summary: {
+          total: rows.length,
+          found: rows.filter(r => r.found && r.lat != null).length,
+          miss: rows.filter(r => !(r.found && r.lat != null)).length,
+          unpaid: 0
+        }
+      });
+    }
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/lookup-history/batch/:batchId - all rows of one batch (owner only)
 // Trùng kết quả (cùng mcc-mnc-lac-cellid-sector) → chỉ trả 1 dòng, giữ bản mới
 // nhất, để danh sách chi tiết khớp với cell_count đã đếm theo cell duy nhất.
@@ -2382,6 +2500,21 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
   const memo = new Map();
   const historyItems = [];
 
+  // DEDUP THEO BATCH (khoá = batchId): cell đã tra RA kết quả trong ĐÚNG batch này
+  // trước đó (vd. bấm "Tra cứu" lần 2, hoặc mở lại phiên rồi tra tiếp) được trả
+  // toạ độ lại MIỄN PHÍ — không trừ điểm lần nữa. Đọc TRƯỚC khi logLookups() ghi
+  // lô hiện tại, nếu không mọi cell vừa tra sẽ bị coi là "đã trả phí từ trước".
+  // Key dùng cellAliasKeys ⇒ short-cellid và ECI của cùng 1 trạm trúng nhau.
+  const chargedBefore = new Set();
+  if (userId && creditOn) {
+    try {
+      const rows = await new Promise((resolve) => db.all(
+        'SELECT mcc, mnc, lac, cellid FROM lookup_history WHERE user_id = ? AND batch_id = ? AND found = 1',
+        [userId, batchId], (err, r) => resolve(err ? [] : (r || []))));
+      for (const r of rows) for (const a of cellAliasKeys(r)) chargedBefore.add(a);
+    } catch (e) { /* không chặn tra vì lỗi dedup */ }
+  }
+
   // Phase 1: local pass (always first, no online budget consumed).
   for (const c of cells) {
     const key = `${c.mcc}-${c.mnc}-${c.lac}-${c.cellid}`;
@@ -2574,26 +2707,53 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
   // `ref = chargeRef` (batchId + số vòng) → retry cùng vòng không bị trừ 2 lần,
   // nhưng vòng kế tiếp vẫn được trừ đúng số cell tra thêm.
   const foundCount = historyItems.filter(h => h.found).length;
+  // Số cell THỰC SỰ MỚI được tra ra trong batch này (chưa từng trả phí) — chỉ phần
+  // này mới bị trừ điểm. Cell tra lại trong cùng batch (bấm Tra cứu lần 2 sau khi
+  // F5 / mở lại phiên) trả toạ độ lại miễn phí.
+  // Dedup trong CHÍNH lô gửi lên: 1 physical cell gửi nhiều alias (short-cellid +
+  // ECI) chỉ tính 1 lần trả phí.
+  const isNewFoundItem = (it) => {
+    if (!it || !it.found) return false;
+    const aliases = cellAliasKeys(it);
+    if (aliases.some(a => chargedBefore.has(a))) return false;
+    for (const a of aliases) chargedBefore.add(a);   // chốt cho các item sau
+    return true;
+  };
+  const newFound = historyItems.reduce((n, it) => n + (isNewFoundItem(it) ? 1 : 0), 0);
+  const reusedFound = Math.max(0, foundCount - newFound);
   let creditInfo = null;
   let affordable = foundCount;
   if (creditOn && creditCost > 0 && foundCount > 0) {
     try {
-      const charge = await credits.chargeLookupPartial(userId, foundCount, chargeRef,
-        `Tra cứu lô ${foundCount} cell (${fileName || 'upload'})`);
-      affordable = Number.isFinite(Number(charge.charged)) ? Number(charge.charged) : foundCount;
-      // Retry cùng vòng (duplicate) → số cell đã trả phí tính ở lần trước, coi như
-      // toàn bộ found đã trả phí để client không ẩn oan kết quả.
-      if (charge.duplicate) affordable = foundCount;
-      creditInfo = {
-        balance: charge.balance, charged: charge.charged, requested: foundCount,
-        cost: creditCost, insufficient: !!charge.insufficient, duplicate: !!charge.duplicate
-      };
+      if (newFound <= 0) {
+        // Toàn bộ cell ra kết quả đã trả phí trong batch này → không ghi bút toán.
+        creditInfo = {
+          balance: await credits.getBalance(userId), charged: 0, requested: 0,
+          cost: creditCost, insufficient: false, duplicate: false
+        };
+        affordable = foundCount;
+      } else {
+        const charge = await credits.chargeLookupPartial(userId, newFound, chargeRef,
+          `Tra cứu lô ${newFound} cell (${fileName || 'upload'})`);
+        affordable = Number.isFinite(Number(charge.charged)) ? Number(charge.charged) : newFound;
+        // Retry cùng vòng (duplicate) → số cell đã trả phí tính ở lần trước, coi như
+        // toàn bộ found đã trả phí để client không ẩn oan kết quả.
+        if (charge.duplicate) affordable = foundCount;
+        creditInfo = {
+          balance: charge.balance, charged: charge.charged, requested: newFound,
+          cost: creditCost, insufficient: !!charge.insufficient, duplicate: !!charge.duplicate
+        };
+      }
     } catch (e) {
       console.error('batch charge failed:', e.message);
       affordable = 0;
     }
   } else if (creditOn && creditCost > 0) {
     creditInfo = { balance: await credits.getBalance(userId), charged: 0, requested: 0, cost: creditCost };
+  }
+  if (creditInfo) {
+    creditInfo.reused = reusedFound;      // cell trả lại toạ độ miễn phí (đã trả phí trong batch)
+    creditInfo.newCells = newFound;       // cell mới được trả phí ở lần này
   }
 
   // Cờ `charged` theo từng cell, gán theo THỨ TỰ TRA (đầu → cuối): chỉ `affordable`
@@ -3425,6 +3585,19 @@ app.get('/api/call-log-sessions', requireAuth, (req, res) => {
       res.json({ data: rows || [], total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) });
     });
   });
+});
+
+// GET /api/call-log-sessions/:batchId/cells - bảng cell của 1 phiên (owner only).
+// CÙNG shape với /api/lookup-history/batch/:batchId/cells → client dùng chung 1
+// pipeline dựng bảng. Cell chưa tra (unpaid) KHÔNG kèm toạ độ nội bộ để không rò
+// kết quả chưa trả phí.
+app.get('/api/call-log-sessions/:batchId/cells', requireAuth, async (req, res) => {
+  try {
+    const data = await buildBatchCellState(req.user.id, req.params.batchId);
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // GET /api/call-log-sessions/:batchId - toàn bộ bản ghi của 1 phiên (owner only).

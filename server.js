@@ -1608,7 +1608,8 @@ app.get('/api/lookup-history', requireAuth, (req, res) => {
     SELECT h.id, 'single' AS mode, h.mcc, h.mnc, h.lac, h.cellid, h.sector, h.lat, h.lng,
            h.range, h.source, h.found, NULL AS batch_id, 1 AS cell_count,
            CASE WHEN h.found = 1 THEN 1 ELSE 0 END AS found_count, NULL AS file_name,
-           h.radio, h.created_at, h.created_at AS sort_at, 1 AS repeat_count
+           h.radio, h.created_at, h.created_at AS sort_at, 1 AS repeat_count,
+           NULL AS row_count, NULL AS network, NULL AS batch_cell_count
     FROM lookup_history h
     WHERE h.user_id = ? AND h.mode = 'single'
       AND h.id = (
@@ -1623,9 +1624,14 @@ app.get('/api/lookup-history', requireAuth, (req, res) => {
     UNION ALL
     SELECT h.id, 'batch' AS mode, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
            NULL, NULL, 0, b.batch_id, b.cell_count, b.found_count, b.file_name,
-           h.radio, b.created_at, b.created_at AS sort_at, 1 AS repeat_count
+           h.radio, b.created_at, b.created_at AS sort_at, 1 AS repeat_count,
+           cb.row_count AS row_count, cb.network AS network, cb.cell_count AS batch_cell_count
     FROM lookup_batches b
-    JOIN lookup_history h ON h.id = (
+    LEFT JOIN call_log_batches cb ON cb.batch_id = b.batch_id AND cb.user_id = b.user_id
+    -- Phải LEFT JOIN: phiên tra theo list mà chưa ghi được dòng lookup_history nào
+    -- (mất kết nối / bị dọn) VẪN phải hiện trong danh sách. Trước đây JOIN (inner)
+    -- làm cả 17 phiên của một user biến mất khỏi tab Lịch sử dù lookup_batches còn.
+    LEFT JOIN lookup_history h ON h.id = (
       SELECT MAX(id) FROM lookup_history WHERE batch_id = b.batch_id AND user_id = b.user_id
     )
     WHERE b.user_id = ?`;
@@ -1665,7 +1671,7 @@ function buildBatchCellState(userId, batchId) {
   const q = (sql, params) => new Promise((resolve) => db.all(sql, params, (err, rows) => resolve(err ? [] : (rows || []))));
   return new Promise(async (resolve) => {
     try {
-      const [records, hist, batchRow] = await Promise.all([
+      const [records, hist, batchRow, lookupRow] = await Promise.all([
         q('SELECT mcc, mnc, lac, cellid, sector, cell_address, action_type, timestamp FROM call_logs WHERE user_id = ? AND batch_id = ?',
           [userId, batchId]),
         q(`SELECT h.mcc, h.mnc, h.lac, h.cellid, h.sector, h.lat, h.lng, h.range, h.source, h.found, h.radio
@@ -1674,9 +1680,24 @@ function buildBatchCellState(userId, batchId) {
                  WHERE user_id = ? AND batch_id = ?
                  GROUP BY ifnull(mcc, ''), ifnull(mnc, ''), ifnull(lac, ''), ifnull(cellid, '')) m ON m.id = h.id`,
           [userId, batchId]),
-        new Promise((res2) => db.get('SELECT file_name, network FROM call_log_batches WHERE user_id = ? AND batch_id = ?',
+        new Promise((res2) => db.get('SELECT file_name, network, resolved_cells, session_cells, cell_count, row_count, created_at FROM call_log_batches WHERE user_id = ? AND batch_id = ?',
+          [userId, batchId], (err, row) => res2(err ? null : row))),
+        // Phiên tra theo list ghi metadata ở lookup_batches (tên file / số cell / thời gian)
+        // — call_log_batches có thể không có dòng nào (phiên tạo từ bảng cell) → fallback.
+        new Promise((res2) => db.get('SELECT file_name, cell_count, found_count, created_at FROM lookup_batches WHERE user_id = ? AND batch_id = ?',
           [userId, batchId], (err, row) => res2(err ? null : row)))
       ]);
+
+      // Cell đã tra được & lưu vào phiên (resolved_cells): người mở phiên ở máy khác
+      // vẫn thấy kết quả. CHỈ cell found mới nằm ở đây → không rò toạ độ chưa trả phí.
+      const savedByKey = new Map();
+      try {
+        const saved = JSON.parse((batchRow && batchRow.resolved_cells) || '[]');
+        for (const s of (Array.isArray(saved) ? saved : [])) {
+          if (!s || s.lat == null || s.lng == null) continue;
+          for (const a of cellAliasKeys(s)) if (!savedByKey.has(a)) savedByKey.set(a, s);
+        }
+      } catch (e) { /* JSON hỏng → bỏ qua, vẫn dùng lookup_history */ }
 
       // Alias → trạng thái tra đã biết (short-cellid và ECI trỏ cùng 1 trạm).
       const histByKey = new Map();
@@ -1692,11 +1713,87 @@ function buildBatchCellState(userId, batchId) {
         canonicalKey: canonicalCellKey, inferRadio, radioConfident
       });
 
+      // ── Fallback 1: danh sách cell ĐẦY ĐỦ client đã lưu ở phiên ────────────
+      // (kể cả cell CHƯA tra). Ưu tiên hơn lookup_history vì giữ đúng số cell gốc.
+      if (!cells.length && batchRow && batchRow.session_cells) {
+        let saved = [];
+        try { saved = JSON.parse(batchRow.session_cells); } catch (e) { saved = []; }
+        for (const s of (Array.isArray(saved) ? saved : [])) {
+          if (!s) continue;
+          cells.push({
+            key: canonicalCellKey(s),
+            mcc: s.mcc, mnc: s.mnc, lac: s.lac, cellid: s.cellid,
+            sector: s.sector == null ? '' : s.sector,
+            rowCount: Math.max(0, parseInt(s.rowCount, 10) || 0),
+            firstTs: '', lastTs: '',
+            radio: normalizeRadio(s.radio) || inferRadio(s.cellid, s.sector, null),
+            addresses: [],
+            state: null, lat: null, lng: null, range: null, source: ''
+          });
+        }
+      }
+
+      // ── Fallback 2: phiên KHÔNG có call_logs và KHÔNG có session_cells ──────
+      // Luồng "Tra cứu danh sách Excel" cũ chỉ ghi lookup_history + lookup_batches
+      // (không lưu call_logs từng dòng) ⇒ `cells` rỗng ⇒ tab Lịch sử báo "Không
+      // tìm thấy phiên — phiên có thể đã bị xoá" dù phiên vẫn còn. Dựng cell từ
+      // lookup_history (mỗi dòng = 1 cell đã tra).
+      if (!cells.length && hist.length) {
+        for (const h of hist) {
+          const found = h.found && h.lat != null && h.lng != null;
+          cells.push({
+            key: canonicalCellKey(h),
+            mcc: h.mcc, mnc: h.mnc, lac: h.lac, cellid: h.cellid,
+            sector: h.sector == null ? '' : h.sector,
+            rowCount: 1, firstTs: '', lastTs: '',
+            radio: normalizeRadio(h.radio) || inferRadio(h.cellid, h.sector, null),
+            addresses: [],
+            state: found ? 'found' : 'miss',
+            lat: found ? h.lat : null,
+            lng: found ? h.lng : null,
+            range: found ? h.range : null,
+            source: found ? (h.source || '') : ''
+          });
+        }
+      }
+
+      // ── Fallback 3: phiên CHỈ còn metadata (lookup_batches.cell_count) ──────
+      // Phiên tra theo list rất cũ: lookup_history đã bị dọn, chưa có session_cells,
+      // không có call_logs. Trước đây `cells` rỗng → client báo "Không có phiên làm
+      // việc" và nút Xoá trông như không chạy. Dựng đúng số cell từ metadata để bảng
+      // mở được (tất cả ở trạng thái "chưa tra" — KHÔNG bịa toạ độ).
+      if (!cells.length) {
+        const nMeta = Math.min(2000, Math.max(
+          Number(lookupRow && lookupRow.cell_count) || 0,
+          Number(batchRow && batchRow.cell_count) || 0,
+          hist.length
+        ));
+        for (let i = 0; i < nMeta; i++) {
+          cells.push({
+            key: `${batchId}#${i + 1}`,
+            mcc: '', mnc: '', lac: '', cellid: '', sector: '',
+            rowCount: 1, firstTs: '', lastTs: '', radio: '',
+            addresses: [], placeholder: true,
+            state: 'unpaid', lat: null, lng: null, range: null, source: ''
+          });
+        }
+      }
+
       let totalRows = 0;
+      // Phiên dựng từ lookup_history: mỗi dòng là 1 cell, số "dòng dữ liệu" = số cell
+      // (không có call_logs để đếm dòng gốc) → dùng đúng số cell để không hiện "0 dòng".
+      const fromHistoryOnly = !records.length && cells.length > 0;
       for (const c of cells) {
         totalRows += c.rowCount;
         let st = null;
         for (const a of cellAliasKeys(c)) { if (histByKey.has(a)) { st = histByKey.get(a); break; } }
+        // Phiên đã lưu toạ độ (mở lại ở máy khác) → coi như found, miễn phí tra lại.
+        if (!(st && st.state === 'found')) {
+          for (const a of cellAliasKeys(c)) {
+            const sv = savedByKey.get(a);
+            if (sv) { st = { state: 'found', lat: sv.lat, lng: sv.lng, range: sv.range, source: sv.source, radio: sv.radio }; break; }
+          }
+        }
         if (st && st.state === 'found') {
           c.state = 'found';
           c.lat = st.lat; c.lng = st.lng; c.range = st.range;
@@ -1714,17 +1811,21 @@ function buildBatchCellState(userId, batchId) {
 
       const summary = { total: cells.length, found: 0, miss: 0, unpaid: 0 };
       for (const c of cells) summary[c.state]++;
+      if (fromHistoryOnly) totalRows = cells.length;
       resolve({
         batchId,
-        fileName: (batchRow && batchRow.file_name) || '',
+        fileName: (batchRow && batchRow.file_name) || (lookupRow && lookupRow.file_name) || '',
         network: (batchRow && batchRow.network) || '',
+        createdAt: (batchRow && batchRow.created_at) || (lookupRow && lookupRow.created_at) || '',
         totalRows,
         cells,
+        // Toạ độ đã trả phí lưu theo phiên — client dùng để giữ marker khi mở lại.
+        resolvedCells: Array.from(savedByKey.values()),
         summary
       });
     } catch (e) {
       console.error('buildBatchCellState error:', e && e.message);
-      resolve({ batchId, fileName: '', network: '', totalRows: 0, cells: [],
+      resolve({ batchId, fileName: '', network: '', createdAt: '', totalRows: 0, cells: [],
         summary: { total: 0, found: 0, miss: 0, unpaid: 0 } });
     }
   });
@@ -1735,15 +1836,19 @@ function buildBatchCellState(userId, batchId) {
 // một bảng, cùng số liệu (không còn "4 cell" ở bảng và "3 cell" ở bản đồ).
 app.get('/api/lookup-history/batch/:batchId/cells', requireAuth, async (req, res) => {
   try {
+    // buildBatchCellState đã tự fallback (session_cells → lookup_history) nên thường
+    // là đủ. Nhánh dưới chỉ dành cho phiên rất cũ: không có call_logs, không có
+    // session_cells VÀ lookup_history cũng rỗng (dữ liệu đã bị xoá) → trả rỗng.
     const data = await buildBatchCellState(req.user.id, req.params.batchId);
-    // Mở từ Lịch sử tra cứu: có thể là batch của luồng Excel (có call_logs) hoặc
-    // batch ghi từ luồng "tra cứu danh sách" cũ (chỉ có lookup_history).
     if (!data.cells.length) {
       const rows = await new Promise((resolve) => db.all(
         'SELECT * FROM lookup_history WHERE user_id = ? AND batch_id = ? ORDER BY id ASC',
         [req.user.id, req.params.batchId], (err, r) => resolve(err ? [] : (r || []))));
       return res.json({
-        batchId: req.params.batchId, fileName: '', network: '', totalRows: rows.length,
+        batchId: req.params.batchId,
+        fileName: data.fileName || '', network: data.network || '',
+        totalRows: data.totalRows || rows.length,
+        resolvedCells: data.resolvedCells || [],
         cells: rows.map(r => ({
           key: canonicalCellKey(r), mcc: r.mcc, mnc: r.mnc, lac: r.lac, cellid: r.cellid,
           sector: r.sector || '', rowCount: 1, firstTs: r.created_at || '', lastTs: '',
@@ -2470,7 +2575,18 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
   const roundNo = Number.isFinite(Number(roundIdx)) ? Math.max(0, Math.floor(Number(roundIdx))) : 0;
   const chargeRef = `${batchId}:r${roundNo}`;
   const userId = req.user ? req.user.id : null;
+  // Đo thời gian từng pha (bật bằng CT_DEBUG_RESOLVE=1) — để biết phần nào chậm khi
+  // file Excel lớn, không log gì khi tắt.
+  const debugResolve = process.env.CT_DEBUG_RESOLVE === '1';
+  let phaseAt = Date.now(), phaseT0 = Date.now();
+  const mark = (label) => {
+    if (!debugResolve) return;
+    const t = Date.now();
+    console.log(`[resolve-batch] ${label}: ${t - phaseAt} ms (từ đầu: ${t - phaseT0} ms, cells=${cells.length})`);
+    phaseAt = t;
+  };
   const onlineSources = await getEnabledOnlineSources();
+  mark('sources');
   const results = [];
   const MAX_ONLINE = parseInt(await getSetting('max_online_resolve', '50'), 10);
   const maxOnline = Number.isFinite(MAX_ONLINE) && MAX_ONLINE > 0 ? MAX_ONLINE : 0;
@@ -2481,6 +2597,7 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
   // tránh đốt quota các nguồn online rồi mới phát hiện user hết điểm.
   const creditOn = await credits.isEnabled();
   const creditCost = await credits.getCost();
+  mark('credits');
   if (creditOn && creditCost > 0) {
     const bal = await credits.getBalance(userId);
     if (bal !== null && bal < creditCost) {
@@ -2494,28 +2611,54 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
   // Pre-fetch keys needed for the enabled source types
   const enabledTypes = new Set(onlineSources.map(s => s.type));
   const ocidKey = enabledTypes.has('opencellid') ? await getOpenCellIDKey() : '';
+  mark('keys');
 
   // memo: alias key -> resolved result. Prevents duplicate online requests when the
   // same physical cell appears via different aliases (raw short vs ECI).
   const memo = new Map();
   const historyItems = [];
 
-  // DEDUP THEO BATCH (khoá = batchId): cell đã tra RA kết quả trong ĐÚNG batch này
-  // trước đó (vd. bấm "Tra cứu" lần 2, hoặc mở lại phiên rồi tra tiếp) được trả
-  // toạ độ lại MIỄN PHÍ — không trừ điểm lần nữa. Đọc TRƯỚC khi logLookups() ghi
-  // lô hiện tại, nếu không mọi cell vừa tra sẽ bị coi là "đã trả phí từ trước".
+  // DEDUP THEO BATCH (khoá = batchId):
+  //  1) lookup_history: cell đã tra RA kết quả trong ĐÚNG batch này trước đó (bấm
+  //     "Tra cứu" lần 2, mở lại phiên rồi tra tiếp) → trả toạ độ lại MIỄN PHÍ.
+  //     Đọc TRƯỚC khi logLookups() ghi lô hiện tại, nếu không mọi cell vừa tra sẽ bị
+  //     coi là "đã trả phí từ trước".
+  //  2) call_log_batches.resolved_cells: toạ độ client đã đẩy về phiên. lookup_history
+  //     có thể bị xoá / chưa kịp ghi (đóng tab giữa chừng) nhưng toạ độ đã trả phí vẫn
+  //     nằm ở đây → cũng phải coi là đã trả phí, nếu không user bị trừ điểm lần 2.
   // Key dùng cellAliasKeys ⇒ short-cellid và ECI của cùng 1 trạm trúng nhau.
-  const chargedBefore = new Set();
+  // Dedup theo PHYSICAL cell (canonical/chỉ ECI) chứ không theo `cellAliasKeys`:
+  // alias kiểu `mcc-mnc-lac-<ECI>` vô tình trùng với cell ECI KHÁC nếu file có cả
+  // dạng ngắn lẫn ECI. Trước đây Set alias làm 1 cell thật bị coi là "đã trả phí"
+  // chỉ vì hàng xóm cùng LAC có ECI = giá trị short-cellid → **không trừ điểm**.
+  const chargedBefore = chargeKeySet();
   if (userId && creditOn) {
     try {
-      const rows = await new Promise((resolve) => db.all(
-        'SELECT mcc, mnc, lac, cellid FROM lookup_history WHERE user_id = ? AND batch_id = ? AND found = 1',
-        [userId, batchId], (err, r) => resolve(err ? [] : (r || []))));
-      for (const r of rows) for (const a of cellAliasKeys(r)) chargedBefore.add(a);
+      const [rows, bRow] = await Promise.all([
+        new Promise((resolve) => db.all(
+          'SELECT mcc, mnc, lac, cellid FROM lookup_history WHERE user_id = ? AND batch_id = ? AND found = 1',
+          [userId, batchId], (err, r) => resolve(err ? [] : (r || [])))),
+        new Promise((resolve) => db.get(
+          'SELECT resolved_cells FROM call_log_batches WHERE user_id = ? AND batch_id = ?',
+          [userId, batchId], (err, r) => resolve(err ? null : r)))
+      ]);
+      for (const r of rows) addChargeKey(chargedBefore, r);
+      let saved = [];
+      try { saved = JSON.parse((bRow && bRow.resolved_cells) || '[]'); } catch (e) { saved = []; }
+      for (const s of (Array.isArray(saved) ? saved : [])) {
+        if (!s || s.lat == null || s.lng == null) continue;
+        addChargeKey(chargedBefore, s);
+      }
     } catch (e) { /* không chặn tra vì lỗi dedup */ }
   }
+  mark('dedup-before');
 
   // Phase 1: local pass (always first, no online budget consumed).
+  // Tra CSDL nội bộ bằng 1 câu SELECT theo lô (trước đây gọi probeCellRow cho TỪNG
+  // cell ⇒ file vài trăm cell = vài trăm query tuần tự, đây là phần chậm nhất của
+  // "Tra cứu").
+  const localRowByAlias = await prefetchLocalRows(cells, chargedBefore);
+  mark('prefetch-local');
   for (const c of cells) {
     const key = `${c.mcc}-${c.mnc}-${c.lac}-${c.cellid}`;
     const canon = canonicalCellKey(c);
@@ -2525,11 +2668,14 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
     for (const a of aliases) { if (memo.has(a)) { reused = memo.get(a); break; } }
     if (reused !== null) {
       results.push({ key, ...reused });
-      historyItems.push({ ...c, lat: reused.lat, lng: reused.lon, range: reused.range, source: reused.source, found: !!reused.lat, radio: reused.radio || inferRadio(c.cellid, c.sector, c.radio) });
+      historyItems.push({ ...c, lat: reused.lat, lng: reused.lon, range: reused.range, source: reused.source, found: !!reused.lat, radio: reused.radio || inferRadio(c.cellid, c.sector, c.radio), reusedCharge: reused.reusedCharge });
       continue;
     }
 
-    const row = await probeCellRow({ mcc: c.mcc, mnc: c.mnc, lac: c.lac, cellid: c.cellid, sector: c.sector });
+    let row = pickLocalRow(c, localRowByAlias);
+    // Cache chưa có (vd. dòng vừa ghi ở vòng trước, hoặc LAC lưu khác dạng) → tra
+    // thẳng bằng index rồi nhớ lại cho các cell cùng LAC trong vòng này.
+    if (!row) row = await probeMissingLocally(c, localRowByAlias);
     if (row && row.lat) {
       const r = { source: 'local', lat: row.lat, lon: row.lng, range: row.range, radio: normalizeRadio(row.radio), description: row.description };
       for (const a of aliases) memo.set(a, r);
@@ -2543,6 +2689,7 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
   }
 
   // Phase 2: online pass (budget-limited). Only cells still unresolved.
+  mark('phase1-local');
   let hasMore = false;
   for (let i = 0; i < cells.length; i++) {
     const c = cells[i];
@@ -2555,7 +2702,7 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
     for (const a of aliases) { if (memo.has(a)) { reused = memo.get(a); break; } }
     if (reused !== null) {
       results[i] = { key: r.key, ...reused };
-      historyItems[i] = { ...c, lat: reused.lat, lng: reused.lon, range: reused.range, source: reused.source, found: !!reused.lat, radio: reused.radio || inferRadio(c.cellid, c.sector, c.radio) };
+      historyItems[i] = { ...c, lat: reused.lat, lng: reused.lon, range: reused.range, source: reused.source, found: !!reused.lat, radio: reused.radio || inferRadio(c.cellid, c.sector, c.radio), reusedCharge: reused.reusedCharge };
       continue;
     }
 
@@ -2633,6 +2780,7 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
   }
 
   // Phase 3: Google Geolocation cho các cell MISS hết nguồn per-cell.
+  mark('phase2-online');
   // Google trả 1 toạ độ ước lượng cho CẢ TẬP cell (multilateration) — không phải
   // toạ độ riêng từng trạm — nên toạ độ nhận được gán chung cho mọi cell trong nhóm,
   // với `range = accuracy` do Google báo. Gom cell thành nhóm ≤ max_google_per_batch
@@ -2698,7 +2846,9 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
 
   for (const r of results) delete r.pending;
 
+  mark('phase3-google');
   logLookups(userId, 'batch', batchId, historyItems, fileName);
+  mark('log-lookups');
 
   // Trừ điểm theo SỐ LẦN TRA RA KẾT QUẢ (không tính miss), 1 bút toán cho cả lô.
   // Chỉ trừ trong khả năng số dư (partial charge) — hết điểm giữa lô thì chỉ trả
@@ -2714,9 +2864,12 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
   // ECI) chỉ tính 1 lần trả phí.
   const isNewFoundItem = (it) => {
     if (!it || !it.found) return false;
-    const aliases = cellAliasKeys(it);
-    if (aliases.some(a => chargedBefore.has(a))) return false;
-    for (const a of aliases) chargedBefore.add(a);   // chốt cho các item sau
+    const k = chargeKey(it);
+    // Cell vừa được trả lại từ memo ở phase 1/2 (đã trả phí TRƯỚC lần resolve này)
+    // → miễn phí. Cờ đi kèm item nên không phụ thuộc thứ tự duyệt của `results`.
+    if (it.reusedCharge) return false;
+    if (chargedBefore.has(k)) return false;
+    chargedBefore.add(k);   // chốt cho các item sau
     return true;
   };
   const newFound = historyItems.reduce((n, it) => n + (isNewFoundItem(it) ? 1 : 0), 0);
@@ -2785,6 +2938,7 @@ app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
   }
 
   res.json({ results, onlineLookups: onlineCount, batchId, hasMore, pending: hasMore, credit: creditInfo });
+  mark('charged+responded');
 });
 
 // Canonical lookup key: collapse short-cellid / ECI aliases that point to the same
@@ -2811,6 +2965,114 @@ function cellAliasKeys(c) {
   } catch (e) { /* keep raw key */ }
   return [...keys];
 }
+
+// ============================================================
+// Tra CSDL nội bộ theo LÔ (thay vì N query tuần tự)
+// ============================================================
+// `probeCellRow` cũ chạy 1 query/cell và `await` tuần tự trong phase 1 ⇒ file 300
+// cell = 300 lượt round-trip SQLite. Dưới đây gom tất cả cell cần tra thành vài câu
+// ============================================================
+// Tra CSDL nội bộ theo LÔ (thay vì N query tuần tự)
+// ============================================================
+// `probeCellRow` cũ chạy 1 query/cell và `await` tuần tự trong phase 1 ⇒ file vài
+// trăm cell = vài trăm lượt query. Đo trên DB thật (251k dòng, `lac`/`cellid` là
+// TEXT) thì: `lac = ? AND cellid = ?` một mình KHÔNG dùng được unique index (30-50ms
+// mỗi lần!) nên cách cũ rất chậm; `lac IN (...)` / `mcc IN (...)` / `cellid % 100`
+// đều full-scan (chậm hơn cả cách cũ). Cách nhanh nhất là gộp nhiều khoá vào 1 câu
+// SELECT dạng row-value (giữ được index seek, ~0.4 ms cho 400 khoá):
+//   WHERE (lac, cellid) IN (VALUES (?, ?), (?, ?), ...)
+// `mcc` không đưa vào điều kiện (mcc=452 phủ gần như toàn bảng, thêm vào chỉ làm
+// SQLite bỏ index) — lọc mcc ở JS sau khi có kết quả.
+const LOCAL_PREFETCH_MAX_KEYS = 400;   // số khoá (lac, cellid) mỗi câu SELECT
+
+// Tra trước toạ độ ĐÃ CÓ trong CSDL nội bộ cho cả lô.
+// Trả Map `lac|cellid` → row (kèm `reusedCharge` = cell đã trả phí trong batch này
+// nên lần này trả lại MIỄN PHÍ). Chỉ đọc DB, không đụng điểm.
+async function prefetchLocalRows(cells, chargedBefore) {
+  // Dòng sinh ra GIỮA lần resolve (storeOnlineCell của cell trước) không được coi là
+  // "đã có sẵn" → chỉ lấy rowid ≤ maxId.
+  const maxId = await new Promise((resolve) => db.get(
+    'SELECT IFNULL(MAX(rowid), 0) AS id FROM cells',
+    (err, r) => resolve(err || !r ? 0 : Number(r.id) || 0)));
+  const out = new Map();
+  // khoá (lac, cellid) cần tra: giữ cả dạng gốc và dạng số của lac (DB lưu TEXT).
+  const pairs = new Map();   // `lac|cellid` → { lac, cid }
+  for (const c of cells) {
+    if (!c || c.lac == null || String(c.lac) === '') continue;
+    const lacs = [String(c.lac), String(Number(c.lac))].filter((v, i, a) => v !== 'NaN' && a.indexOf(v) === i);
+    for (const id of cellId.cellIdLookupKeys(c.cellid, c.sector)) {
+      for (const lac of lacs) {
+        const k = `${lac}|${String(id)}`;
+        if (!pairs.has(k)) pairs.set(k, { lac, cid: String(id) });
+      }
+    }
+  }
+  const keys = [...pairs.values()];
+  for (let i = 0; i < keys.length; i += LOCAL_PREFETCH_MAX_KEYS) {
+    const chunk = keys.slice(i, i + LOCAL_PREFETCH_MAX_KEYS);
+    const ph = chunk.map(() => '(?, ?)').join(', ');
+    const params = chunk.flatMap(k => [k.lac, k.cid]);
+    const rows = await new Promise((resolve) => db.all(
+      `SELECT rowid AS rid, mcc, mnc, lac, cellid, lat, lng, range, radio, description
+       FROM cells
+       WHERE (lac, cellid) IN (VALUES ${ph}) AND lat IS NOT NULL`,
+      params, (err, r) => resolve(err ? [] : (r || []))));
+    for (const row of rows) {
+      if (Number(row.rid) > maxId) continue;
+      const k = `${String(row.lac)}|${String(row.cellid)}`;
+      if (out.has(k)) continue;
+      out.set(k, { ...row, reusedCharge: !!(chargedBefore && chargedBefore.has(chargeKey(row))) });
+    }
+  }
+  return out;
+}
+
+// Vài cell lẻ còn lại (vd. MNC/lac lưu khác dạng) → tra bằng index
+// `(mcc, mnc, lac, cellid)` (mỗi candidate là 1 index seek, chạy song song).
+async function probeMissingLocally(c, byAlias) {
+  const keys = [];
+  for (const id of cellId.cellIdLookupKeys(c.cellid, c.sector)) {
+    for (const m of cellId.mncVariants(c.mnc)) keys.push([String(c.mcc), String(m), String(c.lac), String(id)]);
+  }
+  if (!keys.length) return null;
+  const q = (sql, params) => new Promise((resolve) => db.all(sql, params, (err, r) => resolve(err ? [] : (r || []))));
+  const rows = (await Promise.all(keys.map(k => q(
+    `SELECT rowid AS rid, mcc, mnc, lac, cellid, lat, lng, range, radio, description FROM cells
+     WHERE mcc = ? AND mnc = ? AND lac = ? AND cellid = ? AND lat IS NOT NULL LIMIT 1`, k)))).flat();
+  const first = rows[0] || null;
+  if (first && byAlias) {
+    for (const id of cellId.cellIdLookupKeys(c.cellid, c.sector)) {
+      const k = `${String(c.lac)}|${String(id)}`;
+      if (!byAlias.has(k)) byAlias.set(k, first);
+    }
+  }
+  return first;
+}
+
+function pickLocalRow(c, byAlias) {
+  if (!byAlias || !byAlias.size) return null;
+  const lacs = [String(c.lac), String(Number(c.lac))].filter((v, i, a) => v !== 'NaN' && a.indexOf(v) === i);
+  for (const id of cellId.cellIdLookupKeys(c.cellid, c.sector)) {
+    for (const lac of lacs) {
+      const hit = byAlias.get(`${lac}|${String(id)}`);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+// ============================================================
+// Khoá tính PHÍ: chỉ theo physical cell (mcc-mnc-raw cellid của bản ghi)
+// ============================================================
+// KHÔNG dùng alias ECI để so "đã trả phí": giá trị ECI của cell khác có thể trùng
+// chuỗi với `mcc-mnc-lac-<short cellid>` → cell thật bị xem là đã trả phí (không trừ
+// điểm). Giữ raw cellid, thêm ECI chỉ khi đó là dạng chuẩn hoá của CHÍNH cell đó.
+function chargeKey(c) {
+  const raw = String(c.cellid == null ? '' : c.cellid);
+  return `${c.mcc}-${c.mnc}-${String(c.lac == null ? '' : c.lac)}-${raw}`;
+}
+function chargeKeySet() { return new Set(); }
+function addChargeKey(set, c) { if (c) set.add(chargeKey(c)); }
 
 function getOpenCellIDKeyFromDB() {
   return new Promise((resolve) => {
@@ -3427,11 +3689,19 @@ app.post('/api/call-logs/upload', requireAuth, upload.single('file'), (req, res)
   }
 });
 
+// Thư mục nhận file cho /api/call-logs/analyze — upload vào ĐĨA các file lớn (multer
+// memoryStorage chỉ giữ file nhỏ trong RAM), xoá ngay trong `finally`.
+try { fs.mkdirSync(path.join(__dirname, 'uploads'), { recursive: true }); } catch (_) { /* đã có */ }
+const analyzeUpload = multer({
+  dest: path.join(__dirname, 'uploads'),
+  limits: { fileSize: 50 * 1024 * 1024 }
+});
+
 // POST /api/call-logs/analyze — CHỈ ĐỌC: parse file Excel trong RAM, gom thành
 // danh sách cell duy nhất kèm số dòng/dạng dữ liệu/khoảng thời gian + toạ độ đã
 // có trong CSDL nội bộ. KHÔNG ghi DB, KHÔNG trừ điểm, KHÔNG đốt quota nguồn online
 // (điểm chỉ bị trừ khi user bấm "Tra cứu" → /api/cells/resolve-batch).
-app.post('/api/call-logs/analyze', requireAuth, upload.single('file'), async (req, res) => {
+app.post('/api/call-logs/analyze', requireAuth, analyzeUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
     const buffer = fs.readFileSync(req.file.path);
@@ -3569,17 +3839,64 @@ app.delete('/api/call-logs', requireAuth, (req, res) => {
 // ========================
 // Phiên rút list (call-log sessions) — tab Lịch sử
 // ========================
-// GET /api/call-log-sessions - các lần upload Excel rút list của user, mới nhất trước.
+// GET /api/call-log-sessions - các phiên tra theo list (tab Lịch sử tra cứu), mới nhất trước.
+//
+// Mỗi dòng kèm số liệu ĐÃ TRA (server là nguồn sự thật): `looked_count` = số cell
+// duy nhất đã tra (có bản ghi lookup_history), `found_count` = số cell có toạ độ.
+// Client dùng để hiện "đã tra x/y" và nhãn "còn N cell chưa tra" — KHÔNG tự suy ra.
+//
+// Phiên có 2 nguồn metadata:
+//   call_log_batches — phiên upload Excel (luồng cũ) và metadata client đăng ký khi
+//                      bấm "Tra cứu" ở bảng cell (PUT /api/call-log-sessions/:id);
+//   lookup_batches   — số cell / tên file / thời gian của lần tra theo list.
+// Phiên do luồng bảng cell tạo KHÔNG có dòng nào trong call_logs và file_name có thể
+// NULL → `file_name`, `created_at` phải fallback sang lookup_batches, `cell_total` đếm
+// cả lookup_history (trước đây chỉ đếm call_logs nên phiên hiện "0 cell").
 app.get('/api/call-log-sessions', requireAuth, (req, res) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 50));
   const offset = (page - 1) * limit;
-  db.get('SELECT COUNT(*) AS total FROM call_log_batches WHERE user_id = ?', [req.user.id], (err, cnt) => {
+  // Lọc theo 1 ngày (giờ VN, UTC+7) — created_at lưu UTC nên cộng bù trước khi so.
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : '';
+  const dateCond = date ? " AND date(b.created_at, '+7 hours') = date(?)" : '';
+  const countParams = date ? [req.user.id, date] : [req.user.id];
+  const listParams = date ? [req.user.id, date, limit, offset] : [req.user.id, limit, offset];
+  // Khoá cell chuẩn (giống canonicalCellKey phía client/server) để đếm 1 physical cell
+  // đúng 1 lần, kể cả khi batch có cả short-cellid lẫn ECI.
+  const cellKey = (alias) =>
+    `ifnull(${alias}.mcc, '') || '-' || ifnull(${alias}.mnc, '') || '-' || ifnull(${alias}.lac, '') || '-' || ifnull(${alias}.cellid, '')`;
+  db.get(`SELECT COUNT(*) AS total FROM call_log_batches b WHERE b.user_id = ?${dateCond}`, countParams, (err, cnt) => {
     if (err) return res.status(500).json({ error: err.message });
-    db.all(`SELECT batch_id, file_name, network, row_count, created_at
-            FROM call_log_batches WHERE user_id = ?
-            ORDER BY created_at DESC, batch_id DESC LIMIT ? OFFSET ?`,
-      [req.user.id, limit, offset], (err2, rows) => {
+    db.all(`SELECT b.batch_id,
+              COALESCE(NULLIF(b.file_name, ''), (SELECT lb.file_name FROM lookup_batches lb
+                 WHERE lb.user_id = b.user_id AND lb.batch_id = b.batch_id)) AS file_name,
+              b.network, b.row_count, b.cell_count, b.created_at,
+              MAX(  -- số cell của phiên: metadata client gửi, không có thì đếm cell của call_logs
+                ifnull(b.cell_count, 0),
+                (SELECT COUNT(DISTINCT ${cellKey('c')}) FROM call_logs c
+                  WHERE c.user_id = b.user_id AND c.batch_id = b.batch_id)
+              ) AS cell_total,
+              (SELECT COUNT(DISTINCT ${cellKey('h')}) FROM lookup_history h
+                WHERE h.user_id = b.user_id AND h.batch_id = b.batch_id) AS looked_count,
+              -- Cell CÓ TOẠ ĐỘ: lookup_history (found) HỢP resolved_cells (toạ độ đã trả phí
+              -- lưu theo phiên), đếm distinct theo khoá cell. Trước đây cộng thẳng 2 con số
+              -- → đếm trùng cell vừa ghi lookup_history vừa nằm trong resolved_cells.
+              (SELECT COUNT(*) FROM (
+                 SELECT ${cellKey('h')} AS k FROM lookup_history h
+                 WHERE h.user_id = b.user_id AND h.batch_id = b.batch_id
+                   AND h.found = 1 AND h.lat IS NOT NULL AND h.lng IS NOT NULL
+                 UNION
+                 SELECT ifnull(json_extract(je.value, '$.mcc'), '') || '-' ||
+                        ifnull(json_extract(je.value, '$.mnc'), '') || '-' ||
+                        ifnull(json_extract(je.value, '$.lac'), '') || '-' ||
+                        ifnull(json_extract(je.value, '$.cellid'), '')
+                 FROM json_each(COALESCE(b.resolved_cells, '[]')) je
+                 WHERE json_extract(je.value, '$.lat') IS NOT NULL
+                   AND json_extract(je.value, '$.lng') IS NOT NULL
+               )) AS found_count
+            FROM call_log_batches b WHERE b.user_id = ?${dateCond}
+            ORDER BY b.created_at DESC, b.batch_id DESC LIMIT ? OFFSET ?`,
+      listParams, (err2, rows) => {
       if (err2) return res.status(500).json({ error: err2.message });
       const total = cnt ? cnt.total : 0;
       res.json({ data: rows || [], total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) });
@@ -3600,6 +3917,112 @@ app.get('/api/call-log-sessions/:batchId/cells', requireAuth, async (req, res) =
   }
 });
 
+// PUT /api/call-log-sessions/:batchId — đăng ký (upsert) metadata phiên rút list.
+//
+// Client gọi TRƯỚC lần tra đầu tiên của một file Excel: chỉ khi user thực sự bấm
+// "Tra cứu" thì phiên mới xuất hiện ở tab "Xem rút list" (file nạp mà chưa tra thì
+// không tạo phiên). Idempotent theo `batch_id` ⇒ bấm lại / F5 không sinh phiên trùng.
+// Chỉ ghi metadata (tên file, mạng, số dòng, số cell) — KHÔNG đụng `resolved_cells`.
+app.put('/api/call-log-sessions/:batchId', requireAuth, (req, res) => {
+  const batchId = String(req.params.batchId || '').slice(0, 120);
+  const userId = req.user.id;
+  if (!batchId) return res.status(400).json({ error: 'batchId required' });
+  const body = req.body || {};
+  const fileName = body.fileName == null ? '' : String(body.fileName).slice(0, 300);
+  const network = body.network == null ? '' : String(body.network).slice(0, 60);
+  const rowCount = Math.max(0, parseInt(body.rowCount, 10) || 0);
+  const cellCount = Math.max(0, parseInt(body.cellCount, 10) || 0);
+  // Danh sách cell đầy đủ (kể cả chưa tra) — CHỈ định danh, KHÔNG toạ độ.
+  // Truyền [] / bỏ trống = giữ nguyên giá trị cũ (đừng xoá danh sách đã lưu).
+  const rawCells = Array.isArray(body.sessionCells) ? body.sessionCells : null;
+  let sessionCellsJson = null;
+  if (rawCells && rawCells.length) {
+    const compact = rawCells.slice(0, 5000).map(c => ({
+      mcc: c && c.mcc != null ? String(c.mcc) : '',
+      mnc: c && c.mnc != null ? String(c.mnc) : '',
+      lac: c && c.lac != null ? String(c.lac) : '',
+      cellid: c && c.cellid != null ? String(c.cellid) : '',
+      sector: c && c.sector != null ? String(c.sector) : '',
+      radio: c && c.radio ? String(c.radio) : '',
+      rowCount: Math.max(0, parseInt(c && c.rowCount, 10) || 0)
+    }));
+    sessionCellsJson = JSON.stringify(compact);
+  }
+
+  db.get('SELECT user_id FROM call_log_batches WHERE batch_id = ?', [batchId], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (row && Number(row.user_id) !== Number(userId)) return res.status(403).json({ error: 'forbidden' });
+    db.run(`INSERT INTO call_log_batches (batch_id, user_id, file_name, network, row_count, cell_count, session_cells, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(batch_id) DO UPDATE SET
+              file_name = COALESCE(NULLIF(excluded.file_name, ''), call_log_batches.file_name),
+              network = COALESCE(NULLIF(excluded.network, ''), call_log_batches.network),
+              row_count = MAX(ifnull(call_log_batches.row_count, 0), excluded.row_count),
+              cell_count = MAX(ifnull(call_log_batches.cell_count, 0), excluded.cell_count),
+              session_cells = COALESCE(excluded.session_cells, call_log_batches.session_cells)`,
+      [batchId, userId, fileName, network, rowCount, cellCount, sessionCellsJson], (err2) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json({ success: true, batchId });
+      });
+  });
+});
+
+// POST /api/call-log-sessions/:batchId/cells — client đẩy các cell ĐÃ TRA ĐƯỢC
+// (đã trả phí) về phiên để mở lại ở máy/tab khác vẫn thấy toạ độ. Gộp (upsert) theo
+// canonical key, không ghi đè kết quả cũ; tối đa 2000 cell/lần. Owner only.
+app.post('/api/call-log-sessions/:batchId/cells', requireAuth, (req, res) => {
+  const batchId = req.params.batchId;
+  const userId = req.user.id;
+  const input = Array.isArray(req.body && req.body.cells) ? req.body.cells : null;
+  if (!input) return res.status(400).json({ error: 'cells required' });
+  if (input.length > 2000) return res.status(400).json({ error: 'too many cells (max 2000)' });
+
+  db.get('SELECT user_id, resolved_cells FROM call_log_batches WHERE batch_id = ?', [batchId], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'batch not found' });
+    if (Number(row.user_id) !== Number(userId)) return res.status(403).json({ error: 'forbidden' });
+
+    let saved = [];
+    try { saved = JSON.parse(row.resolved_cells || '[]'); } catch (e) { saved = []; }
+    if (!Array.isArray(saved)) saved = [];
+
+    const byKey = new Map();
+    for (const s of saved) {
+      if (!s) continue;
+      byKey.set(canonicalCellKey(s), s);
+    }
+    let added = 0, updated = 0;
+    for (const c of input) {
+      if (!c) continue;
+      const lat = Number(c.lat);
+      const lng = c.lng != null ? Number(c.lng) : (c.lon != null ? Number(c.lon) : NaN);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      if (Math.abs(lat) > 90 || Math.abs(lng) > 180) continue;
+      const key = canonicalCellKey(c);
+      if (!key) continue;
+      const rec = {
+        mcc: c.mcc == null ? null : String(c.mcc),
+        mnc: c.mnc == null ? null : String(c.mnc),
+        lac: c.lac == null ? null : String(c.lac),
+        cellid: c.cellid == null ? null : String(c.cellid),
+        sector: c.sector || c.sector_name || '',
+        lat, lng,
+        range: c.range != null ? Number(c.range) || null : null,
+        source: c.source || '',
+        radio: c.radio || ''
+      };
+      if (byKey.has(key)) updated++; else added++;
+      byKey.set(key, rec);
+    }
+    const merged = Array.from(byKey.values()).slice(0, 5000);
+    db.run('UPDATE call_log_batches SET resolved_cells = ? WHERE batch_id = ? AND user_id = ?',
+      [JSON.stringify(merged), batchId, userId], (err2) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json({ success: true, added, updated, total: merged.length, resolvedCells: merged });
+      });
+  });
+});
+
 // GET /api/call-log-sessions/:batchId - toàn bộ bản ghi của 1 phiên (owner only).
 app.get('/api/call-log-sessions/:batchId', requireAuth, (req, res) => {
   db.all('SELECT * FROM call_logs WHERE user_id = ? AND batch_id = ? ORDER BY id ASC',
@@ -3609,15 +4032,28 @@ app.get('/api/call-log-sessions/:batchId', requireAuth, (req, res) => {
   });
 });
 
-// DELETE /api/call-log-sessions/:batchId - xoá cả bản ghi lẫn metadata của 1 phiên.
+// DELETE /api/call-log-sessions/:batchId - xoá TOÀN BỘ dữ liệu của 1 phiên.
+//
+// Phiên "tra theo danh sách Excel" chỉ nằm ở lookup_batches + lookup_history (KHÔNG
+// có call_logs) ⇒ trước đây route này chỉ xoá call_logs / call_log_batches nên bấm
+// Xoá xong phiên VẪN hiện lại trong danh sách (và mở ra thì báo "không tìm thấy").
+// Xoá đủ 4 nguồn để phiên biến mất hẳn.
 app.delete('/api/call-log-sessions/:batchId', requireAuth, (req, res) => {
-  db.run('DELETE FROM call_logs WHERE user_id = ? AND batch_id = ?',
-    [req.user.id, req.params.batchId], function(err) {
+  const batchId = String(req.params.batchId || '');
+  const userId = req.user.id;
+  if (!batchId) return res.status(400).json({ error: 'batchId required' });
+  let deletedLogs = 0;
+  db.run('DELETE FROM call_logs WHERE user_id = ? AND batch_id = ?', [userId, batchId], function (err) {
     if (err) return res.status(500).json({ error: err.message });
-    const n = this.changes;
-    db.run('DELETE FROM call_log_batches WHERE user_id = ? AND batch_id = ?',
-      [req.user.id, req.params.batchId], () => {});
-    res.json({ success: true, deleted: n });
+    deletedLogs = this.changes;
+    db.serialize(() => {
+      db.run('DELETE FROM call_log_batches WHERE user_id = ? AND batch_id = ?', [userId, batchId], () => {});
+      db.run('DELETE FROM lookup_history WHERE user_id = ? AND batch_id = ?', [userId, batchId], () => {});
+      db.run('DELETE FROM lookup_batches WHERE user_id = ? AND batch_id = ?', [userId, batchId], function (err2) {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json({ success: true, deleted: deletedLogs, deletedBatch: this.changes });
+      });
+    });
   });
 });
 

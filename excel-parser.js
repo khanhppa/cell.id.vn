@@ -333,6 +333,10 @@ function aggregateCellsFromRecords(records, opts) {
     c.radio = confident ? radio : '';
     c.radioConfident = !!confident;
     if (!c.radio && radio) c.radioGuess = radio;
+    // Không xác định được MNC (file Excel không có cột MNC / cột rỗng): KHÔNG được coi
+    // là chuỗi rỗng khi tra CSDL nội bộ — DB lưu MNC dạng '01'/'1'. Caller dựa vào cờ
+    // này để tra theo mọi MNC biến thể thay vì miss oan.
+    c.unknownMnc = String(c.mnc == null ? '' : c.mnc).trim() === '';
   }
   return cells;
 }

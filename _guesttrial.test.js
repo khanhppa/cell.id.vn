@@ -276,7 +276,7 @@ async function runWiring() {
   ok('guestLookup gọi /api/guest/lookup', app.includes('/api/guest/lookup'));
   ok('app.js KHÔNG còn hàm renderGuestTrialBanner', !app.includes('renderGuestTrialBanner'));
   ok('app.js KHÔNG còn refreshGuestTrialUI', !app.includes('refreshGuestTrialUI'));
-  ok('app.js vẽ lại panel foot khi đổi tab', /switchTab[\s\S]{0,1000}renderPanelVersion/.test(app));
+  ok('app.js vẽ lại panel foot khi đổi tab', /function switchTab\(tabId\)[\s\S]{0,1600}renderPanelVersion/.test(app));
   ok('apiRequest có guard guest (chặn vòng lặp 401)', /__guestMode\s*&&\s*!Auth\.getToken\(\)/.test(app));
   ok('lookupCell có nhánh guest', /__guestMode\)\s*return guestLookup/.test(app));
 

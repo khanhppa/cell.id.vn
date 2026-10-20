@@ -79,9 +79,8 @@ ok('buildCellPopupHtml dùng cellPopupTitle', /cellPopupTitle\(opts\.mcc/.test(b
 ok('showCellOnMap dùng buildCellPopupHtml (tiêu đề qua cellPopupTitle)',
   /buildCellPopupHtml\(/.test(scm));
 ok('showCellOnMap KHÔNG còn "hist.cell: mcc-mnc-lac" cũ', !/hist\.cell'\}\s*:\s*\$\{histEsc\(opts\.mcc/.test(scm));
-const hob = fnBody(app, 'histOpenBatchOnMap');
-ok('histOpenBatchOnMap dùng cellPopupTitle', /cellPopupTitle\(r\.mcc/.test(hob));
-ok('histOpenBatchOnMap KHÔNG còn title cũ', !/hist\.cell'\}\s*:\s*\$\{histEsc\(r\.mcc/.test(hob));
+// histOpenBatchOnMap đã bị gỡ (phiên mở qua openCallLogSession dùng buildCellPopupHtml).
+ok('không còn title "hist.cell" dựng tay trong app.js', !/hist\.cell'\}\s*:\s*\$\{histEsc\(r\.mcc/.test(app));
 
 // === 5. Cú pháp tra cứu 1 dòng ===
 console.log('\n== 5. searchCells split "-" hoặc "," ==');

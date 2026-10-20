@@ -74,6 +74,29 @@ db.serialize(() => {
     row_count INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+  // Toạ độ của cell ĐÃ TRẢ PHÍ trong phiên (JSON array) — để mở lại phiên ở máy/tab
+  // khác vẫn thấy kết quả, không phải tra & trừ điểm lần nữa. Chỉ ghi cell
+  // state=found (kèm lat/lng); cell chưa trả phí không bao giờ được lưu ở đây.
+  db.run(`ALTER TABLE call_log_batches ADD COLUMN resolved_cells TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column')) console.error('call_log_batches.resolved_cells column:', err.message);
+  });
+  // Số CELL của file (khác `row_count` = số DÒNG cuộc gọi). Phiên chỉ chứa toạ độ
+  // đã tra nên `call_logs` có thể rỗng → giữ số cell trong metadata để tab "Xem rút
+  // list" vẫn hiện đúng "đã tra x/y" và tiến trình.
+  db.run(`ALTER TABLE call_log_batches ADD COLUMN cell_count INTEGER DEFAULT 0`, (err) => {
+    if (err && !err.message.includes('duplicate column')) console.error('call_log_batches.cell_count column:', err.message);
+  });
+  // DANH SÁCH CELL đầy đủ của phiên (JSON array) — gồm cả cell CHƯA tra.
+  //
+  // Luồng "Tra cứu danh sách Excel" không lưu call_logs từng dòng (chỉ ghi
+  // lookup_history cho cell đã tra) ⇒ mở lại phiên chỉ dựng được các cell ĐÃ TRA,
+  // còn cell chưa tra biến mất; nếu chưa tra cell nào thì báo "Không tìm thấy phiên".
+  // Cột này giữ nguyên danh sách cell của file để mở lại đủ, đúng thứ tự.
+  // CHỈ chứa định danh cell (mcc/mnc/lac/cellid/sector/radio/rowCount) — KHÔNG
+  // chứa toạ độ, nên không rò kết quả chưa trả phí.
+  db.run(`ALTER TABLE call_log_batches ADD COLUMN session_cells TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column')) console.error('call_log_batches.session_cells column:', err.message);
+  });
   // ==========================================================================
   // Credit system — mỗi lần tra cứu THÀNH CÔNG trừ `credit_cost_per_lookup`.
   // Số dư nằm ở users.credit_balance (cache); `credit_transactions` là ledger
@@ -428,6 +451,9 @@ db.serialize(() => {
     });
   });
   db.run(`CREATE INDEX IF NOT EXISTS idx_cells_lookup_nonunique ON cells(lat)`);
+  // Đếm/dọn cells cũng như ghép phiên hay lọc theo batch_id (thiếu index = full scan).
+  db.run(`CREATE INDEX IF NOT EXISTS idx_call_log_batches_batch ON call_log_batches(batch_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_lookup_history_user_batch ON lookup_history(user_id, batch_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_call_logs_user ON call_logs(user_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_call_logs_batch ON call_logs(user_id, batch_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_ip_tracker_token ON ip_tracker(token)`);
@@ -445,6 +471,15 @@ db.serialize(() => {
     FROM call_logs
     WHERE batch_id IS NOT NULL AND batch_id <> ''
     GROUP BY batch_id, user_id`);
+  // Phiên cũ chưa có số cell → lấy số cell duy nhất của batch (chỉ chạy 1 lần cho
+  // dòng còn 0, nên không ghi đè giá trị client đã gửi).
+  db.run(`UPDATE call_log_batches
+    SET cell_count = (SELECT COUNT(*) FROM (
+        SELECT 1 FROM call_logs c
+        WHERE c.batch_id = call_log_batches.batch_id AND c.user_id = call_log_batches.user_id
+        GROUP BY ifnull(c.mcc,'') || '-' || ifnull(c.mnc,'') || '-' || ifnull(c.lac,'') || '-' || ifnull(c.cellid,'')
+      ))
+    WHERE ifnull(cell_count, 0) = 0`);
   // Backfill metadata cho các batch đã ghi trước khi có bảng lookup_batches
   // (idempotent nhờ INSERT OR IGNORE — chạy lại mỗi lần khởi động vẫn an toàn).
   db.run(`INSERT OR IGNORE INTO lookup_batches

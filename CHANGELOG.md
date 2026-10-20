@@ -6,7 +6,63 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
 
 ## [Unreleased]
 
+### Changed
+- **Tab "Xem rút list" đổi tên thành "Tra cứu danh sách"** (`tab.callLogs`, cả vi + en).
+- **Chọn mạng + nạp file chỉ hiện ở bước đầu**: khi phiên đã có danh sách cell, khối upload
+  được thay bằng **card phiên đang làm việc** (tên file, mạng, số cell, số dòng) với nút
+  **Đóng** (`#clSessionCloseBtn` → `closeClSession()`) — bấm Đóng để quay lại giao diện
+  chọn mạng + upload. Danh sách bản ghi/bộ lọc bên dưới cũng ẩn khi chưa có phiên.
+- **Phiên được lưu ngay khi nạp file** (không chờ bấm Tra cứu): `uploadCallLogAnalyze` gọi
+  `ensureCallLogSession()` với danh sách cell đầy đủ → mọi phiên (kể cả đã đóng, chưa tra
+  cell nào) đều nằm trong **Lịch sử tra cứu**. Đóng phiên chỉ dọn màn hình + `sessionStorage`,
+  toạ độ đã trả phí được gửi nốt (`flushCallSessionResolved()`) trước khi dọn.
+- **Nút `?` hướng dẫn ở tra cứu đơn lẻ** (`#cellHelpBtn` cạnh tiêu đề "Tra Cứu Cell ID"):
+  hướng dẫn nhập MCC/MNC/LAC/CellID, sector/công nghệ, cách đọc kết quả, ô "Tìm Kiếm Cell"
+  miễn phí, và lưu ý về dữ liệu/điểm. Popup hướng dẫn dùng chung `showHelpPopup()` (neo theo
+  nút, tự lật lên trên khi tràn viewport) cho cả 2 tab.
+- **Soạn lại nội dung hướng dẫn tab "Tra cứu danh sách"**: 6 bước (chọn mạng → nạp file →
+  tích cell → tra cứu → đóng/nạp file khác → mở lại ở Lịch sử) + mục "Đọc file" giải thích
+  định dạng, cách chọn mạng, thời điểm trừ điểm, và việc phiên được lưu từ lúc nạp file.
+- **Nạp Excel ngay trong tab "Xem rút list"** (bỏ bước mở popup): đầu tab có ô chọn mạng
+  rồi khung upload — bấm vào khung là mở hộp chọn file (input phủ toàn khung), kéo-thả vẫn
+  dùng được. Nạp xong mở thẳng **Bảng cell cần tra**; lỗi/đọc file hiện trạng thái ngay trên
+  khung. Bỏ bước `pick`/`busy` khỏi overlay `#clTableOverlay` (chỉ còn bảng), bỏ nút
+  "Load Excel" và nút "Chọn file Excel" trên header overlay. Các nội dung khác (bộ lọc,
+  danh sách bản ghi, chọn cell, tra cứu, bản đồ, Lịch sử) giữ nguyên.
+- **Bỏ nút "Hướng dẫn"** ở tab: nội dung hướng dẫn (guide1..7) + giải thích định dạng file /
+  tính điểm nằm trong popup của nút `?` cạnh ô chọn mạng.
+- **Chọn mạng gọn lại 1 hàng**: radio + logo chữ cái → `<select>` native (`#clNetSelect`)
+  hiển thị **logo thật** của mạng (`public/img/net/`: viettel/mobifone/vinaphone `.svg`,
+  vietnamobile/gmobile `.png`), tên mạng, mũi tên; mạng chưa hỗ trợ bị khoá trong list.
+
+### Fixed
+- **Tra cứu danh sách Excel nhanh hơn nhiều**: `POST /api/cells/resolve-batch` phase 1
+  (tra CSDL nội bộ) không còn 1 query/cell `await` tuần tự. Gom mọi khoá của lô vào
+  ít câu `SELECT ... WHERE (lac, cellid) IN (VALUES (?, ?), ...)` (400 khoá/câu) —
+  đo trên DB thật 251k dòng: 600 cell = **~170 ms / 2 câu** thay vì 600 lượt query
+  (mỗi lượt `lac = ? AND cellid = ?` mất 30-50 ms do `lac`/`cellid` là TEXT nên không
+  dùng được unique index khi thiếu `mcc`). Đã loại các cách full-scan
+  (`lac IN (...)`, `cellid % 100`, `mcc IN (...)`).
+  - `prefetchLocalRows()` + `pickLocalRow()` + `probeMissingLocally()` (fallback cho
+    cell lẻ / khác dạng MNC-lac) trong `server.js`.
+  - `loadLocalRowIndex` không dùng nữa; thêm index `idx_call_log_batches_batch`,
+    `idx_lookup_history_user_batch` (`database.js`).
+  - Đo thời gian từng pha khi cần: đặt env `CT_DEBUG_RESOLVE=1` (mặc định tắt).
+  - Cell đã có trong CSDL nội bộ hiện toạ độ NGAY trên bảng sau khi nạp file
+    (`clApplyLocalHints`, trạng thái `local`, miễn phí) — không phải chờ bấm Tra cứu.
+- **Sửa lỗi tính điểm khi tra lô**: dedup "đã trả phí" dùng khoá physical cell
+  (`chargeKey`: mcc-mnc-lac-cellid gốc) thay vì alias ECI — trước đây ECI của cell
+  hàng xóm trùng chuỗi alias nên cell thật bị coi là đã trả phí và **không bị trừ
+  điểm**. Cell trả lại từ memo mang cờ `reusedCharge` nên không bị trừ lần 2.
+
 ### Added
+- **Tab Lịch sử có mục "Tra cứu danh sách (Excel)"**: mỗi lần bấm Tra cứu ở bảng cell
+  (đã trừ điểm) hiện ngay 1 dòng — tên file, thời gian, tổng cell / số cell ra toạ độ,
+  phân trang, lọc theo `#histDate`. Bấm dòng = vẽ lại cell trên bản đồ;
+  nút bảng = mở lại bảng cell (cell đã trả phí hiện sẵn, không trừ điểm lại).
+  - `#histBatchList` trong `#histPaneSingle`, i18n `hist.batchSection/singleSection/
+    openTable/batchEmptyHistory` (vi+en), `loadHistBatches()/renderHistBatches()`.
+  - `resolveClSelected()` làm mới danh sách này nếu tab Lịch sử đang mở.
 - **Kéo giãn panel trái (sidebar)**: tay kéo `.sidebar-resizer` bám mép phải panel, kéo ngang
   để đổi độ rộng `--sidebar-width` (min `260px`, max `720px` / chừa tối thiểu `360px` cho
   bản đồ). Độ rộng lưu `localStorage['sidebarWidth']`, khôi phục lại khi mở trang.
@@ -65,7 +121,102 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
   Client tích luỹ `found`/`missed`/`unpaid` qua các vòng, bỏ qua cell `unpaid` khi cập nhật
   `myLogsCache` (để lại chờ nạp điểm rồi tra tiếp).
 
+### Changed
+- **Tra cứu bảng cell: tra được một phần thay vì chặn khi thiếu điểm**: trước đây số dư
+  không đủ cho **cả** danh sách thì nút "Tra cứu" bị chặn ngay, không tra được gì. Nay luật là
+  **"còn đủ giá 1 cell thì cho chạy"**:
+  - `clCanStartQuote(q)` (`public/app.js`) trả `false` **chỉ khi** bật chế độ điểm mà
+    `balance < giá 1 cell`; thiếu tổng vẫn `canStart = true`.
+  - `resolveClSelectedClick()` hết điểm → toast đỏ `calllogs.confirmNoCredits` +
+    mời nạp điểm; thiếu tổng nhưng còn điểm → toast info `calllogs.notEnoughTotal` (nêu
+    số cần / số còn) rồi **vẫn mở** modal xác nhận.
+  - Modal xác nhận (`openClConfirmResolveModal`) và footer (`renderClSheetResolve`) dùng
+    `canStart` để disable nút (thay `enough`), chỉ khi hết điểm mới đổi nút thành "Nạp điểm";
+    banner tách 2 mức (info `notEnoughTotal` / cảnh báo `confirmNoCredits`) kèm ghi chú
+    "tra tới khi hết điểm rồi dừng".
+  - `resolveClSelected()` có lưới an toàn `outOfCredit()` (số dư tụt dưới giá 1 cell giữa
+    chừng) → dừng vòng, gắn `stoppedNoCredit` và toast `calllogs.stopNoCredit`; các cell còn
+    lại giữ `state: 'unpaid'` để tra tiếp sau khi nạp điểm.
+  - `updateClResolveNowBtn()` đếm cell chưa tra **từ bảng đang mở** qua `clUnpaidCount()`
+    (bỏ cell `found`/`miss`) thay vì `countResolveNeeded()` suy từ `myLogsCache`.
+- **Tab Lịch sử chỉ còn danh sách tra cứu đơn lẻ**: bỏ tab con `#histTabBatch` (phiên rút
+  list trùng chức năng với tab "Xem rút list"). `histKind` cố định `'single'`;
+  `setHistKind()`/`renderHistKind()` chỉ nạp `loadLookupHistory()` và ẩn pane batch —
+  pane này chỉ còn lời nhắn + nút `switchTab('calllogs')` (i18n `hist.batchMoved`,
+  `hist.openCallLogs`). `switchTab('lookuphistory')` không còn gọi `loadCallLogSessions()`;
+  xoá `onHistBatchDateChange`/`clearHistBatchDate` (giữ stub `syncHistBatchDateClear` cho
+  HTML cũ) và mọi id `histBatch*`.
+- **Pager + danh sách phiên rút list chuyển về tab "Xem rút list"**:
+  `#clSessionPicker` (số phiên + trang + nút mở `#clSessionsList`), `toggleCallLogSessionList()`
+  và `updateClSessionsPager()` trỏ `#clSession*`; `loadCallLogSessions()` bỏ filter ngày
+  (danh sách phiên gộp toàn bộ). i18n `hist.prevPage`/`hist.nextPage` dùng chung.
+  `renderCurrentSessionBar()` bỏ nút xoá (xoá phiên nằm trong danh sách phiên).
+
+### Removed
+- **Nút xoá từng bản ghi trong `#logRecordList`**: bỏ `delBtn` + `deleteCallLog()`
+  (`DELETE /api/call-logs/:id` không còn được gọi từ UI) — xoá theo phiên nằm ở danh sách phiên.
+- **Nút "Hiển thị tất cả trên bản đồ" ở footer bảng cell**: bỏ `#clMapAllBtn`,
+  `plotClTableOnMap()` và i18n `calllogs.mapAllBtn`/`mapAllDone`/`mapAllPartial`; muốn xem
+  trên bản đồ thì dùng tab "Xem rút list" (đã tự vẽ marker).
+- **Cột Sóng dạng text trong bảng cell**: thay bằng badge RAT màu (`clRadioBadgeHtml`,
+  bảng `RADIO_STYLE`), hiện `?` khi `radioConfident === false`. Dòng trạng thái thêm icon
+  (`clStatusIconHtml`) + badge nguồn (`csdl`/`online`). CSS mới `.cl-radio-badge`,
+  `.cl-src-badge`, sọc dòng chẵn và cột # gọn hơn.
+
 ### Fixed
+- **Nạp Excel → bấm "Tra cứu" nhưng không có phiên trong tab "Xem rút list"**:
+  server chỉ tạo dòng `call_log_batches` khi có bản ghi call-log, nên file chỉ tra toạ
+  độ (không có cuộc gọi) không hiện ở đâu cả; `POST .../cells` còn trả `404 batch not found`.
+  - Route mới `PUT /api/call-log-sessions/:batchId` (`requireAuth`) upsert metadata phiên
+    (`file_name`, `network`, `row_count`, `cell_count`) — idempotent theo `batch_id`, **không
+    đụng `resolved_cells`**, **không trừ điểm**, trả `403` nếu batch thuộc user khác.
+  - Cột mới `call_log_batches.cell_count` (`ALTER TABLE` idempotent + backfill số cell duy
+    nhất cho phiên cũ); `GET /api/call-log-sessions` trả thêm `cell_count`.
+  - Client `ensureCallLogSession()` gọi **trước** vòng `resolve-batch` trong `resolveClSelected`
+    (file được nạp mà chưa tra vẫn không tạo phiên — đúng thiết kế), `clFlushResolvedCells`
+    tự đăng ký lại 1 lần khi gặp lỗi (không mất toạ độ đã trả phí); `clSessionCellTotal`
+    fallback `cell_total → cell_count → row_count`; tab "Xem rút list" tự nạp lại danh sách
+    phiên khi mở (`clRefreshSessionsIfVisible`).
+- **Không xem được toạ độ vừa tra trên bản đồ**: thêm nút `#clMapResultsBtn` ("Xem N toạ độ
+  trên bản đồ") ở footer bảng cell, chỉ bật khi có cell `found` (`updateClMapResultsBtn`
+  trong `renderClTableSummary`). `clPlotResultsOnMap()` chỉ đưa cell `state === 'found'`
+  (kèm `_charged`) sang `myLogsCache`, đóng bảng và vẽ lại danh sách — không lộ cell
+  `unpaid`/`miss`. i18n: `calllogs.mapResults`, `calllogs.mapNone`.
+- **Bản đồ căn giữa bỏ qua panel trái (cell nằm sau sidebar)**: helper mới
+  `mapSidebarWidth()` (0 khi panel thu gọn), `mapVisiblePad()` (`paddingTopLeft` chừa
+  `--sidebar-width`), `fitBoundsVisible()`, `centerOnVisible()` (dịch tâm sang trái nửa bề
+  rộng panel qua `map.project`/`unproject`). Đã wire vào `plotCallLogs`,
+  `histOpenBatchOnMap`, `highlightCellOnMap`, `showCellOnMap` và nút "Vị trí của tôi".
+- **Danh sách bản ghi `#logRecordList` chưa gọn/khó quét mắt**: thay inline style bằng card
+  `.log-card` (viền trái theo trạng thái `found`/`locked`/`miss`/`pending`, sọc chẵn lẻ,
+  hover), dùng lại `clRadioBadgeHtml` / `.cl-row-status` / `.cl-src-badge` / `clCellShort`,
+  bỏ `lastBatch` chết. Thêm i18n `calllogs.partner`.
+- **Bảng cell cần tra: cột nhảy / cell dài dòng + panel không kéo giãn được khi bảng mở**:
+  - Cột bảng chuyển sang **auto-fit**: `.cl-col-*` không còn `width` cứng (`190px`, `210px`…)
+    mà `width: 1%` + `min-width` (đủ chữ), riêng `.cl-col-addr` `width: 100%` để ăn phần dư;
+    `.cl-tbl-addr` xuống ellipsis theo cột thay vì `max-width: 220px`. `<colgroup>` sinh từ
+    `CL_TBL_COLS` (thêm khoá `col`) nên không lệch giữa header và `<col>`.
+  - Cột **Cell** gọn 1 dòng `MCC-MNC-LAC/TAC-CELLID` (`clCellShort()`, LTE/NR dùng nhãn `TAC`,
+    còn lại `LAC`); cell dạng ECI (id dài) có thêm dòng phụ `eNB · sector` cỡ nhỏ.
+  - Khi bảng cell mở, **tay kéo panel vẫn dùng được**: `syncSidebarResizeBlock()` giờ chỉ
+    `blocked` cho `.modal-overlay.show` / `.legend-panel.show`; riêng `.cl-fullsheet.show` thì
+    gắn `.sidebar-resizer.over-sheet` (`z-index: 4950` > overlay `4900`, `pointer-events: auto`)
+    — handle nổi trên overlay, vạch mép panel vẫn hiện.
+- **Mất toạ độ đã trả phí / bị trừ điểm lần 2 khi đóng tab ngay sau khi tra**:
+  - Client: `clResolvedCellsForSave(batchId)` chỉ lấy toạ độ `state=found` của bảng đang mở và
+    **bỏ `myLogsCache`** (dữ liệu mở từ Lịch sử tra cứu, `_fromHistory`, không thuộc phiên đang
+    mở không còn bị nhét vào `resolved_cells`). Batch của bảng khác phiên đang mở → không gửi.
+  - `saveCallSessionResolved(batchId, { flush: true })` + `flushCallSessionResolved()` gọi ngay sau
+    mỗi vòng tra, khi **bấm X đóng bảng**, và trên `pagehide` / `beforeunload` /
+    `visibilitychange=hidden` (đăng ký trong `initCallSessionResolvedFlush()`) → không bị mất bởi
+    debounce 800ms.
+  - `clLoadBatchCells()` trả `{ cells, resolvedCells, fileName, network, totalRows, batchId }`;
+    `clCellsFromSource()` ghép `resolvedCells` thành `state=found` (cell đã trả phí không hiện
+    "chưa tra" kể cả khi `lookup_history` đã mất).
+  - Server: `POST /api/cells/resolve-batch` đọc **thêm `call_log_batches.resolved_cells`** vào
+    `chargedBefore` (cùng `cellAliasKeys`) → cell đã trả phí trong phiên được trả toạ độ lại
+    **miễn phí** dù `lookup_history` trống; nhánh fallback của
+    `GET /api/lookup-history/batch/:batchId/cells` trả kèm `resolvedCells`.
 - **Handle kéo giãn panel trái nuốt chuột khi overlay đang phủ**: `.sidebar-resizer` là `position:absolute` **trong** `.sidebar` nên khi mở overlay toàn màn hình (bảng cell cần tra `.cl-fullsheet.show`, modal, panel chú thích) nó vẫn nằm trên cùng ở mép phải panel và **vẫn nhận `mousedown`** — chuột rơi vào 6px mép trái màn hình bị nó nuốt nên không bấm/kéo được thứ phía trên/dưới. Nay `syncSidebarResizeBlock()` gắn class `.sidebar-resizer.blocked` (`pointer-events: none`) mỗi khi có `.cl-fullsheet.show` / `.modal-overlay.show` / `.legend-panel.show`, `initSidebarResizeBlock()` theo dõi bằng `MutationObserver` (class của `body` + các overlay) và theo `window.resize` để bật/tắt lại ngay. `initSidebarResizeBlock()` chỉ tạo `MutationObserver`
   khi môi trường có (guard `typeof MutationObserver === 'function'`) — trước đó test chạy `app.js`
   trong `node:vm` không có DOM thật bị `ReferenceError: MutationObserver is not defined` ngay khi nạp script.
@@ -135,6 +286,18 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
   local vẫn cần nhận `cell_range` + dấu `_resolvedOnline`.
 
 ### Tests
+- `_uxtest.js` (+10 case): bảng cell **auto-fit** (`.cl-col-*` `width:1%`+`min-width`, không còn
+  `width:190px`, `.cl-col-addr` `100%`, `.cl-tbl-addr` block+ellipsis), `<colgroup>` sinh từ
+  `CL_TBL_COLS` (9 khoá `col`), `clCellShort` dạng `mcc-mnc-lac/tac-cellid` và
+  `clTableRowHtml` không còn ghép LAC chung dòng cell; handle panel `.over-sheet` (z-index 4950,
+  `pointer-events:auto`) khi bảng mở + `syncSidebarResizeBlock` chỉ `blocked` cho modal/legend;
+  `clResolvedCellsForSave(batchId)` không đọc `myLogsCache`; flush `opts.flush` /
+  `flushCallSessionResolved()` trên `pagehide`/`beforeunload`/`visibilitychange` + trong
+  `closeClTableOverlay`; `clLoadBatchCells` trả `{ cells, resolvedCells }` và
+  `clCellsFromSource` ghép `resolvedCells` → `state=found`.
+- `_batchcredit.test.js` (+4 case): batch có `call_log_batches.resolved_cells` nhưng **không có**
+  `lookup_history` → `resolve-batch` trả toạ độ lại, `credit.charged = 0`, số dư không đổi;
+  `GET /api/lookup-history/batch/:id/cells` trả `resolvedCells` (kể cả nhánh fallback).
 - `_googlesource.test.js` (76 case, +16): mock `axios.post` → kiểm request shape (`considerIp:false`,
   `radioType` chữ thường, `cellTowers[]` số nguyên, `homeMobileCountryCode` number), NR dùng
   `newRadioCellId` và **không** có `cellId`, cell vượt uint32 bị loại khỏi mảng, GSM LAC ngoài range

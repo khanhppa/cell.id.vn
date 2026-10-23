@@ -1,6 +1,16 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+
+// Cấu hình runtime từ file `.env` cạnh server.js (production: /opt/cell-tracker/shared/.env
+// được systemd nạp qua EnvironmentFile, local: .env ở gốc repo). Không bắt buộc —
+// thiếu file hoặc thiếu module thì chạy tiếp với biến môi trường hiện có.
+try {
+  const dotenv = require('dotenv');
+  dotenv.config({ path: path.join(__dirname, '.env'), quiet: true });
+} catch (e) {
+  if (e && e.code !== 'MODULE_NOT_FOUND') console.warn('dotenv:', e.message);
+}
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
@@ -24,9 +34,42 @@ const guestTrial = require('./guest-trial');
 const payos = require('./payos');
 const topup = require('./topup');
 const mailer = require('./mailer');
+const apiKeys = require('./api-keys');
+const ipLookup = require('./ip-lookup');
+const googleAnalytics = require('./google-analytics');
+const adminDashboard = require('./admin-dashboard');
+const siteStatus = require('./site-status');
 
 const app = express();
 const port = process.env.PORT || 3000;
+// Chỉ nghe trên 1 interface khi đặt HOST (production: 127.0.0.1 sau Nginx). Bỏ trống → mọi interface.
+const HOST = process.env.HOST || undefined;
+
+// Production chạy sau reverse proxy (Nginx) → cần tin X-Forwarded-* để dựng baseUrl
+// (link kích hoạt email, returnUrl payOS) đúng https + đúng IP client cho rate limit.
+// TRUST_PROXY=1 (hop proxy) hoặc giá trị Express chấp nhận ('loopback', dải IP…).
+if (process.env.TRUST_PROXY) {
+  const v = String(process.env.TRUST_PROXY).trim();
+  app.set('trust proxy', /^\d+$/.test(v) ? Number(v) : v);
+}
+
+// Thư mục dữ liệu do NGƯỜI DÙNG tải lên. Production đặt ngoài thư mục release
+// (vd /opt/cell-tracker/shared/uploads) để deploy bản mới không xoá mất file.
+// Tuyệt đối KHÔNG dùng path tương đối: `multer({dest:'uploads/'})` phụ thuộc CWD
+// và sẽ ghi ra `/` khi systemd không đặt WorkingDirectory.
+const UPLOAD_DIR = process.env.UPLOAD_DIR
+  ? path.resolve(process.env.UPLOAD_DIR)
+  : path.join(__dirname, 'uploads');
+const TRACKER_UPLOAD_DIR = path.join(UPLOAD_DIR, 'tracker');
+const CLF_EXPORT_DIR = path.join(UPLOAD_DIR, 'clf');
+
+/** Tạo thư mục upload (idempotent) — gọi trước mọi route dùng multer trên đĩa. */
+function ensureUploadDirs() {
+  for (const dir of [UPLOAD_DIR, TRACKER_UPLOAD_DIR, CLF_EXPORT_DIR]) {
+    try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { console.error('mkdir upload dir:', dir, e.message); }
+  }
+}
+ensureUploadDirs();
 
 // Locate a cell row in the local DB for a raw cell ID.
 // Probes candidates in order (raw/short first, then ECI/long) and, MNC variants
@@ -72,15 +115,156 @@ app.use(express.urlencoded({ extended: true }));
 // renderer changelog) nhưng lại KHÔNG có tên gắn hash như build tool. Trình duyệt
 // giữ bản cũ trong cache → user mở /version.html vẫn thấy UI/nội dung cũ dù server
 // đã đổi. Ép revalidate (vẫn cho 304 nếu chưa đổi) để luôn lấy bản mới nhất.
-const ALWAYS_REVALIDATE = /[\\/](version\.js|version\.html)$/;
+//
+// Tài nguyên của app di động (`/m/*.js|css|html|webmanifest`) cũng vậy: service
+// worker + cache của trình duyệt rất dễ giữ bản cũ, và người dùng không có nút
+// "hard reload" trên điện thoại → cũng ép revalidate.
+const ALWAYS_REVALIDATE = /[\\/](version\.js|version\.html|admin\.(?:js|html)|[\\/]m[\\/][^\\/]+\.(?:js|css|html|webmanifest))$/;
+
+// `.webmanifest` không nằm trong bảng MIME mặc định của Express 4 → trình duyệt
+// nhận `application/octet-stream` và TỪ CHỐI cài PWA. Khai báo tường minh.
+express.static.mime.define({ 'application/manifest+json': ['webmanifest'] });
+
+// ============================================================
+// Điều hướng cho ứng dụng di động (/m/)
+// ============================================================
+// Người dùng mở trang chủ bằng điện thoại → đưa sang bản app di động. Phải đặt
+// TRƯỚC `express.static` vì static sẽ trả luôn `index.html` cho `/`.
+// Có lối thoát `?desktop=1` để không "khoá" người dùng iPad/máy tính bảng ở bản
+// mobile khi họ cần bản đầy đủ.
+// (`/m` không có dấu / đã được serve-static tự 301 sang `/m/`.)
+const MOBILE_UA = /Android|iPhone|iPad|iPod|Windows Phone|Mobile|webOS|BlackBerry/i;
+
+app.get('/', (req, res, next) => {
+  if (req.query.desktop === '1') return next();
+  // Chỉ chuyển khi đây là điều hướng trang (không chuyển fetch/XHR/ảnh).
+  const dest = req.headers['sec-fetch-dest'];
+  if (dest && dest !== 'document') return next();
+  if (!MOBILE_UA.test(req.headers['user-agent'] || '')) return next();
+  return res.redirect(302, '/m/');
+});
+
+// ============================================================
+// Bật/đóng website — trang bảo trì + bootstrap chặn trang phía client.
+//
+// Trang /maintenance.html do SERVER render để thông báo hiện ngay cả khi JS
+// lỗi/tắt, và message do admin nhập được escape (không chèn HTML/JS).
+// /site-status.js là script chặn render (đặt trong <head>): biết trạng thái
+// ngay từ server nên không nháy nội dung; admin (role trong localStorage)
+// được đi qua để vẫn dùng website khi đang đóng.
+// ============================================================
+const MAINTENANCE_TEMPLATE_PATH = path.join(__dirname, 'public', 'maintenance.html');
+
+function escapeMaintenanceHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Đọc lại mỗi request (trang chỉ được serve khi website đóng, tần suất thấp):
+// sửa giao diện trang bảo trì có hiệu lực ngay, không cần restart server.
+function getMaintenanceTemplate() {
+  try {
+    return fs.readFileSync(MAINTENANCE_TEMPLATE_PATH, 'utf8');
+  } catch (e) {
+    console.error('[maintenance] không đọc được public/maintenance.html:', e.message);
+    return '<!DOCTYPE html><html lang="vi"><meta charset="utf-8">'
+      + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+      + '<title>Website đang bảo trì</title><body style="font-family:sans-serif;padding:40px">'
+      + '<h1>Website đang bảo trì</h1><div>{{MESSAGE}}</div>{{NOTE}}'
+      + '</body></html>';
+  }
+}
+
+/** Render template với message đã escape + note (HTML nội bộ, không từ user). */
+function renderMaintenancePage(message, note) {
+  return getMaintenanceTemplate()
+    .split('{{MESSAGE}}').join(escapeMaintenanceHtml(message))
+    .split('{{NOTE}}').join(note || '');
+}
+
+app.get('/maintenance.html', async (req, res) => {
+  try {
+    const st = await siteStatus.getStatus();
+    if (!st.closed) return res.redirect(302, '/');
+    const note = String(req.query.from || '') === 'login'
+      ? '<p class="m-note">Bạn đã đăng nhập thành công, nhưng website đang tạm đóng để bảo trì. Vui lòng quay lại sau.</p>'
+      : '';
+    res.status(503)
+      .set('Cache-Control', 'no-store')
+      .set('Retry-After', '3600')
+      .type('html')
+      .send(renderMaintenancePage(st.message, note));
+  } catch (e) {
+    console.error('[maintenance] render lỗi:', e.message);
+    res.status(503).type('html').send('<!DOCTYPE html><html lang="vi"><meta charset="utf-8">'
+      + '<title>Website đang bảo trì</title><body><h1>Website đang bảo trì</h1>'
+      + '<p>Vui lòng quay lại sau.</p></body></html>');
+  }
+});
+
+// Script chặn trang phía client: chạy ngay trong <head> trên các trang của
+// website. Không phải nguồn thẩm quyền — middleware /api mới là nơi chặn dữ
+// liệu; đây chỉ là UX (đưa người thường về trang bảo trì, admin vẫn đi qua).
+const SITE_GATE_JS = `window.__SITE_STATUS__ = { closed: __SITE_CLOSED__ };
+(function () {
+  try {
+    if (!window.__SITE_STATUS__.closed) return;
+    var raw = localStorage.getItem('cell_tracker_user');
+    var user = raw ? JSON.parse(raw) : null;
+    if (user && user.role === 'admin') return;
+  } catch (e) { /* localStorage bị chặn → coi như người thường */ }
+  if (location.pathname === '/maintenance.html') return;
+  location.replace('/maintenance.html');
+})();`;
+
+app.get('/site-status.js', async (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  let closed = false;
+  try { closed = (await siteStatus.getStatus()).closed; } catch (e) { closed = false; }
+  res.send(SITE_GATE_JS.replace('__SITE_CLOSED__', closed ? 'true' : 'false'));
+});
+
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
     if (ALWAYS_REVALIDATE.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
   }
 }));
 
+// ------------------------------------------------------------------
+// GET /ga.js — thẻ Google Analytics 4 dùng chung cho các trang public.
+// Sinh động từ settings để admin bật/tắt/đổi Measurement ID mà không phải sửa
+// HTML từng trang. Chưa bật hoặc ID sai → trả JS rỗng (không tải gtag).
+// ------------------------------------------------------------------
+app.get('/ga.js', async (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  try {
+    const cfg = await googleAnalytics.getTrackingConfig();
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.send(cfg.enabled
+      ? googleAnalytics.buildGaJs(cfg.measurement_id)
+      : '/* Cell.id.vn — Google Analytics chưa bật */\n');
+  } catch (e) {
+    res.setHeader('Cache-Control', 'no-store');
+    res.send('/* Cell.id.vn — GA config error */\n');
+  }
+});
+
 // Auth middleware
-const JWT_SECRET = process.env.JWT_SECRET || 'cell-tracker-secret-key-2024';
+const DEFAULT_JWT_SECRET = 'cell-tracker-secret-key-2024';
+const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_JWT_SECRET;
+
+// Production mà dùng secret mặc định (hoặc rỗng) = ai cũng tự ký được token admin.
+// Dừng hẳn thay vì chạy tiếp — sửa bằng `JWT_SECRET` trong .env (openssl rand -hex 32).
+if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || JWT_SECRET === DEFAULT_JWT_SECRET)) {
+  console.error('FATAL: JWT_SECRET chưa đặt (hoặc đang dùng giá trị mặc định) trong môi trường production.');
+  console.error('       Đặt JWT_SECRET=<chuỗi ngẫu nhiên ≥32 byte> trong .env rồi khởi động lại.');
+  process.exit(1);
+}
 
 function requireAuth(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -105,7 +289,199 @@ function optionalAuth(req, res, next) {
 }
 
 // ============================================================
-// Captcha (chuỗi 6 ký tự) + mã/token xác thực email.
+// Public API v1 — xác thực bằng API key HOẶC JWT.
+//
+// Chấp nhận 2 kiểu (theo thứ tự ưu tiên):
+//   1. `Authorization: Bearer sk_live_...`  → API key (server-to-server)
+//   2. `X-API-Key: sk_live_...`             → API key (cho client ít sửa header)
+//   3. `Authorization: Bearer <jwt>`        → JWT của user (client web/mobile)
+// Không có CORS: API này dành cho server-to-server. Browser ở domain khác sẽ bị
+// same-origin policy chặn ở tầng preflight.
+//
+// Trả lỗi dạng JSON thống nhất: { error, reason, code? } để app ngoài xử lý máy được.
+// ============================================================
+const API_VERSION = 'v1';
+
+// Chuẩn hoá mọi response lỗi của API v1 về 1 hình dạng.
+function apiError(res, status, error, reason, extra) {
+  return res.status(status).json(Object.assign({
+    ok: false, error, reason: reason || null, apiVersion: API_VERSION
+  }, extra || {}));
+}
+
+// Lấy phần token sau "Bearer ".
+function bearerToken(req) {
+  const h = req.headers['authorization'];
+  if (!h || typeof h !== 'string') return null;
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * Middleware xác thực API v1.
+ *
+ * MÔ HÌNH: API KEY = CỔNG KẾT NỐI, JWT = TÀI KHOẢN
+ * ------------------------------------------------
+ * Key KHÔNG gắn tài khoản nào. Key chỉ chứng minh "ứng dụng ngoài được phép gọi
+ * máy chủ" và chịu hạn mức riêng. Tài khoản bị trừ điểm là tài khoản đã đăng
+ * nhập — lấy từ JWT của `POST /api/v1/login`.
+ *
+ * Vì vậy request có thể gửi:
+ *   - Chỉ JWT                              → dùng được, xác định tài khoản.
+ *   - Cả key LẪN JWT (khuyến nghị)          → key chịu hạn mức + scope, JWT là tài khoản.
+ *   - Chỉ key                              → BỊ TỪ CHỐI (401 USER_REQUIRED) với mọi
+ *                                            endpoint cần danh tính, trừ khi key có
+ *                                            `require_user = 0` (chỉ endpoint công khai).
+ *
+ * Gắn vào req:
+ *   req.apiKey      — row api_keys (null nếu chỉ dùng JWT)
+ *   req.apiUserId   — user id bị trừ điểm (luôn là tài khoản đăng nhập)
+ *   req.apiAuthType — 'jwt' | 'key+jwt' | 'key'
+ *   req.apiScopes   — mảng scope hiệu lực
+ * `need` là scope bắt buộc ('lookup' | 'account' | null = chỉ cần xác thực).
+ */
+function requireApiAuth(need) {
+  return async function (req, res, next) {
+    try {
+      const headerKey = req.headers['x-api-key'] && String(req.headers['x-api-key']).trim();
+      const bearer = bearerToken(req);
+      // `Authorization: Bearer sk_live_...` là key; còn lại là JWT.
+      const bearerIsKey = !!bearer && bearer.startsWith(apiKeys.KEY_PREFIX);
+      const rawKey = headerKey || (bearerIsKey ? bearer : null);
+      const rawJwt = bearerIsKey ? null : bearer;
+
+      if (!rawKey && !rawJwt) {
+        return apiError(res, 401, 'Thiếu thông tin xác thực. Gửi header "X-API-Key: sk_live_..." và "Authorization: Bearer <token>".', 'NO_CREDENTIALS');
+      }
+
+      // ---------- Bước 1: API key (cổng kết nối) ----------
+      let key = null;
+      if (rawKey) {
+        key = await apiKeys.findKeyByRaw(rawKey);
+        const usable = apiKeys.checkUsable(key);
+        if (!usable.ok) return apiError(res, usable.status, usable.error, usable.reason);
+
+        // Hạn mức theo key. Mọi response (kể cả lỗi) đều kèm header để client tự điều tiết.
+        const rl = apiKeys.checkRateLimit(key.id, key.rate_limit_per_min, key.rate_limit_per_day);
+        res.setHeader('X-RateLimit-Limit', rl.limitMin);
+        res.setHeader('X-RateLimit-Remaining', rl.remainingMin);
+        res.setHeader('X-RateLimit-Limit-Day', rl.limitDay);
+        res.setHeader('X-RateLimit-Remaining-Day', rl.remainingDay);
+        if (!rl.ok) {
+          res.setHeader('Retry-After', rl.retryAfter);
+          apiKeys.logRequest({
+            apiKeyId: key.id, userId: null, method: req.method,
+            path: req.originalUrl.split('?')[0], status: 429, durationMs: 0,
+            ip: adminIp(req), userAgent: req.headers['user-agent'], error: 'rate limited'
+          });
+          return apiError(res, 429, 'Vượt quá hạn mức gọi API. Thử lại sau ' + rl.retryAfter + ' giây.', 'RATE_LIMITED',
+            { retryAfter: rl.retryAfter, limitPerMin: rl.limitMin, limitPerDay: rl.limitDay });
+        }
+        apiKeys.touchKey(key.id);
+      }
+
+      // ---------- Bước 2: JWT (tài khoản bị trừ điểm) ----------
+      let user = null;
+      if (rawJwt) {
+        let decoded;
+        try {
+          decoded = jwt.verify(rawJwt, JWT_SECRET);
+        } catch (e) {
+          return apiError(res, 401, 'Token không hợp lệ hoặc đã hết hạn', 'INVALID_TOKEN');
+        }
+        if (!decoded || !decoded.id) return apiError(res, 401, 'Token không hợp lệ', 'INVALID_TOKEN');
+
+        user = await new Promise(r => db.get(
+          'SELECT id, username, role, status FROM users WHERE id = ?',
+          [decoded.id], (e, row) => r(e ? null : row)));
+        if (!user) return apiError(res, 401, 'Tài khoản không tồn tại', 'USER_NOT_FOUND');
+        if (user.status === 'disabled') return apiError(res, 403, 'Tài khoản đã bị khoá', 'ACCOUNT_DISABLED');
+        if (user.status && user.status !== 'active') {
+          return apiError(res, 403, 'Tài khoản chưa được kích hoạt', 'EMAIL_NOT_VERIFIED');
+        }
+        // Hạn mức riêng cho JWT theo user id (bucket âm để không đụng id của key).
+        const url = apiKeys.checkRateLimit(-user.id, 120, 20000);
+        if (!url.ok) {
+          res.setHeader('Retry-After', url.retryAfter);
+          return apiError(res, 429, 'Vượt quá hạn mức gọi API. Thử lại sau ' + url.retryAfter + ' giây.', 'RATE_LIMITED',
+            { retryAfter: url.retryAfter, limitPerMin: url.limitMin, limitPerDay: url.limitDay });
+        }
+      }
+
+      // ---------- Bước 3: cần danh tính mà không có JWT ----------
+      // Key một mình không biết trừ điểm của ai → từ chối, trừ khi key được đánh
+      // dấu "không cần đăng nhập" (chỉ dùng endpoint công khai).
+      const needIdentity = need !== null;
+      if (!user && needIdentity && key && apiKeys.requiresUser(key)) {
+        return apiError(res, 401,
+          'API key đã đúng nhưng còn thiếu đăng nhập. Gọi POST /api/v1/login để lấy token rồi gửi kèm header "Authorization: Bearer <token>" — điểm sẽ trừ vào tài khoản đăng nhập.',
+          'USER_REQUIRED', { hint: 'POST /api/v1/login' });
+      }
+      if (!user && needIdentity) {
+        return apiError(res, 401, 'Cần đăng nhập để xác định tài khoản bị trừ điểm.', 'USER_REQUIRED',
+          { hint: 'POST /api/v1/login' });
+      }
+
+      // ---------- Bước 4: scope ----------
+      // Scope hiệu lực = giao của scope key (nếu có) và scope JWT (nếu có).
+      // JWT của chính tài khoản có đủ mọi scope công khai; key có thể hẹp hơn.
+      const jwtScopes = user ? [apiKeys.SCOPE_LOOKUP, apiKeys.SCOPE_ACCOUNT] : null;
+      const keyScopes = key ? String(key.scopes || '').split(',').map(s => s.trim()).filter(Boolean) : null;
+      let effective;
+      if (keyScopes && jwtScopes) effective = keyScopes.filter(s => jwtScopes.includes(s));
+      else effective = keyScopes || jwtScopes || [];
+
+      if (need && !effective.includes(need)) {
+        const missingOnKey = keyScopes && !keyScopes.includes(need);
+        return apiError(res, 403,
+          missingOnKey ? `API key không có quyền "${need}"` : `Không có quyền "${need}"`,
+          'INSUFFICIENT_SCOPE',
+          { requiredScope: need, scopes: effective, keyScopes: keyScopes || null });
+      }
+
+      req.apiKey = key;
+      req.apiUserId = user ? user.id : null;
+      req.apiAuthType = key && user ? 'key+jwt' : (user ? 'jwt' : 'key');
+      req.apiScopes = effective;
+      // Gắn req.user để các hàm dùng chung (logLookups, credits...) chạy được.
+      req.user = user ? { id: user.id, username: user.username, role: user.role } : null;
+      return next();
+    } catch (e) {
+      return apiError(res, 500, e.message, 'INTERNAL_ERROR');
+    }
+  };
+}
+
+// Ghi log + thời gian cho mọi request /api/v1 (kể cả lỗi) — đặt trước route.
+function apiLogging(req, res, next) {
+  const started = Date.now();
+  const originalJson = res.json.bind(res);
+  let errorMsg = null;
+  res.json = function (body) {
+    if (body && body.error) errorMsg = body.error;
+    return originalJson(body);
+  };
+  // Ghi sau khi response xong để không làm chậm client.
+  res.on('finish', () => {
+    apiKeys.logRequest({
+      apiKeyId: req.apiKey ? req.apiKey.id : null,
+      userId: req.apiUserId != null ? req.apiUserId : null,
+      method: req.method,
+      path: req.originalUrl.split('?')[0],
+      status: res.statusCode,
+      durationMs: Date.now() - started,
+      cells: res.locals && res.locals.apiCells ? res.locals.apiCells : 0,
+      charged: res.locals && res.locals.apiCharged ? res.locals.apiCharged : 0,
+      ip: adminIp(req),
+      userAgent: req.headers['user-agent'],
+      error: errorMsg
+    });
+  });
+  next();
+}
+
+app.use('/api/v1', apiLogging);
+
 //
 // LƯU Ý VỀ MỨC ĐỘ AN TOÀN: captcha ở đây là "captcha chữ" — GET /api/captcha
 // trả về cả `id` và `text` cho client tự vẽ ra (canvas/CSS). Nó chặn được bot
@@ -269,6 +645,68 @@ function makeRateLimit(max, hits) {
 const authRateLimit = makeRateLimit(AUTH_RATE_LIMIT, authHits);
 const captchaRateLimit = makeRateLimit(CAPTCHA_RATE_LIMIT, captchaHits);
 
+// ============================================================
+// Bật/đóng website — chặn API khi website đang bảo trì.
+//
+// Đây là nơi THẨM QUYỀN thật sự: mọi endpoint nghiệp vụ trả 403 SITE_CLOSED
+// cho người dùng thường. Admin (JWT ký hợp lệ, role 'admin') đi qua bình
+// thường để còn bật/tắt website.
+//
+// Các endpoint vẫn phải chạy khi đóng:
+//   - đăng nhập + captcha (để admin vào bật lại),
+//   - /api/me (admin page xác thực phiên; client giữ được phiên),
+//   - /api/version + /api/site/status (trạng thái/phiên bản),
+//   - quên/đặt lại mật khẩu (admin quên mật khẩu vẫn cứu được),
+//   - payOS webhook (đơn đang xử lý vẫn được cộng điểm) + health check.
+// ============================================================
+const SITE_CLOSED_API_ALLOW = new Set([
+  '/login', '/captcha', '/me', '/version', '/site/status',
+  '/forgot-password', '/reset-password', '/reset-password/token',
+  '/verify-email', '/resend-verification',
+  '/payos/webhook', '/v1/health'
+]);
+
+/** Request có JWT admin hợp lệ? (cùng mức tin cậy với requireAdmin hiện tại) */
+function isAdminRequest(req) {
+  const header = req.headers['authorization'];
+  if (!header) return false;
+  const token = String(header).split(' ')[1];
+  if (!token) return false;
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return !!decoded && decoded.role === 'admin';
+  } catch (e) {
+    return false;
+  }
+}
+
+// GET /api/site/status — công khai (trước gate) để client biết website đóng/mở.
+app.get('/api/site/status', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    res.json(await siteStatus.getStatus());
+  } catch (e) {
+    res.json({ open: true, closed: false, message: '' });
+  }
+});
+
+app.use('/api', async (req, res, next) => {
+  try {
+    // Bỏ dấu "/" cuối để allowlist không bị hụt (vd /api/login/).
+    const apiPath = req.path.length > 1 ? req.path.replace(/\/+$/, '') : req.path;
+    if (SITE_CLOSED_API_ALLOW.has(apiPath)) return next();
+    const st = await siteStatus.getStatus();
+    if (!st.closed) return next();
+    if (isAdminRequest(req)) return next();
+    res.status(403)
+      .set('X-Site-Closed', '1')
+      .json({ ok: false, error: st.message, reason: 'SITE_CLOSED', maintenance: true });
+  } catch (e) {
+    // Lỗi bất ngờ khi đọc trạng thái → fail-open, không chặn oan toàn bộ API.
+    next();
+  }
+});
+
 // Auth Routes
 // Captcha công khai: client tự vẽ chuỗi 6 ký tự (xem ghi chú ở createCaptcha).
 app.get('/api/captcha', captchaRateLimit, (req, res) => {
@@ -286,7 +724,7 @@ app.post('/api/login', authRateLimit, (req, res) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
-    bcrypt.compare(password, user.password, (err, match) => {
+    bcrypt.compare(password, user.password, async (err, match) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!match) return res.status(401).json({ error: 'Invalid credentials' });
 
@@ -294,6 +732,16 @@ app.post('/api/login', authRateLimit, (req, res) => {
       if (user.status === 'disabled') {
         return res.status(403).json({ error: 'Tài khoản đã bị khoá', reason: 'ACCOUNT_DISABLED' });
       }
+
+      // Website đang bảo trì: chỉ admin được đăng nhập; người dùng thường nhận
+      // đúng thông báo bảo trì như trang chủ (client chuyển /maintenance.html).
+      const site = await siteStatus.getStatus();
+      if (site.closed && user.role !== 'admin') {
+        return res.status(403)
+          .set('X-Site-Closed', '1')
+          .json({ error: site.message, reason: 'SITE_CLOSED', maintenance: true });
+      }
+
       // Chưa kích hoạt email → client mở popup nhập mã 6 số.
       // `email` trả về để UI biết gửi lại mã cho ai (không lộ gì thêm).
       if (user.status === 'pending' || (user.email && !user.email_verified)) {
@@ -607,15 +1055,14 @@ app.put('/api/auth/password', requireAuth, authRateLimit, async (req, res) => {
 // ========================
 // Trang HTML trả về từ link trong email (không phụ thuộc JS của app).
 // ========================
-// ========================
-// Trang HTML trả về từ link trong email (không phụ thuộc JS của app).
-// ========================
 function authResultPage(ok, title, message, base) {
   const color = ok ? '#22c55e' : '#ef4444';
   const icon = ok ? 'OK' : '!';
   const target = ok ? `${base}/index.html#verified=1` : `${base}/index.html#login`;
   return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
 <title>${mailer.escapeHtml(title)} — Cell Tracker</title>
 ${ok ? `<meta http-equiv="refresh" content="3;url=${target}">` : ''}
 <style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
@@ -660,6 +1107,8 @@ function resetPasswordPage(token, base) {
     + "};";
   return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
 <title>Đặt lại mật khẩu — Cell Tracker</title>
 <style>${css}</style></head><body><div class="card">
 <h1>Đặt lại mật khẩu</h1><p class="hint">Nhập mật khẩu mới cho tài khoản Cell Tracker của bạn.</p>
@@ -680,28 +1129,158 @@ app.get('/api/me', requireAuth, (req, res) => {
 });
 
 // ========================
-// Trang HTML trả về từ link trong email (không phụ thuộc JS của app).
+// Public API v1 — cho ứng dụng / website khác tích hợp.
+//
+// Xác thực (xem requireApiAuth): `X-API-Key: sk_live_...` hoặc
+// `Authorization: Bearer <api-key|jwt>`. KHÔNG bật CORS → chỉ dùng server-to-server.
+// Mọi response kèm `apiVersion` để app ngoài phát hiện thay đổi hợp đồng.
+// Tài liệu đầy đủ: /API.md (và tab "API" trong trang admin).
 // ========================
-function authResultPage(ok, title, message, base) {
-  const color = ok ? '#22c55e' : '#ef4444';
-  const icon = ok ? 'OK' : '!';
-  const target = ok ? `${base}/index.html#verified=1` : `${base}/index.html#login`;
-  return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${mailer.escapeHtml(title)} — Cell Tracker</title>
-${ok ? `<meta http-equiv="refresh" content="3;url=${target}">` : ''}
-<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-background:#0f172a;font-family:Arial,Helvetica,sans-serif;color:#e2e8f0}
-.card{max-width:420px;margin:20px;padding:28px;background:#1e293b;border-radius:14px;text-align:center}
-h1{font-size:19px;margin:0 0 10px;color:${color}}p{font-size:14px;line-height:1.6;color:#cbd5e1}
-a{display:inline-block;margin-top:16px;background:#0ea5e9;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none}
-</style></head><body><div class="card">
-<div style="font-size:34px;color:${color};font-weight:bold">${icon}</div>
-<h1>${mailer.escapeHtml(title)}</h1>
-<p>${mailer.escapeHtml(message)}</p>
-<a href="${target}">Về trang chủ</a></div></body></html>`;
+
+// Thông tin tài khoản ĐÃ ĐĂNG NHẬP (nguồn bị trừ điểm). Key không có tài khoản.
+function apiAccountPayload(userId, authType) {
+  if (userId == null) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    db.get(`SELECT id, username, email, role, status, created_at, credit_balance
+            FROM users WHERE id = ?`, [Number(userId)], (err, user) => {
+      if (err || !user) return resolve(null);
+      resolve({
+        id: user.id,
+        username: user.username,
+        email: user.email || null,
+        role: user.role,
+        status: user.status || 'active',
+        created_at: user.created_at,
+        credit_balance: Number(user.credit_balance) || 0,
+        email_verified: !!(user.email),
+        auth_type: authType
+      });
+    });
+  });
 }
 
+// GET /api/v1/health — không cần xác thực, dùng để app ngoài kiểm tra kết nối.
+app.get('/api/v1/health', (req, res) => {
+  res.json({
+    ok: true, apiVersion: API_VERSION, service: 'cell.id.vn',
+    time: new Date().toISOString()
+  });
+});
+
+// POST /api/v1/login — đăng nhập bằng username/email + password, trả JWT.
+// Cùng logic với /api/login nhưng trả đúng hình dạng JSON của API v1.
+// Rate limit theo IP giống trang đăng nhập (chống dò mật khẩu).
+app.post('/api/v1/login', authRateLimit, (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return apiError(res, 400, 'Cần gửi username (hoặc email) và password', 'MISSING_CREDENTIALS');
+  }
+  db.get('SELECT * FROM users WHERE username = ? OR (email IS NOT NULL AND email = ?) LIMIT 1',
+    [username, String(username).trim().toLowerCase()], (err, user) => {
+      if (err) return apiError(res, 500, err.message, 'INTERNAL_ERROR');
+      if (!user) return apiError(res, 401, 'Sai tên đăng nhập hoặc mật khẩu', 'INVALID_CREDENTIALS');
+
+      bcrypt.compare(password, user.password, (err2, match) => {
+        if (err2) return apiError(res, 500, err2.message, 'INTERNAL_ERROR');
+        if (!match) return apiError(res, 401, 'Sai tên đăng nhập hoặc mật khẩu', 'INVALID_CREDENTIALS');
+
+        if (user.status === 'disabled') {
+          return apiError(res, 403, 'Tài khoản đã bị khoá', 'ACCOUNT_DISABLED');
+        }
+        if (user.status === 'pending' || (user.email && !user.email_verified)) {
+          return apiError(res, 403, 'Tài khoản chưa kích hoạt email', 'EMAIL_NOT_VERIFIED',
+            { email: user.email ? maskEmail(user.email) : null });
+        }
+
+        const token = jwt.sign({ id: user.id, username: user.username, role: user.role },
+          JWT_SECRET, { expiresIn: '24h' });
+        db.get('SELECT credit_balance FROM users WHERE id = ?', [user.id], (err3, row) => {
+          res.json({
+            ok: true, apiVersion: API_VERSION,
+            token, expires_in: 24 * 3600,
+            user: {
+              id: user.id,
+              username: user.username,
+              email: user.email || null,
+              role: user.role,
+              status: user.status || 'active',
+              credit_balance: row ? (Number(row.credit_balance) || 0) : 0
+            }
+          });
+        });
+      });
+    });
+});
+
+// GET /api/v1/me — thông tin tài khoản ĐÃ ĐĂNG NHẬP (từ JWT) + thông tin key đang gọi.
+// Key một mình không có "tài khoản của key" — key không gắn ai.
+app.get('/api/v1/me', requireApiAuth(apiKeys.SCOPE_ACCOUNT), async (req, res) => {
+  const acct = await apiAccountPayload(req.apiUserId, req.apiAuthType);
+  if (!acct) return apiError(res, 404, 'Không tìm thấy tài khoản', 'USER_NOT_FOUND');
+  const body = { ok: true, apiVersion: API_VERSION, user: acct, auth_type: req.apiAuthType };
+  // Đi kèm thông tin key đang gọi (nếu có) — app ngoài tự kiểm tra được hạn mức /
+  // scope của mình mà không cần hỏi admin.
+  if (req.apiKey) {
+    body.key = {
+      id: req.apiKey.id,
+      name: req.apiKey.name,
+      prefix: req.apiKey.key_prefix,
+      scopes: String(req.apiKey.scopes || '').split(',').map(s => s.trim()).filter(Boolean),
+      rate_limit_per_min: Number(req.apiKey.rate_limit_per_min) || 0,
+      rate_limit_per_day: Number(req.apiKey.rate_limit_per_day) || 0,
+      expires_at: req.apiKey.expires_at || null,
+      require_user: !!Number(req.apiKey.require_user)
+    };
+  }
+  res.json(body);
+});
+
+// GET /api/v1/cells/resolve — tra cứu 1 cell, trả toạ độ + bán kính + công nghệ.
+//
+// Dùng CHUNG resolveCellCore với /api/cells/resolve của web → thứ tự nguồn, geo
+// gate và cách trừ điểm luôn khớp. Trừ điểm như tra trên web (mỗi lần tra ra kết
+// quả = credit_cost_per_lookup); miss (404) không trừ.
+app.get('/api/v1/cells/resolve', requireApiAuth(apiKeys.SCOPE_LOOKUP), async (req, res) => {
+  const { mcc, mnc, lac, cellid, sector, radio } = req.query;
+  // `debug=1` chỉ có tác dụng với admin — resolveCellCore tự kiểm tra role.
+  const r = await resolveCellCore({
+    mcc, mnc, lac, cellid, sector, radio,
+    user: req.user, debug: req.query.debug === '1'
+  });
+  res.locals.apiCells = r.cells || 0;
+  res.locals.apiCharged = r.charged || 0;
+
+  if (r.status === 200) {
+    const d = r.body.data || {};
+    return res.json({
+      ok: true,
+      apiVersion: API_VERSION,
+      found: true,
+      source: r.body.source,
+      radio_source: r.body.radioInferred ? 'inferred' : 'declared',
+      radio_confident: r.body.radioConfident !== false,
+      credit: r.body.credit,
+      cell: {
+        mcc: d.mcc, mnc: d.mnc, lac: d.lac, cellid: d.cellid,
+        sector: sector != null && sector !== '' ? sector : null,
+        lat: parseFloat(d.lat) || d.lat,
+        lon: d.lon != null ? (parseFloat(d.lon) || d.lon) : (parseFloat(d.lng) || d.lng),
+        range: parseFloat(d.range) || null,
+        radio: d.radio || null,
+        address: d.description || null
+      }
+    });
+  }
+
+  // 400 / 402 / 404 / 500 — giữ nguyên mã trạng thái để app ngoài xử lý máy được.
+  const reasonByStatus = { 400: 'BAD_REQUEST', 402: 'INSUFFICIENT_CREDIT', 404: 'CELL_NOT_FOUND', 500: 'INTERNAL_ERROR' };
+  return res.status(r.status).json(Object.assign({
+    ok: false,
+    apiVersion: API_VERSION,
+    found: false,
+    reason: reasonByStatus[r.status] || 'ERROR'
+  }, r.body));
+});
 
 // ========================
 // Credits (user)
@@ -2055,33 +2634,7 @@ app.post('/api/users', requireAuth, requireAdmin, (req, res) => {
   });
 });
 
-app.put('/api/users/:id', requireAuth, requireAdmin, (req, res) => {
-  const { username, password, role, status } = req.body;
-  const fields = [];
-  const values = [];
-  if (username !== undefined) { fields.push('username = ?'); values.push(username); }
-  if (role !== undefined) { fields.push('role = ?'); values.push(role); }
-  if (status !== undefined) { fields.push('status = ?'); values.push(status); }
-  if (fields.length === 0 && !password) return res.status(400).json({ error: 'Nothing to update' });
-
-  const runUpdate = (hash) => {
-    if (hash) { fields.push('password = ?'); values.push(hash); }
-    values.push(req.params.id);
-    db.run(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, values, function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true, changes: this.changes });
-    });
-  };
-
-  if (password) {
-    bcrypt.hash(password, 10, (err, hash) => {
-      if (err) return res.status(500).json({ error: err.message });
-      runUpdate(hash);
-    });
-  } else {
-    runUpdate(null);
-  }
-});
+app.put('/api/users/:id', requireAuth, requireAdmin, (req, res) => updateAdminUser(req, res));
 
 app.delete('/api/users/:id', requireAuth, requireAdmin, (req, res) => {
   db.run('DELETE FROM users WHERE id = ? AND role != ?', [req.params.id, 'admin'], function(err) {
@@ -2408,157 +2961,182 @@ app.post('/api/admin/cells/bulk-delete', requireAuth, (req, res) => {
 // điểm. Miss (404) không trừ. Yêu cầu đăng nhập để quy được điểm về user.
 app.get('/api/cells/resolve', requireAuth, (req, res) => {
   const { mcc, mnc, lac, cellid, sector, radio } = req.query;
-  if (!mcc || !mnc || !lac || !cellid) return res.status(400).json({ error: 'mcc, mnc, lac, cellid required' });
+  resolveCellCore({ mcc, mnc, lac, cellid, sector, radio, user: req.user, debug: req.query.debug === '1' })
+    .then(r => res.status(r.status).json(r.body))
+    .catch(e => res.status(500).json({ error: e.message }));
+});
+
+/**
+ * Lõi tra cứu 1 cell — DÙNG CHUNG cho `/api/cells/resolve` (web) và
+ * `/api/v1/cells/resolve` (API công khai). Tách ra để 2 đường không bao giờ lệch
+ * nhau về thứ tự nguồn / geo gate / cách trừ điểm.
+ *
+ * @returns {Promise<{status:number, body:object, cells?:number, charged?:number}>}
+ *   Luôn trả object thay vì tự ghi response → caller tự set status + log.
+ */
+async function resolveCellCore({ mcc, mnc, lac, cellid, sector, radio, user, debug }) {
+  if (!mcc || !mnc || !lac || !cellid) {
+    return { status: 400, body: { error: 'mcc, mnc, lac, cellid required' } };
+  }
   // RAT do user chỉ định (dropdown "Tự động" → rỗng). Ưu tiên cao nhất trong inferRadio.
   const radioHint = normalizeRadio(radio) || '';
-  const userId = req.user ? req.user.id : null;
+  const userId = user ? user.id : null;
   // ref chống trùng theo lần tra: cùng (user, cell, giây) không trừ 2 lần khi retry.
   const chargeRef = `single:${userId}:${mcc}-${mnc}-${lac}-${cellid}`;
-  const logOne = (found, source, lat, lng, range, radio) => logLookups(userId, 'single', null,
-    [{ mcc, mnc, lac, cellid, sector, lat, lng, range, source, found, radio }]);
-  const lookupLocal = () => probeCellRow({ mcc, mnc, lac, cellid, sector });
-  lookupLocal().then(async (row) => {
-    if (row && row.lat) {
-      const localRadio = radioHint || normalizeRadio(row.radio) || inferRadio(cellid, sector, row.radio);
-      logOne(true, 'local', row.lat, row.lng, row.range, localRadio);
-      const charge = await credits.chargeLookup(userId, 1, chargeRef, 'Tra cứu 1 cell (CSDL nội bộ)');
-      if (!charge.ok) return res.status(402).json({ error: 'Không đủ điểm', balance: charge.balance, required: await credits.getCost(), reason: charge.reason });
-      return res.json({
-        source: 'local', credit: { balance: charge.balance, charged: charge.skipped ? 0 : 1 },
-        radioInferred: !radioHint && !normalizeRadio(row.radio),
-        radioConfident: radioConfident(cellid, sector, radioHint || row.radio),
-        data: { ...row, lon: row.lng, radio: localRadio }
-      });
-    }
+  const logOne = (found, source, lat, lng, range, r) => logLookups(userId, 'single', null,
+    [{ mcc, mnc, lac, cellid, sector, lat, lng, range, source, found, radio: r }]);
+  // Đóng gói kết quả thành công: phần thân response + số liệu để ghi log API.
+  const hit = (source, charge, data, extra) => ({
+    status: 200,
+    cells: 1,
+    charged: charge.skipped ? 0 : 1,
+    body: Object.assign({
+      source,
+      credit: { balance: charge.balance, charged: charge.skipped ? 0 : 1 },
+      data
+    }, extra || {})
+  });
+  const noCredit = async (charge) => ({
+    status: 402,
+    cells: 0,
+    body: { error: 'Không đủ điểm', balance: charge.balance, required: await credits.getCost(), reason: charge.reason }
+  });
 
-    // Build candidate cellid list — ECI form first, then raw. The local row (if
-    // any) supplies the RAT so the raw short id is not mistaken for GSM.
-    const candidates = cellId.cellIdCandidates(cellid, sector);
+  const row = await probeCellRow({ mcc, mnc, lac, cellid, sector });
+  if (row && row.lat) {
+    const localRadio = radioHint || normalizeRadio(row.radio) || inferRadio(cellid, sector, row.radio);
+    logOne(true, 'local', row.lat, row.lng, row.range, localRadio);
+    const charge = await credits.chargeLookup(userId, 1, chargeRef, 'Tra cứu 1 cell (CSDL nội bộ)');
+    if (!charge.ok) return noCredit(charge);
+    return hit('local', charge, { ...row, lon: row.lng, radio: localRadio }, {
+      radioInferred: !radioHint && !normalizeRadio(row.radio),
+      radioConfident: radioConfident(cellid, sector, radioHint || row.radio)
+    });
+  }
 
-    // Online fallback — iterate enabled sources sorted by priority
-    const onlineSources = await getEnabledOnlineSources();
-    for (const src of onlineSources) {
-      try {
-        let data = null;
-        if (src.type === 'opencellid') {
-          const apiKey = await getOpenCellIDKey();
-          if (!apiKey) { noteSourceError('opencellid', 'Chưa cấu hình API key'); continue; }
-          let lastErr = null;
-          for (const candidateId of candidates) {
-            try { data = await resolveOpenCellID({ mcc, mnc, lac, cellid: candidateId }, apiKey); lastErr = null; break; }
-            catch (e) { lastErr = e; /* try next candidate */ }
-          }
-          if (!data && lastErr) noteSourceError('opencellid', lastErr.message);
-        } else if (src.type === 'opencellid_web') {
-          data = await resolveOpenCellIDWeb({ mcc, mnc, lac, cellid, radio: radioHint || (row ? row.radio : '') }, sector);
-        } else if (src.type === 't0stbrot') {
-          data = await resolveT0stbrot({ mcc, mnc, lac, cellid, sector, radio: radioHint });
-        } else if (src.type === 'combain') {
-          data = await resolveCombain({ mcc, mnc, lac, cellid, sector, radio: radioHint });
+  // Build candidate cellid list — ECI form first, then raw. The local row (if
+  // any) supplies the RAT so the raw short id is not mistaken for GSM.
+  const candidates = cellId.cellIdCandidates(cellid, sector);
+
+  // Online fallback — iterate enabled sources sorted by priority
+  const onlineSources = await getEnabledOnlineSources();
+  for (const src of onlineSources) {
+    try {
+      let data = null;
+      if (src.type === 'opencellid') {
+        const apiKey = await getOpenCellIDKey();
+        if (!apiKey) { noteSourceError('opencellid', 'Chưa cấu hình API key'); continue; }
+        let lastErr = null;
+        for (const candidateId of candidates) {
+          try { data = await resolveOpenCellID({ mcc, mnc, lac, cellid: candidateId }, apiKey); lastErr = null; break; }
+          catch (e) { lastErr = e; /* try next candidate */ }
         }
-        if (data && data.lat != null) {
-          clearSourceError(src.type);
-          if (!isPlausibleLatLng(data.lat, data.lon, mcc)) {
-            console.warn(`geo gate: bỏ toạ độ không hợp lệ từ ${src.type} (${mcc}-${mnc}-${lac}-${cellid} → ${data.lat},${data.lon})`);
-            continue;
-          }
-          const storeCellid = data.cellid || cellid;
-          const storeRadio = radioHint || normalizeRadio(data.radio) || inferRadio(cellid, sector, row ? row.radio : '');
+        if (!data && lastErr) noteSourceError('opencellid', lastErr.message);
+      } else if (src.type === 'opencellid_web') {
+        data = await resolveOpenCellIDWeb({ mcc, mnc, lac, cellid, radio: radioHint || (row ? row.radio : '') }, sector);
+      } else if (src.type === 't0stbrot') {
+        data = await resolveT0stbrot({ mcc, mnc, lac, cellid, sector, radio: radioHint });
+      } else if (src.type === 'combain') {
+        data = await resolveCombain({ mcc, mnc, lac, cellid, sector, radio: radioHint });
+      }
+      if (data && data.lat != null) {
+        clearSourceError(src.type);
+        if (!isPlausibleLatLng(data.lat, data.lon, mcc)) {
+          console.warn(`geo gate: bỏ toạ độ không hợp lệ từ ${src.type} (${mcc}-${mnc}-${lac}-${cellid} → ${data.lat},${data.lon})`);
+          continue;
+        }
+        const storeCellid = data.cellid || cellid;
+        const storeRadio = radioHint || normalizeRadio(data.radio) || inferRadio(cellid, sector, row ? row.radio : '');
+        const store = await storeOnlineCell({
+          mcc, mnc, lac, cellid: storeCellid,
+          lat: data.lat, lng: data.lon, range: data.range, description: data.description,
+          source: src.type, radio: storeRadio, userId,
+        });
+        if (!store.written && store.reason && store.reason !== 'csv-protected') {
+          console.warn(`store gate: không ghi ${src.type} ${mcc}-${mnc}-${lac}-${cellid} (${store.reason})`);
+        }
+        data.radio = storeRadio;
+        logOne(true, src.type, data.lat, data.lon, data.range, storeRadio);
+        const charge = await credits.chargeLookup(userId, 1, chargeRef,
+          `Tra cứu 1 cell (${ONLINE_SOURCE_DEFAULTS[src.type]?.name || src.type})`);
+        if (!charge.ok) return noCredit(charge);
+        return hit(src.type, charge, data, {
+          radioInferred: !radioHint && !normalizeRadio(data.radio),
+          radioConfident: radioConfident(cellid, sector, radioHint || (row ? row.radio : ''))
+        });
+      }
+    } catch (e) { noteSourceError(src.type, e.message); /* fall through to next source */ }
+  }
+
+  // Google Geolocation — nguồn cuối, chỉ dùng khi MỌI nguồn per-cell đã miss.
+  // Google trả 1 toạ độ cho cả tập cell (không phải toạ độ riêng từng trạm) nên
+  // với 1 cell lẻ nó chỉ là ước lượng thô; vẫn hơn là miss hoàn toàn.
+  if (onlineSources.some(s => s.type === 'google')) {
+    const gKey = await getGoogleKey();
+    if (!gKey) {
+      noteSourceError('google', 'Chưa cấu hình API key');
+    } else {
+      try {
+        const cell = { mcc, mnc, lac, cellid, sector, radio: radioHint };
+        const g = await resolveGoogleGeolocation([cell], gKey);
+        if (g && isPlausibleLatLng(g.lat, g.lng, mcc)) {
+          const storeRadio = radioHint || normalizeRadio(row ? row.radio : '') || inferRadio(cellid, sector, row ? row.radio : '');
+          const data = {
+            mcc, mnc, lac, cellid,
+            lat: g.lat, lon: g.lng, range: g.accuracy,
+            radio: storeRadio,
+            description: `Google Geolocation ${mcc}-${mnc}`
+          };
+          const storeId = cellId.cellIdCandidates(cellid, sector)[0];
           const store = await storeOnlineCell({
-            mcc, mnc, lac, cellid: storeCellid,
-            lat: data.lat, lng: data.lon, range: data.range, description: data.description,
-            source: src.type, radio: storeRadio, userId,
+            mcc, mnc, lac, cellid: storeId,
+            lat: g.lat, lng: g.lng, range: g.accuracy, description: data.description,
+            source: 'google', radio: storeRadio, userId,
           });
           if (!store.written && store.reason && store.reason !== 'csv-protected') {
-            console.warn(`store gate: không ghi ${src.type} ${mcc}-${mnc}-${lac}-${cellid} (${store.reason})`);
+            console.warn(`store gate: không ghi google ${mcc}-${mnc}-${lac}-${cellid} (${store.reason})`);
           }
-          data.radio = storeRadio;
-          logOne(true, src.type, data.lat, data.lon, data.range, storeRadio);
+          logOne(true, 'google', g.lat, g.lng, g.accuracy, storeRadio);
+          clearSourceError('google');
           const charge = await credits.chargeLookup(userId, 1, chargeRef,
-            `Tra cứu 1 cell (${ONLINE_SOURCE_DEFAULTS[src.type]?.name || src.type})`);
-          if (!charge.ok) return res.status(402).json({ error: 'Không đủ điểm', balance: charge.balance, required: await credits.getCost(), reason: charge.reason });
-          return res.json({
-            source: src.type, credit: { balance: charge.balance, charged: charge.skipped ? 0 : 1 },
-            radioInferred: !radioHint && !normalizeRadio(data.radio),
-            radioConfident: radioConfident(cellid, sector, radioHint || (row ? row.radio : '')),
-            data
+            `Tra cứu 1 cell (${ONLINE_SOURCE_DEFAULTS.google.name})`);
+          if (!charge.ok) return noCredit(charge);
+          return hit('google', charge, data, {
+            radioInferred: !radioHint && !normalizeRadio(storeRadio),
+            radioConfident: radioConfident(cellid, sector, radioHint || (row ? row.radio : ''))
           });
         }
-      } catch (e) { noteSourceError(src.type, e.message); /* fall through to next source */ }
-    }
-
-    // Google Geolocation — nguồn cuối, chỉ dùng khi MỌI nguồn per-cell đã miss.
-    // Google trả 1 toạ độ cho cả tập cell (không phải toạ độ riêng từng trạm) nên
-    // với 1 cell lẻ nó chỉ là ước lượng thô; vẫn hơn là miss hoàn toàn.
-    if (onlineSources.some(s => s.type === 'google')) {
-      const gKey = await getGoogleKey();
-      if (!gKey) {
-        noteSourceError('google', 'Chưa cấu hình API key');
-      } else {
-        try {
-          const cell = { mcc, mnc, lac, cellid, sector, radio: radioHint };
-          const g = await resolveGoogleGeolocation([cell], gKey);
-          if (g && isPlausibleLatLng(g.lat, g.lng, mcc)) {
-            const storeRadio = radioHint || normalizeRadio(row ? row.radio : '') || inferRadio(cellid, sector, row ? row.radio : '');
-            const data = {
-              mcc, mnc, lac, cellid,
-              lat: g.lat, lon: g.lng, range: g.accuracy,
-              radio: storeRadio,
-              description: `Google Geolocation ${mcc}-${mnc}`
-            };
-            const storeId = cellId.cellIdCandidates(cellid, sector)[0];
-            const store = await storeOnlineCell({
-              mcc, mnc, lac, cellid: storeId,
-              lat: g.lat, lng: g.lng, range: g.accuracy, description: data.description,
-              source: 'google', radio: storeRadio, userId,
-            });
-            if (!store.written && store.reason && store.reason !== 'csv-protected') {
-              console.warn(`store gate: không ghi google ${mcc}-${mnc}-${lac}-${cellid} (${store.reason})`);
-            }
-            logOne(true, 'google', g.lat, g.lng, g.accuracy, storeRadio);
-            clearSourceError('google');
-            const charge = await credits.chargeLookup(userId, 1, chargeRef,
-              `Tra cứu 1 cell (${ONLINE_SOURCE_DEFAULTS.google.name})`);
-            if (!charge.ok) return res.status(402).json({ error: 'Không đủ điểm', balance: charge.balance, required: await credits.getCost(), reason: charge.reason });
-            return res.json({
-              source: 'google', credit: { balance: charge.balance, charged: charge.skipped ? 0 : 1 },
-              radioInferred: !radioHint && !normalizeRadio(storeRadio),
-              radioConfident: radioConfident(cellid, sector, radioHint || (row ? row.radio : '')),
-              data
-            });
-          }
-          console.warn(`geo gate: bỏ toạ độ không hợp lệ từ google (${mcc}-${mnc}-${lac}-${cellid} → ${g.lat},${g.lng})`);
-        } catch (e) {
-          noteSourceError('google', e.message);
-          console.warn(`Google Geolocation miss (${mcc}-${mnc}-${lac}-${cellid}): ${e.message}`);
-        }
+        console.warn(`geo gate: bỏ toạ độ không hợp lệ từ google (${mcc}-${mnc}-${lac}-${cellid} → ${g.lat},${g.lng})`);
+      } catch (e) {
+        noteSourceError('google', e.message);
+        console.warn(`Google Geolocation miss (${mcc}-${mnc}-${lac}-${cellid}): ${e.message}`);
       }
     }
+  }
 
-    logOne(false, null, null, null, null);
-    const names = ['CSDL nội bộ', ...onlineSources.map(s => ONLINE_SOURCE_DEFAULTS[s.type]?.name || s.type)];
-    // `?debug=1` (admin) kèm lý do miss gần nhất của từng nguồn — thay vì phải mò log
-    // console (nhiều khi không bật file log). Không lộ key, chỉ giữ message lỗi.
-    const payload = { error: 'Không tìm thấy cell trong ' + names.join(', ') + '.' };
-    if (req.query.debug === '1' && req.user && req.user.role === 'admin') {
-      const perSource = {};
-      for (const src of onlineSources) {
-        let keyReady = true;
-        if (src.type === 'opencellid') keyReady = !!(await getOpenCellIDKey());
-        else if (src.type === 'google') keyReady = !!(await getGoogleKey());
-        else if (src.type === 'combain') keyReady = !!(await getCombainKey());
-        const le = sourceLastError.get(src.type);
-        perSource[src.type] = {
-          key: keyReady ? 'set' : 'missing',
-          lastError: le ? le.message : null,
-          lastErrorAt: le ? le.at : null
-        };
-      }
-      payload.debug = { sources: perSource, sourcesQueried: onlineSources.map(s => s.type) };
+  logOne(false, null, null, null, null);
+  const names = ['CSDL nội bộ', ...onlineSources.map(s => ONLINE_SOURCE_DEFAULTS[s.type]?.name || s.type)];
+  // `?debug=1` (admin) kèm lý do miss gần nhất của từng nguồn — thay vì phải mò log
+  // console (nhiều khi không bật file log). Không lộ key, chỉ giữ message lỗi.
+  const payload = { error: 'Không tìm thấy cell trong ' + names.join(', ') + '.' };
+  if (debug && user && user.role === 'admin') {
+    const perSource = {};
+    for (const src of onlineSources) {
+      let keyReady = true;
+      if (src.type === 'opencellid') keyReady = !!(await getOpenCellIDKey());
+      else if (src.type === 'google') keyReady = !!(await getGoogleKey());
+      else if (src.type === 'combain') keyReady = !!(await getCombainKey());
+      const le = sourceLastError.get(src.type);
+      perSource[src.type] = {
+        key: keyReady ? 'set' : 'missing',
+        lastError: le ? le.message : null,
+        lastErrorAt: le ? le.at : null
+      };
     }
-    res.status(404).json(payload);
-  }).catch((e) => res.status(500).json({ error: e.message }));
-});
+    payload.debug = { sources: perSource, sourcesQueried: onlineSources.map(s => s.type) };
+  }
+  return { status: 404, cells: 0, body: payload };
+}
 
 // Batch resolve for call logs — local first, then online sources by priority
 app.post('/api/cells/resolve-batch', requireAuth, async (req, res) => {
@@ -3632,7 +4210,7 @@ app.get('/api/records/:phone', requireAuth, (req, res) => {
   });
 });
 
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: UPLOAD_DIR });
 
 // ========================
 // User: Call Logs (scoped to owner)
@@ -3691,9 +4269,9 @@ app.post('/api/call-logs/upload', requireAuth, upload.single('file'), (req, res)
 
 // Thư mục nhận file cho /api/call-logs/analyze — upload vào ĐĨA các file lớn (multer
 // memoryStorage chỉ giữ file nhỏ trong RAM), xoá ngay trong `finally`.
-try { fs.mkdirSync(path.join(__dirname, 'uploads'), { recursive: true }); } catch (_) { /* đã có */ }
+try { fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch (_) { /* đã có */ }
 const analyzeUpload = multer({
-  dest: path.join(__dirname, 'uploads'),
+  dest: UPLOAD_DIR,
   limits: { fileSize: 50 * 1024 * 1024 }
 });
 
@@ -4243,8 +4821,7 @@ app.post('/api/upload/cells', requireAuth, upload.single('file'), (req, res) => 
 // ========================
 // CLF V4.1 conversion (G-MoN Pro) <-> OpenCellID CSV
 // ========================
-const clfUpload = multer({ dest: 'uploads/' });
-const CLF_EXPORT_DIR = path.join(__dirname, 'uploads', 'clf');
+const clfUpload = multer({ dest: UPLOAD_DIR });
 
 function ensureClfDir() {
   if (!fs.existsSync(CLF_EXPORT_DIR)) fs.mkdirSync(CLF_EXPORT_DIR, { recursive: true });
@@ -4345,7 +4922,7 @@ app.get('/api/convert/clf/download/:file', requireAuth, (req, res) => {
 });
 
 // Excel upload for VinaPhone lookup
-const vinaphoneUpload = multer({ dest: 'uploads/' });
+const vinaphoneUpload = multer({ dest: UPLOAD_DIR });
 
 app.post('/api/upload/vinaphone', requireAuth, vinaphoneUpload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -4417,54 +4994,230 @@ app.get('/api/admin/users', requireAuth, (req, res) => {
   });
 });
 
+// ------------------------------------------------------------------
+// Admin sửa user: cho phép chỉnh TOÀN BỘ trường hồ sơ cơ bản.
+// `credit_balance` KHÔNG sửa trực tiếp — vẫn đi qua ledger (nút "Nạp điểm")
+// để giữ bất biến SUM(credit_transactions) == users.credit_balance.
+// ------------------------------------------------------------------
+const USER_ROLES = new Set(['user', 'admin']);
+const USER_STATUSES = new Set(['pending', 'active', 'disabled']);
+const USERNAME_RE = /^[A-Za-z0-9._-]+$/;
+const USER_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function dbGet(sql, params = []) {
+  return new Promise((resolve) => {
+    db.get(sql, params, (err, row) => resolve(err ? null : (row || null)));
+  });
+}
+
+function dbRun(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) reject(err);
+      else resolve({ changes: this.changes, lastID: this.lastID });
+    });
+  });
+}
+
+function hashPassword(pw) {
+  return new Promise((resolve, reject) => {
+    bcrypt.hash(String(pw), 10, (err, hash) => (err ? reject(err) : resolve(hash)));
+  });
+}
+
+function truthyFlag(v) {
+  return v === true || v === 1 || v === '1' || v === 'true' || v === 'on';
+}
+
+function adminUserView(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    username: row.username,
+    email: row.email || null,
+    email_verified: Number(row.email_verified) ? 1 : 0,
+    role: row.role,
+    status: row.status || 'active',
+    terms_accepted_at: row.terms_accepted_at || null,
+    created_at: row.created_at,
+    credit_balance: Number(row.credit_balance) || 0,
+    balance: Number(row.credit_balance) || 0,
+    used: Number(row.used) || 0
+  };
+}
+
+/** Chi tiết 1 user cho modal sửa (kèm số dư + tổng đã dùng). */
+async function loadAdminUser(id) {
+  const row = await new Promise((resolve) => {
+    db.get(`SELECT u.id, u.username, u.email, u.email_verified, u.role, u.status,
+                   u.terms_accepted_at, u.created_at, u.credit_balance,
+                   COALESCE((SELECT SUM(-t.amount) FROM credit_transactions t
+                             WHERE t.user_id = u.id AND t.type = 'lookup'), 0) AS used
+            FROM users u WHERE u.id = ?`, [id], (err, r) => resolve(err ? null : (r || null)));
+  });
+  return adminUserView(row);
+}
+
+/** PUT /api/admin/users/:id — validate + cập nhật 1 lần, trả user mới. */
+async function updateAdminUser(req, res) {
+  try {
+    const target = await loadAdminUser(req.params.id);
+    if (!target) return res.status(404).json({ error: 'Không tìm thấy user' });
+    const body = req.body || {};
+    const fields = [];
+    const values = [];
+
+    if (body.username !== undefined) {
+      const username = String(body.username).trim();
+      if (username.length < 3 || username.length > 32) {
+        return res.status(400).json({ error: 'Tên đăng nhập phải từ 3 đến 32 ký tự' });
+      }
+      if (!USERNAME_RE.test(username)) {
+        return res.status(400).json({ error: 'Tên đăng nhập chỉ dùng chữ, số và . _ -' });
+      }
+      if (username !== target.username) {
+        const dup = await dbGet('SELECT id FROM users WHERE username = ? AND id <> ?', [username, target.id]);
+        if (dup) return res.status(409).json({ error: 'Tên đăng nhập đã tồn tại' });
+      }
+      fields.push('username = ?');
+      values.push(username);
+    }
+
+    let nextEmail = target.email || null;
+    let emailChanged = false;
+    if (body.email !== undefined) {
+      const raw = String(body.email == null ? '' : body.email).trim().toLowerCase();
+      nextEmail = raw || null;
+      if (nextEmail && !USER_EMAIL_RE.test(nextEmail)) {
+        return res.status(400).json({ error: 'Email không hợp lệ' });
+      }
+      emailChanged = nextEmail !== (target.email || null);
+      if (emailChanged && nextEmail) {
+        const dup = await dbGet('SELECT id FROM users WHERE email = ? AND id <> ?', [nextEmail, target.id]);
+        if (dup) return res.status(409).json({ error: 'Email này đã được dùng cho tài khoản khác' });
+      }
+      fields.push('email = ?');
+      values.push(nextEmail);
+    }
+
+    // Đổi email mà không nói rõ trạng thái xác thực → reset về chưa xác thực
+    // (tránh việc email mới nghiễm nhiên "đã xác thực").
+    let nextVerified = Number(target.email_verified) ? 1 : 0;
+    if (body.email_verified !== undefined) {
+      nextVerified = truthyFlag(body.email_verified) ? 1 : 0;
+      fields.push('email_verified = ?');
+      values.push(nextVerified);
+    } else if (emailChanged) {
+      nextVerified = 0;
+      fields.push('email_verified = ?');
+      values.push(0);
+    }
+
+    let nextRole = target.role;
+    if (body.role !== undefined) {
+      const role = String(body.role);
+      if (!USER_ROLES.has(role)) return res.status(400).json({ error: 'Vai trò không hợp lệ' });
+      nextRole = role;
+      fields.push('role = ?');
+      values.push(role);
+    }
+
+    let nextStatus = target.status || 'active';
+    if (body.status !== undefined) {
+      const status = String(body.status);
+      if (!USER_STATUSES.has(status)) return res.status(400).json({ error: 'Trạng thái không hợp lệ' });
+      nextStatus = status;
+      fields.push('status = ?');
+      values.push(status);
+    }
+
+    if (body.password !== undefined && String(body.password) !== '') {
+      const password = String(body.password);
+      if (password.length < 6) {
+        return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 6 ký tự' });
+      }
+      fields.push('password = ?');
+      values.push(await hashPassword(password));
+    }
+
+    if (!fields.length) return res.status(400).json({ error: 'Không có thay đổi nào để lưu' });
+
+    // Guard: không tự hạ quyền/tự khoá; không để mất admin cuối cùng.
+    if (Number(req.user.id) === target.id && (nextRole !== 'admin' || nextStatus !== 'active')) {
+      return res.status(400).json({ error: 'Không thể hạ quyền hoặc khoá tài khoản của chính mình' });
+    }
+    const wasActiveAdmin = target.role === 'admin' && (target.status || 'active') === 'active';
+    const willBeActiveAdmin = nextRole === 'admin' && nextStatus === 'active';
+    if (wasActiveAdmin && !willBeActiveAdmin) {
+      const row = await dbGet(
+        `SELECT COUNT(*) AS c FROM users WHERE role = 'admin' AND status = 'active' AND id <> ?`,
+        [target.id]);
+      if (!row || Number(row.c) === 0) {
+        return res.status(400).json({ error: 'Không thể hạ quyền hoặc khoá admin cuối cùng' });
+      }
+    }
+
+    await dbRun(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, [...values, target.id]);
+    const user = await loadAdminUser(target.id);
+    res.json({ success: true, changes: fields.length, user });
+  } catch (e) {
+    if (/UNIQUE/i.test(e.message)) {
+      return res.status(409).json({ error: 'Tên đăng nhập hoặc email đã tồn tại' });
+    }
+    res.status(500).json({ error: e.message });
+  }
+}
+
+// GET /api/admin/users/:id — chi tiết cho modal sửa.
+app.get('/api/admin/users/:id', requireAuth, requireAdmin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const user = await loadAdminUser(req.params.id);
+    if (!user) return res.status(404).json({ error: 'Không tìm thấy user' });
+    res.json(user);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/admin/users', requireAuth, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
   // Không nhận `credit`: điểm user mới chỉ đến từ bonus đăng ký.
   // User do admin tạo được coi là đã xác thực email (không qua bước kích hoạt).
-  const { username, password, role, email, status } = req.body;
+  const body = req.body || {};
+  const username = String(body.username || '').trim();
+  const password = String(body.password || '');
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
-  const mail = email ? String(email).trim().toLowerCase() : null;
+  if (username.length < 3 || username.length > 32) return res.status(400).json({ error: 'Tên đăng nhập phải từ 3 đến 32 ký tự' });
+  if (!USERNAME_RE.test(username)) return res.status(400).json({ error: 'Tên đăng nhập chỉ dùng chữ, số và . _ -' });
+  if (password.length < 6) return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 6 ký tự' });
+
+  const role = body.role === undefined ? 'user' : String(body.role);
+  if (!USER_ROLES.has(role)) return res.status(400).json({ error: 'Vai trò không hợp lệ' });
+  const status = body.status === undefined ? 'active' : String(body.status);
+  if (!USER_STATUSES.has(status)) return res.status(400).json({ error: 'Trạng thái không hợp lệ' });
+  const mail = body.email ? String(body.email).trim().toLowerCase() : null;
+  if (mail && !USER_EMAIL_RE.test(mail)) return res.status(400).json({ error: 'Email không hợp lệ' });
+  const verified = body.email_verified === undefined ? 1 : (truthyFlag(body.email_verified) ? 1 : 0);
+
   bcrypt.hash(password, 10, (err, hash) => {
     if (err) return res.status(500).json({ error: err.message });
-    db.run('INSERT INTO users (username, password, role, email, email_verified, status) VALUES (?, ?, ?, ?, 1, ?)',
-      [username, hash, role || 'user', mail, status || 'active'], async function(err) {
-      if (err) return res.status(500).json({ error: err.message });
+    db.run('INSERT INTO users (username, password, role, email, email_verified, status) VALUES (?, ?, ?, ?, ?, ?)',
+      [username, hash, role, mail, verified, status], async function(err) {
+      if (err) {
+        if (/UNIQUE/i.test(err.message)) {
+          return res.status(409).json({ error: /email/i.test(err.message) ? 'Email này đã được dùng cho tài khoản khác' : 'Tên đăng nhập đã tồn tại' });
+        }
+        return res.status(500).json({ error: err.message });
+      }
       const userId = this.lastID;
       const balance = await applyUserInitialCredit(userId, req);
-      res.json({ success: true, id: userId, credit_balance: balance });
+      res.json({ success: true, id: userId, credit_balance: balance, user: await loadAdminUser(userId) });
     });
   });
 });
 
-app.put('/api/admin/users/:id', requireAuth, (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-  const { username, password, role, email, status } = req.body;
-  const mail = email === undefined ? null : (email ? String(email).trim().toLowerCase() : '');
-  // email === '' là ý định XOÁ email; undefined là giữ nguyên (COALESCE không xử lý
-  // được phân biệt này nên phải rẽ nhánh SQL).
-  const setEmail = email === undefined ? '' : ', email = ?';
-  const emailArg = email === undefined ? [] : [mail || null];
-  const setStatus = status ? ', status = ?' : '';
-  const statusArg = status ? [status] : [];
-  if (password) {
-    bcrypt.hash(password, 10, (err, hash) => {
-      if (err) return res.status(500).json({ error: err.message });
-      db.run(`UPDATE users SET username = COALESCE(?, username), password = ?, role = COALESCE(?, role)
-              ${setEmail}${setStatus} WHERE id = ?`,
-        [username || null, hash, role || null, ...emailArg, ...statusArg, req.params.id], function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true, changes: this.changes });
-      });
-    });
-  } else {
-    db.run(`UPDATE users SET username = COALESCE(?, username), role = COALESCE(?, role)
-            ${setEmail}${setStatus} WHERE id = ?`,
-      [username || null, role || null, ...emailArg, ...statusArg, req.params.id], function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true, changes: this.changes });
-    });
-  }
-});
+app.put('/api/admin/users/:id', requireAuth, requireAdmin, (req, res) => updateAdminUser(req, res));
 
 // Admin gửi lại mã kích hoạt (khi user không nhận được email).
 app.post('/api/admin/users/:id/resend-verification', requireAuth, creditAdminRateLimit, async (req, res) => {
@@ -4509,10 +5262,97 @@ app.get('/api/admin/users/:id/verification-link', requireAuth, creditAdminRateLi
 
 app.delete('/api/admin/users/:id', requireAuth, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  if (Number(req.user.id) === Number(req.params.id)) {
+    return res.status(400).json({ error: 'Không thể tự xoá tài khoản của chính mình' });
+  }
   db.run('DELETE FROM users WHERE id = ? AND role != ?', [req.params.id, 'admin'], function(err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ success: true, deleted: this.changes });
   });
+});
+
+// ========================
+// Admin — quản lý Public API (tab "API" trong admin.html)
+//
+// Tất cả route dưới đây requireAdmin: chỉ admin mới tạo/thu hồi key và xem log.
+// Key thô CHỈ trả về đúng 1 lần ở POST /api/admin/api/keys — không có endpoint
+// nào đọc lại được (server chỉ giữ SHA-256).
+//
+// `key_hash` KHÔNG BAO GIỜ được trả ra response, kể cả cho admin: biết hash
+// cũng không dựng lại được key, nhưng không có lý do gì để phát tán nó.
+// ========================
+function publicKeyView(k) {
+  return {
+    id: k.id,
+    name: k.name,
+    key_prefix: k.key_prefix,
+    scopes: String(k.scopes || '').split(',').map(s => s.trim()).filter(Boolean),
+    rate_limit_per_min: Number(k.rate_limit_per_min) || 0,
+    rate_limit_per_day: Number(k.rate_limit_per_day) || 0,
+    enabled: !!Number(k.enabled),
+    // Key không gắn tài khoản: require_user = 1 nghĩa là bắt buộc đăng nhập (JWT).
+    require_user: k.require_user == null ? true : !!Number(k.require_user),
+    revoked_at: k.revoked_at || null,
+    expires_at: k.expires_at || null,
+    last_used_at: k.last_used_at || null,
+    created_at: k.created_at,
+    request_count: Number(k.request_count) || 0,
+    request_count_24h: Number(k.request_count_24h) || 0,
+    // Số tài khoản khác nhau đã dùng key này — cho admin thấy key đang phục vụ ai.
+    user_count: Number(k.user_count) || 0
+  };
+}
+
+app.get('/api/admin/api/keys', requireAuth, requireAdmin, async (req, res) => {
+  const keys = await apiKeys.listKeys();
+  res.json(keys.map(publicKeyView));
+});
+
+app.post('/api/admin/api/keys', requireAuth, requireAdmin, creditAdminRateLimit, async (req, res) => {
+  // KHÔNG nhận user_id: key là cổng kết nối, không gắn tài khoản cố định.
+  const r = await apiKeys.createKey({
+    name: req.body && req.body.name,
+    scopes: req.body && req.body.scopes,
+    rateLimitPerMin: req.body && req.body.rate_limit_per_min,
+    rateLimitPerDay: req.body && req.body.rate_limit_per_day,
+    expiresAt: req.body && req.body.expires_at,
+    requireUser: req.body && req.body.require_user,
+    createdBy: req.user.id
+  });
+  if (!r.ok) return res.status(400).json({ error: r.error });
+  // `raw` CHỈ có ở response này — admin phải copy ngay.
+  res.json({ success: true, key: publicKeyView(r.key), raw: r.raw });
+});
+
+app.put('/api/admin/api/keys/:id', requireAuth, requireAdmin, creditAdminRateLimit, async (req, res) => {
+  const r = await apiKeys.updateKey(req.params.id, req.body || {});
+  if (!r.ok) return res.status(400).json({ error: r.error });
+  res.json({ success: true, key: publicKeyView(r.key) });
+});
+
+app.post('/api/admin/api/keys/:id/revoke', requireAuth, requireAdmin, creditAdminRateLimit, async (req, res) => {
+  const r = await apiKeys.revokeKey(req.params.id);
+  if (!r.ok) return res.status(400).json({ error: r.error });
+  res.json({ success: true, key: publicKeyView(r.key) });
+});
+
+app.delete('/api/admin/api/keys/:id', requireAuth, requireAdmin, creditAdminRateLimit, async (req, res) => {
+  const r = await apiKeys.deleteKey(req.params.id);
+  if (!r.ok) return res.status(400).json({ error: r.error });
+  res.json({ success: true });
+});
+
+app.get('/api/admin/api/logs', requireAuth, requireAdmin, async (req, res) => {
+  const logs = await apiKeys.listLogs({
+    apiKeyId: req.query.key_id,
+    status: req.query.status,
+    limit: req.query.limit
+  });
+  res.json(logs);
+});
+
+app.get('/api/admin/api/stats', requireAuth, requireAdmin, async (req, res) => {
+  res.json(await apiKeys.stats());
 });
 
 // Stats (admin)
@@ -4550,6 +5390,8 @@ app.get('/api/admin/logs', requireAuth, (req, res) => {
 // SETTINGS (admin)
 // ========================
 const SETTING_KEYS = ['max_online_resolve', 'lookup_history_retention_days',
+  // Bật/đóng website (chế độ bảo trì) — xem site-status.js
+  'site_open', 'site_closed_message',
   // Google Geolocation: số cell tối đa gửi trong 1 request (nguồn tốn phí).
   'max_google_per_batch',
   'credit_enabled', 'credit_cost_per_lookup', 'credit_signup_bonus', 'credit_allow_negative',
@@ -4559,27 +5401,45 @@ const SETTING_KEYS = ['max_online_resolve', 'lookup_history_retention_days',
   'topup_min_vnd', 'topup_max_vnd', 'topup_vnd_per_credit',
   // SMTP — gửi email kích hoạt tài khoản + đặt lại mật khẩu
   'smtp_enabled', 'smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'smtp_pass',
-  'smtp_from', 'smtp_from_name'];
+  'smtp_from', 'smtp_from_name',
+  // Tra cứu IP đa nguồn — xem ip-lookup.js
+  'ip_lookup_public_enabled', 'ip_lookup_public_guest_daily', 'ip_lookup_user_daily',
+  'ip_lookup_console_enabled', 'ip_lookup_console_per_day', 'ip_lookup_day_cutoff_hour',
+  'ip_lookup_log_retention_days',
+  // Google Analytics 4 — theo dõi lưu lượng website + đọc báo cáo (xem google-analytics.js)
+  'ga_enabled', 'ga_measurement_id', 'ga_property_id', 'ga_service_account_json'];
 
 // Toggle nhị phân + kiểu số cho từng setting.
 const BOOL_SETTING_KEYS = new Set(['credit_enabled', 'credit_allow_negative', 'payos_enabled', 'payos_test_mode',
-  'smtp_enabled', 'smtp_secure']);
+  'smtp_enabled', 'smtp_secure', 'ip_lookup_public_enabled', 'ip_lookup_console_enabled', 'ga_enabled',
+  'site_open']);
 // Giá trị chuỗi tự do (không parse số, không được rỗng-hoá thành số 0).
 const STRING_SETTING_KEYS = new Set([
   'payos_client_id', 'payos_api_key', 'payos_checksum_key', 'payos_base_url', 'payos_webhook_url', 'public_base_url',
-  'smtp_host', 'smtp_user', 'smtp_pass', 'smtp_from', 'smtp_from_name'
+  'smtp_host', 'smtp_user', 'smtp_pass', 'smtp_from', 'smtp_from_name',
+  'ga_measurement_id', 'ga_property_id', 'ga_service_account_json',
+  // Thông báo bảo trì là chuỗi tự do; rỗng = dùng thông báo mặc định.
+  'site_closed_message'
 ]);
 // Setting bí mật: GET trả về bản che, không bao giờ trả nguyên văn.
-const SECRET_SETTING_KEYS = new Set(['payos_api_key', 'payos_checksum_key', 'smtp_pass']);
+const SECRET_SETTING_KEYS = new Set(['payos_api_key', 'payos_checksum_key', 'smtp_pass', 'ga_service_account_json']);
 const SETTING_DEFAULTS = {
   max_online_resolve: '50', lookup_history_retention_days: '90',
+  // Website mặc định MỞ, message rỗng = dùng DEFAULT_MESSAGE trong site-status.js.
+  site_open: '1', site_closed_message: '',
   max_google_per_batch: '10',
   credit_enabled: '0', credit_cost_per_lookup: '1', credit_signup_bonus: '5', credit_allow_negative: '0',
   payos_enabled: '0', payos_client_id: '', payos_api_key: '', payos_checksum_key: '',
   payos_base_url: '', payos_webhook_url: '', payos_test_mode: '0', public_base_url: '',
   topup_min_vnd: '10000', topup_max_vnd: '5000000', topup_vnd_per_credit: '1000',
   smtp_enabled: '0', smtp_host: '', smtp_port: '587', smtp_secure: '0', smtp_user: '', smtp_pass: '',
-  smtp_from: '', smtp_from_name: 'Cell Tracker'
+  smtp_from: '', smtp_from_name: 'Cell Tracker',
+  // Tra cứu IP: public mở cho khách (chỉ nguồn không cần key), console TẮT.
+  ip_lookup_public_enabled: '1', ip_lookup_public_guest_daily: '1', ip_lookup_user_daily: '50',
+  ip_lookup_console_enabled: '0', ip_lookup_console_per_day: '1000',
+  ip_lookup_day_cutoff_hour: '2', ip_lookup_log_retention_days: '30',
+  // Google Analytics 4: mặc định TẮT cho tới khi admin điền Measurement/Property.
+  ga_enabled: '0', ga_measurement_id: '', ga_property_id: '', ga_service_account_json: ''
 };
 
 // Giới hạn số cho từng setting tiền tệ — chặn giá trị vô lý.
@@ -4588,7 +5448,17 @@ const SETTING_NUM_MAX = {
   max_google_per_batch: 1e5,
   credit_cost_per_lookup: 1e7, credit_signup_bonus: 1e7,
   topup_min_vnd: 1e9, topup_max_vnd: 1e9, topup_vnd_per_credit: 1e7,
-  smtp_port: 65535
+  smtp_port: 65535,
+  ip_lookup_public_guest_daily: 1000, ip_lookup_user_daily: 100000,
+  ip_lookup_console_per_day: 1000000, ip_lookup_day_cutoff_hour: 23,
+  ip_lookup_log_retention_days: 3650
+};
+
+// Giới hạn độ dài chuỗi riêng cho từng setting (mặc định 500).
+// Service Account JSON chứa private key PEM (~1.7KB) nên cần trần lớn hơn.
+const SETTING_STRING_MAX = {
+  ga_service_account_json: 8192,
+  site_closed_message: 2000
 };
 
 /** Che bí mật: giữ 4 ký tự cuối, phần còn lại thay bằng dấu chấm. */
@@ -4611,6 +5481,15 @@ async function readSettingsForAdmin() {
       out[k] = v;
     }
   }
+  // Thông tin dẫn xuất cho Google Analytics: email service account để admin
+  // copy sang GA4 → Property Access Management (không phải bí mật).
+  if (SETTING_KEYS.includes('ga_service_account_json')) {
+    const raw = await getSetting('ga_service_account_json', '');
+    const account = googleAnalytics.describeServiceAccount(raw);
+    out.ga_service_account_email = account.email || '';
+    out.ga_service_account_json_valid = account.configured;
+    if (account.configured) out.ga_service_account_json_set = true;
+  }
   return out;
 }
 
@@ -4622,6 +5501,9 @@ function isMaskedValue(v) {
 
 // GET /api/settings
 app.get('/api/settings', requireAuth, requireAdmin, async (req, res) => {
+  // Không để browser/proxy cache: admin vừa lưu xong phải thấy giá trị mới
+  // (trước đây response cũ có thể quay lại và làm form trông như "không lưu được").
+  res.set('Cache-Control', 'no-store');
   try { res.json(await readSettingsForAdmin()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -4654,7 +5536,12 @@ app.put('/api/settings', requireAuth, requireAdmin, async (req, res) => {
       }
 
       if (STRING_SETTING_KEYS.has(k)) {
-        if (v.length > 500) return res.status(400).json({ error: `Giá trị quá dài cho ${k}` });
+        // GA: chuẩn hoá về đúng dạng trước khi lưu (viết hoa Measurement ID,
+        // bỏ tiền tố "properties/" nếu admin copy từ URL/API).
+        if (k === 'ga_measurement_id') v = googleAnalytics.normalizeMeasurementId(v);
+        else if (k === 'ga_property_id') v = googleAnalytics.normalizePropertyId(v);
+        const maxLen = SETTING_STRING_MAX[k] || 500;
+        if (v.length > maxLen) return res.status(400).json({ error: `Giá trị quá dài cho ${k}` });
         updates.push([k, v]);
         continue;
       }
@@ -4700,12 +5587,127 @@ app.put('/api/settings', requireAuth, requireAdmin, async (req, res) => {
       }
     }
 
+    // Google Analytics: validate trước khi ghi để form không lưu nửa vời.
+    const gaMeasurement = String(merged.ga_measurement_id || '').trim();
+    if (gaMeasurement && !googleAnalytics.isValidMeasurementId(gaMeasurement)) {
+      return res.status(400).json({ error: 'Measurement ID không hợp lệ — phải có dạng G-XXXXXXXXXX' });
+    }
+    const gaProperty = String(merged.ga_property_id || '').trim();
+    if (gaProperty && !googleAnalytics.isValidPropertyId(gaProperty)) {
+      return res.status(400).json({ error: 'Property ID không hợp lệ — phải là dãy số (vd 123456789)' });
+    }
+    const gaRawJson = String(merged.ga_service_account_json || '').trim();
+    const gaAccount = googleAnalytics.parseServiceAccount(gaRawJson);
+    if (gaRawJson && !gaAccount.ok) {
+      const reasons = {
+        invalid_json: 'file JSON không parse được',
+        missing_client_email: 'thiếu client_email',
+        invalid_private_key: 'thiếu private_key hợp lệ'
+      };
+      return res.status(400).json({
+        error: 'Service Account JSON không hợp lệ: ' + (reasons[gaAccount.reason] || gaAccount.reason)
+      });
+    }
+    if (merged.ga_enabled === '1') {
+      const hasTracking = googleAnalytics.isValidMeasurementId(gaMeasurement);
+      const hasReporting = googleAnalytics.isValidPropertyId(gaProperty) && gaAccount.ok;
+      if (!hasTracking && !hasReporting) {
+        return res.status(400).json({
+          error: 'Bật Google Analytics cần Measurement ID hợp lệ, hoặc đủ Property ID + Service Account JSON để đọc báo cáo'
+        });
+      }
+    }
+
     // Bước 3: mọi giá trị đã hợp lệ → ghi hết.
     for (const [k, v] of updates) await setSetting(k, v);
+    // Cấu hình GA đổi → bỏ cache tracking/report để /ga.js và dashboard nhận ngay.
+    if (updates.some(([k]) => k.startsWith('ga_'))) googleAnalytics.resetCache();
+    // Bật/tắt website đổi → bỏ cache trạng thái để có hiệu lực ngay lập tức.
+    if (updates.some(([k]) => k === 'site_open' || k === 'site_closed_message')) siteStatus.invalidate();
 
     res.json({ success: true, settings: await readSettingsForAdmin() });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ========================
+// DASHBOARD (admin)
+// ========================
+// Số liệu local gom trong 1 request (users/cells/lookups/revenue/API/IP/system).
+app.get('/api/admin/dashboard', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    res.json(await adminDashboard.getOverview({
+      days: req.query.days,
+      refresh: req.query.refresh === '1'
+    }));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Google Analytics — giới hạn số lần gọi Google thật mỗi admin (chống đốt quota).
+const gaAdminHits = new Map();
+function gaAllow(adminId) {
+  const key = String(adminId);
+  const now = Date.now();
+  const hits = (gaAdminHits.get(key) || []).filter(t => now - t < 60000);
+  if (hits.length >= 30) return false;
+  hits.push(now);
+  gaAdminHits.set(key, hits);
+  return true;
+}
+
+// GET /api/admin/analytics?days=28&refresh=1
+app.get('/api/admin/analytics', requireAuth, requireAdmin, async (req, res) => {
+  const days = parseInt(req.query.days, 10) || 28;
+  const refresh = req.query.refresh === '1';
+  try {
+    const cfg = await googleAnalytics.loadConfig(refresh);
+    // Chưa bật / chưa đủ cấu hình: trả trạng thái để dashboard hiện CTA, KHÔNG gọi Google.
+    if (!cfg.enabled || !cfg.reportingValid) {
+      return res.json(await googleAnalytics.getDashboard({ days, refresh }));
+    }
+    if (!gaAllow(req.user.id)) {
+      return res.status(429).json({
+        ok: false, configured: true,
+        error: { code: 'rate_limited', message: 'Quá nhiều yêu cầu Google Analytics. Thử lại sau ít phút.' }
+      });
+    }
+    const data = await googleAnalytics.getDashboard({ days, refresh });
+    res.json(data);
+  } catch (e) {
+    const code = (e && e.code) || 'api_error';
+    const status = code === 'network_error' ? 504 : 502;
+    res.status(status).json({
+      ok: false, configured: true,
+      error: { code, message: e.message || 'Không đọc được Google Analytics', hint: e.hint || '' }
+    });
+  }
+});
+
+// POST /api/admin/analytics/test — thử cấu hình đang lưu hoặc giá trị admin vừa nhập.
+app.post('/api/admin/analytics/test', requireAuth, requireAdmin, creditAdminRateLimit, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const override = {};
+    if (body.measurement_id !== undefined) override.measurement_id = body.measurement_id;
+    if (body.property_id !== undefined) override.property_id = body.property_id;
+    // JSON service account là secret: bản che •••• nghĩa là "dùng bản đã lưu".
+    if (body.service_account_json !== undefined) {
+      const raw = String(body.service_account_json || '').trim();
+      if (raw.length > 8192) return res.status(400).json({
+        ok: false, error: { code: 'invalid_credentials', message: 'Service Account JSON quá dài' }
+      });
+      if (raw && !raw.startsWith('••••')) override.service_account_json = raw;
+    }
+    const result = await googleAnalytics.testConnection(override);
+    res.status(result.ok ? 200 : 400).json(result);
+  } catch (e) {
+    res.status(500).json({
+      ok: false,
+      error: { code: (e && e.code) || 'api_error', message: e.message }
+    });
   }
 });
 
@@ -4833,8 +5835,25 @@ function initLookupHistoryRetention() {
   try {
     cron.schedule('30 3 * * *', runLookupHistoryRetention, { timezone: 'Asia/Ho_Chi_Minh' });
     console.log('Lookup history retention job scheduled (daily 03:30)');
+  } catch (e) {    console.error('Failed to schedule retention job:', e.message);
+  }
+}
+
+// Retention cho nhật ký API v1 — dọn log cũ hơn api_request_logs_retention_days
+// (mặc định 30). Chạy cùng lúc với retention của lookup_history (03:35).
+async function runApiLogRetention() {
+  const days = parseInt(await getSetting('api_request_logs_retention_days', '30'), 10);
+  if (!Number.isFinite(days) || days <= 0) return;
+  const removed = await apiKeys.pruneLogs(days);
+  if (removed) console.log(`api_request_logs retention: removed ${removed} row(s) older than ${days} day(s)`);
+}
+
+function initApiLogRetention() {
+  try {
+    cron.schedule('35 3 * * *', runApiLogRetention, { timezone: 'Asia/Ho_Chi_Minh' });
+    console.log('API request log retention job scheduled (daily 03:35)');
   } catch (e) {
-    console.error('Failed to schedule retention job:', e.message);
+    console.error('Failed to schedule API log retention job:', e.message);
   }
 }
 
@@ -4906,108 +5925,97 @@ app.delete('/api/sync-jobs/:id', requireAuth, requireAdmin, (req, res) => {
 });
 
 // ========================
+// ==================================================================
+// BẪY ĐỊA CHỈ IP (trước đây: IP Tracker)
+//
+// Mục tiêu: mỗi lượt victim mở link (/r/:token) hoặc xem ảnh (/i/:token) thu được
+// NHIỀU thông tin nhất, NHANH nhất.
+//
+// CÁCH LÀM (xem thêm tracker.js)
+// - Đường nóng KHÔNG chờ mạng: IP WAN máy chủ lấy từ cache RAM; vị trí IP victim
+//   tra NỀN rồi UPDATE lại row log. Response đi ra ngay.
+// - Ghi log NGAY (trả lastID) để beacon /px/:token gắn dữ liệu trình duyệt vào
+//   đúng row sau vài chục ms.
+// - Bot/crawler xem trước (Facebook, Zalo, Telegram…) nhận trang OG tĩnh — KHÔNG
+//   từ đó suy ra "victim đã click".
+// - Ảnh OG: dán URL hoặc TẢI LÊN (lưu ngoài thư mục release, phục vụ qua /og/:token).
+// ==================================================================
 const crypto = require('crypto');
 const sharp = require('sharp');
-const trackerUpload = multer({ dest: 'uploads/tracker/' });
+const tracker = require('./tracker');
 
-function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) return forwarded.split(',')[0].trim();
-  const realIp = req.headers['x-real-ip'];
-  if (realIp) return realIp;
-  return req.ip || req.connection?.remoteAddress || 'unknown';
-}
-
-function sanitizeHeaders(headers) {
-  const safe = ['user-agent', 'accept', 'accept-language', 'accept-encoding', 'referer', 'origin',
-    'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform', 'dnt', 'connection',
-    'cache-control', 'pragma', 'upgrade-insecure-requests'];
-  const result = {};
-  for (const key of safe) {
-    if (headers[key]) result[key] = headers[key];
+// Ảnh: tối đa 25 MB (ảnh điện thoại ~5–12 MB), chỉ nhận ảnh.
+const trackerUpload = multer({
+  dest: TRACKER_UPLOAD_DIR,
+  limits: { fileSize: 25 * 1024 * 1024, files: 2 },
+  fileFilter: (req, file, cb) => {
+    const ok = /^image\//.test(file.mimetype || '');
+    cb(ok ? null : new Error('Chỉ nhận file ảnh (PNG/JPG/WEBP/GIF)'), ok);
   }
-  return result;
+});
+const trackerFields = trackerUpload.fields([{ name: 'image', maxCount: 1 }, { name: 'og_image_file', maxCount: 1 }]);
+
+/** IP người gọi theo chuẩn (ưu tiên CF-Connecting-IP → XFF → socket). */
+const trackerClientIp = callerIp;
+
+/** Tỉ lệ ghi log /px: giới hạn theo IP để một script không bơm log giả. */
+const PX_RATE_LIMIT = process.env.AUTH_TEST_NO_RATELIMIT === '1' ? Infinity : 120;
+const pxHits = new Map();
+const pxRateLimit = makeRateLimit(PX_RATE_LIMIT, pxHits);
+
+/** Trả về ảnh OG hiệu lực: ảnh do người dùng tải lên (/og/:token) ưu tiên hơn URL. */
+function ogImageUrlFor(row, baseUrl) {
+  if (row.og_image_path) return `${baseUrl}/og/${row.token}`;
+  return row.og_image || '';
 }
 
-// Async WAN IP lookup via ipify
-async function getWanIp() {
-  try {
-    const resp = await axios.get('https://api.ipify.org?format=json', { timeout: 3000 });
-    return resp.data.ip || 'unknown';
-  } catch (_) {
-    return 'lookup_failed';
-  }
-}
+function buildOgHtml(row, baseUrl) {
+  const token = row.token;
+  const type = row.type;
 
-// Bot / crawler detection for social platforms
-const BOT_PATTERNS = [
-  'facebookexternalhit', 'Facebot', 'Twitterbot', 'Slackbot',
-  'TelegramBot', 'WhatsApp', 'Viber', 'SkypeUriPreview',
-  'Discordbot', 'Slack-ImgProxy',
-  'Zalo', 'ZaloPC', 'ZaloAndroid',
-  'Googlebot', 'Bingbot', 'YandexBot', 'DuckDuckBot',
-  'LinkedInBot', 'Pinterest', 'MetaInspector', 'curl', 'Wget',
-  'python-requests', 'Go-http-client'
-];
-
-function isBot(ua) {
-  if (!ua) return false;
-  const uaLower = ua.toLowerCase();
-  return BOT_PATTERNS.some(p => uaLower.includes(p.toLowerCase()));
-}
-
-// OG HTML skeleton for social preview
-function buildOgHtml(tracker, baseUrl) {
-  const token = tracker.token;
-  const type = tracker.type;
-
-  // Default OG values
-  let ogTitle = tracker.og_title || '';
-  let ogDescription = tracker.og_description || '';
-  let ogImage = tracker.og_image || '';
+  let ogTitle = row.og_title || '';
+  let ogDescription = row.og_description || '';
+  let ogImage = ogImageUrlFor(row, baseUrl);
   let ogUrl = '';
 
   if (type === 'url') {
     ogUrl = `${baseUrl}/r/${token}`;
     if (!ogTitle) ogTitle = 'Bài viết mới - Tin tức 24h';
     if (!ogDescription) ogDescription = 'Xem bài viết mới nhất. Cập nhật tin tức nhanh chóng và chính xác.';
-    if (!ogImage) ogImage = `${baseUrl}/api/tools/ip-tracker/og-default.jpg`; // fallback image
-    // Use redirect_url as more realistic content for OG
-    if (tracker.redirect_url) {
+    if (!ogImage) ogImage = `${baseUrl}/api/tools/ip-tracker/og-default.jpg`;
+    if (row.redirect_url) {
       try {
-        const u = new URL(tracker.redirect_url);
-        if (!ogTitle.includes('Bài viết')) ogTitle = `${u.hostname} - Bài viết mới`;
-      } catch (_) {}
+        const u = new URL(row.redirect_url);
+        if (!row.og_title) ogTitle = `${u.hostname} - Bài viết mới`;
+      } catch (_) { /* URL hỏng: giữ tiêu đề mặc định */ }
     }
   } else {
     ogUrl = `${baseUrl}/i/${token}`;
     if (!ogTitle) ogTitle = 'Hình ảnh mới';
     if (!ogDescription) ogDescription = 'Chia sẻ hình ảnh.';
     if (!ogImage) ogImage = `${baseUrl}/i/${token}`;
-    if (tracker.og_image) ogImage = tracker.og_image;
   }
 
-  // Build HTML
   return `<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
+  <meta name="robots" content="noindex,nofollow">
   <title>${escapeHtml(ogTitle)}</title>
-  <!-- Open Graph -->
   <meta property="og:title" content="${escapeHtml(ogTitle)}">
   <meta property="og:description" content="${escapeHtml(ogDescription)}">
   <meta property="og:image" content="${escapeHtml(ogImage)}">
+  <meta property="og:image:alt" content="${escapeHtml(ogTitle)}">
   <meta property="og:url" content="${escapeHtml(ogUrl)}">
   <meta property="og:type" content="${type === 'url' ? 'article' : 'website'}">
   <meta property="og:site_name" content="Cell.id.vn">
-  <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${escapeHtml(ogTitle)}">
   <meta name="twitter:description" content="${escapeHtml(ogDescription)}">
   <meta name="twitter:image" content="${escapeHtml(ogImage)}">
-  <!-- Redirect real users -->
-  ${type === 'url' ? `<script>window.location.replace("${escapeHtml(tracker.redirect_url || 'https://www.google.com')}")</script>` : ''}
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
@@ -5015,15 +6023,13 @@ function buildOgHtml(tracker, baseUrl) {
     h2 { color: #1a1a2e; margin-bottom: 12px; }
     p { color: #666; margin-bottom: 24px; }
     .btn { display: inline-block; padding: 12px 32px; border-radius: 8px; background: #2563eb; color: white; text-decoration: none; font-weight: 600; }
-    .btn:hover { background: #1d4ed8; }
   </style>
 </head>
 <body>
   <div class="card">
     <h2>${escapeHtml(ogTitle)}</h2>
     <p>${escapeHtml(ogDescription)}</p>
-    ${type === 'url' ? `<a class="btn" href="${escapeHtml(tracker.redirect_url || 'https://www.google.com')}">Xem bài viết</a>` : ''}
-    <p style="margin-top: 12px; font-size: 12px; color: #999;">Đang tải nội dung...</p>
+    ${type === 'url' ? `<a class="btn" href="${escapeHtml(row.redirect_url || 'https://www.google.com')}">Xem bài viết</a>` : ''}
   </div>
 </body>
 </html>`;
@@ -5031,16 +6037,78 @@ function buildOgHtml(tracker, baseUrl) {
 
 function escapeHtml(str) {
   if (!str) return '';
-   return String(str)
-     .replace(/&/g, '\x26amp;')
-     .replace(/"/g, '\x26quot;')
-     .replace(/</g, '\x26lt;')
-     .replace(/>/g, '\x26gt;');
+  return String(str)
+    .replace(/&/g, '\x26amp;')
+    .replace(/"/g, '\x26quot;')
+    .replace(/</g, '\x26lt;')
+    .replace(/>/g, '\x26gt;');
 }
 
-// POST /api/tools/ip-tracker/create - Create tracking link
-app.post('/api/tools/ip-tracker/create', requireAuth, trackerUpload.single('image'), async (req, res) => {
+// ------------------------------------------------------------------
+// Ghi log chung cho 3 đường nóng (/r, /i, /d)
+// ------------------------------------------------------------------
+/**
+ * Ghi 1 lượt vào ip_tracker_logs rồi trả Promise<logId>.
+ *
+ * Không await DB trước khi trả response (xem cách các route dùng): DB chỉ là ghi
+ * thêm, không ảnh hưởng nội dung trang/ảnh victim nhận.
+ *
+ * `wan_ip`: xem `tracker.wanFor()` — bằng chính IP nếu server thấy IP công khai,
+ * rỗng nếu IP là LAN (khi đó beacon từ trình duyệt victim sẽ điền `wanHint` vào).
+ *
+ * Phần tra vị trí chạy Ở NỀN rồi UPDATE đúng row — victim không phải chờ nguồn ngoài.
+ */
+function recordVisit(req, row, { event, wanIp }) {
+  const ip = trackerClientIp(req);
+  const ua = req.headers['user-agent'] || '';
+  const headers = tracker.collectHeaders(req);
+  const uaInfo = tracker.parseUa(ua, req.headers);
+  const vid = tracker.visitorId(req);
+  const referer = String(req.headers['referer'] || '').slice(0, 1000);
+
+  const done = new Promise((resolve) => {
+    db.run(
+      `INSERT INTO ip_tracker_logs
+        (tracker_id, ip, wan_ip, user_agent, headers, query_params, visitor_id, referer, event)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.id, ip, wanIp || '', ua, JSON.stringify({ ...headers, 'ua-parsed': uaInfo }),
+        JSON.stringify(req.query || {}), vid.id, referer, event || (row.type === 'url' ? 'click' : 'view')],
+      function (err) {
+        if (err) { console.error('tracker log error:', err.message); return resolve(0); }
+        const logId = this.lastID;
+        resolve(logId);
+        // ---- phần nền: tra vị trí IP rồi cập nhật lại row ----
+        tracker.geolocate(ip, (opts) => ipLookup.runLookup(opts)).then(geo => {
+          if (!geo) return;
+          db.run(
+            `UPDATE ip_tracker_logs SET country = ?, region = ?, city = ?, geo_json = ? WHERE id = ?`,
+            [geo.country || null, geo.region || null, geo.city || null, JSON.stringify(geo), logId],
+            (uErr) => { if (uErr) console.error('tracker geo update error:', uErr.message); }
+          );
+        });
+      }
+    );
+  });
+
+  return { logId: done, visitorId: vid };
+}
+
+/** Gắn cookie thiết bị nếu là lần đầu (dùng chung cho /r, /i, /d). */
+function ensureVisitorCookie(res, vid) {
+  if (vid.isNew) res.setHeader('Set-Cookie', tracker.visitorCookieHead(vid.id));
+}
+
+// ------------------------------------------------------------------
+// POST /api/tools/ip-tracker/create — tạo bẫy mới
+// ------------------------------------------------------------------
+app.post('/api/tools/ip-tracker/create', requireAuth, trackerFields, async (req, res) => {
+  // Dọn file tạm của multer nếu route lỗi giữa chừng (tránh rác trong uploads/).
+  const tempFiles = [];
   try {
+    const files = req.files || {};
+    if (files.image && files.image[0]) tempFiles.push(files.image[0].path);
+    if (files.og_image_file && files.og_image_file[0]) tempFiles.push(files.og_image_file[0].path);
+
     const { type, name, redirect_url, og_title, og_description, og_image } = req.body;
     if (!type || !['url', 'image'].includes(type)) {
       return res.status(400).json({ error: 'Type must be "url" or "image"' });
@@ -5049,49 +6117,62 @@ app.post('/api/tools/ip-tracker/create', requireAuth, trackerUpload.single('imag
     const token = crypto.randomBytes(16).toString('hex');
     let imagePath = null;
     let imageName = null;
+    let ogImagePath = null;
+    let ogImageUrl = String(og_image || '').trim().slice(0, 2000);
+    if (ogImageUrl && !/^https?:\/\//i.test(ogImageUrl)) {
+      return res.status(400).json({ error: 'OG Image URL phải bắt đầu bằng http:// hoặc https://' });
+    }
 
+    // ---- Ảnh chính của bẫy dạng "ảnh" ----
     if (type === 'image') {
-      if (!req.file) {
+      if (!files.image || !files.image[0]) {
         return res.status(400).json({ error: 'Image file required for type "image"' });
       }
-      imagePath = req.file.path;
-      imageName = req.file.originalname || req.file.filename;
+      const f = files.image[0];
+      imagePath = f.path;
+      imageName = f.originalname || f.filename;
 
-      // Create watermarked copy with tracking pixel
+      // Bản có nhúng tracking pixel, trả về qua /d/:token.
       try {
-        const trackingPixel = Buffer.from(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
-          'base64'
-        );
-        const imgExt = path.extname(imageName).toLowerCase();
-        let compositeImage;
-        if (imgExt === '.png') {
-          compositeImage = await sharp(imagePath)
-            .composite([{ input: trackingPixel, top: 0, left: 0 }])
-            .png()
-            .toBuffer();
-        } else {
-          compositeImage = await sharp(imagePath)
-            .composite([{ input: trackingPixel, top: 0, left: 0 }])
-            .jpeg()
-            .toBuffer();
-        }
-        const watermarkedPath = imagePath + '_tracked' + (imgExt === '.png' ? '.png' : '.jpg');
+        const meta = await sharp(imagePath).metadata();
+        const pixel = tracker.PIXEL_PNG;
+        const compositeImage = meta.format === 'png'
+          ? await sharp(imagePath).composite([{ input: pixel, top: 0, left: 0 }]).png().toBuffer()
+          : await sharp(imagePath).composite([{ input: pixel, top: 0, left: 0 }]).jpeg({ quality: 92 }).toBuffer();
+        const watermarkedPath = `${imagePath}_tracked${meta.format === 'png' ? '.png' : '.jpg'}`;
         fs.writeFileSync(watermarkedPath, compositeImage);
-        req.watermarkedPath = watermarkedPath;
       } catch (sharpErr) {
         console.error('Sharp processing error:', sharpErr.message);
-        req.watermarkedPath = null;
       }
     }
 
-    db.run(`INSERT INTO ip_tracker (user_id, type, name, redirect_url, image_path, image_name, token, og_title, og_description, og_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.id, type, name || '', redirect_url || '', imagePath, imageName, token, og_title || '', og_description || '', og_image || ''],
+    // ---- Ảnh OG tải lên: resize để nhẹ (link preview tải nhanh) ----
+    if (files.og_image_file && files.og_image_file[0]) {
+      const ogFile = files.og_image_file[0];
+      try {
+        const outPath = `${ogFile.path}_og.jpg`;
+        await sharp(ogFile.path)
+          .rotate()
+          .resize({ width: 1200, height: 630, fit: 'cover', withoutEnlargement: false })
+          .jpeg({ quality: 85, mozjpeg: true })
+          .toFile(outPath);
+        ogImagePath = outPath;
+      } catch (e) {
+        console.error('OG image processing error:', e.message);
+        return res.status(400).json({ error: 'Ảnh OG không hợp lệ: ' + e.message });
+      }
+    }
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    db.run(
+      `INSERT INTO ip_tracker (user_id, type, name, redirect_url, image_path, image_name, token, og_title, og_description, og_image, og_image_path)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.id, type, name || '', redirect_url || '', imagePath, imageName, token,
+        og_title || '', og_description || '', ogImageUrl, ogImagePath],
       function (err) {
         if (err) return res.status(500).json({ error: err.message });
         const trackerId = this.lastID;
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
-        const result = {
+        res.json({
           success: true,
           id: trackerId,
           token,
@@ -5099,166 +6180,220 @@ app.post('/api/tools/ip-tracker/create', requireAuth, trackerUpload.single('imag
           type,
           trackingUrl: type === 'url' ? `${baseUrl}/r/${token}` : `${baseUrl}/i/${token}`,
           imageDownloadUrl: type === 'image' ? `${baseUrl}/d/${token}` : null,
+          ogImageUrl: ogImagePath ? `${baseUrl}/og/${token}` : (ogImageUrl || null),
           shareUrl: `${baseUrl}/api/tools/ip-tracker/${trackerId}/share`,
           dashboardUrl: null,
           createdAt: new Date().toISOString()
-        };
-        res.json(result);
+        });
       }
     );
   } catch (err) {
+    for (const p of tempFiles) { try { fs.unlinkSync(p); } catch (_) { /* ignore */ } }
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET /r/:token - URL redirect tracking endpoint (public)
-app.get('/r/:token', async (req, res) => {
+// ------------------------------------------------------------------
+// GET /r/:token — click link: trang trung chuyển + beacon + redirect
+// ------------------------------------------------------------------
+app.get('/r/:token', (req, res) => {
   const { token } = req.params;
-  try {
-    const [tracker, wanIp] = await Promise.all([
-      new Promise((resolve, reject) => {
-        db.get('SELECT * FROM ip_tracker WHERE token = ? AND type = ?', [token, 'url'], (err, row) => {
-          if (err) reject(err); else resolve(row);
-        });
-      }),
-      getWanIp()
-    ]);
+  db.get('SELECT * FROM ip_tracker WHERE token = ? AND type = ?', [token, 'url'], async (err, row) => {
+    if (err) return res.status(500).send('Error');
+    if (!row) return res.status(404).send('Not found');
 
-    if (!tracker) {
-      return res.status(404).send('Not found');
+    const ua = req.headers['user-agent'] || '';
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+    // Trình duyệt xem trước của mạng xã hội: trả OG tĩnh, không tính là click.
+    if (tracker.parseUa(ua, req.headers).bot) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(buildOgHtml(row, baseUrl));
     }
 
-    const ua = req.headers['user-agent'] || 'unknown';
-
-    // If crawler bot → return OG HTML for social preview
-    if (isBot(ua)) {
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
-      const html = buildOgHtml(tracker, baseUrl);
-      return res.setHeader('Content-Type', 'text/html; charset=utf-8').send(html);
-    }
-
-    const ip = getClientIp(req);
-    const headers = sanitizeHeaders(req.headers);
-
-    db.run(`INSERT INTO ip_tracker_logs (tracker_id, ip, wan_ip, user_agent, headers, query_params) VALUES (?, ?, ?, ?, ?, ?)`,
-      [tracker.id, ip, wanIp, ua, JSON.stringify(headers), JSON.stringify(req.query || {})],
-      (logErr) => {
-        if (logErr) console.error('Log error:', logErr.message);
-      }
-    );
-
-    // Redirect to target URL
-    const target = tracker.redirect_url || 'https://www.google.com';
-    res.redirect(target);
-  } catch (err) {
-    console.error('r error:', err.message);
-    res.status(500).send('Error');
-  }
-});
-
-// GET /i/:token - Image serve tracking endpoint (public)
-app.get('/i/:token', async (req, res) => {
-  const { token } = req.params;
-  try {
-    const [tracker, wanIp] = await Promise.all([
-      new Promise((resolve, reject) => {
-        db.get('SELECT * FROM ip_tracker WHERE token = ? AND type = ?', [token, 'image'], (err, row) => {
-          if (err) reject(err); else resolve(row);
-        });
-      }),
-      getWanIp()
-    ]);
-
-    if (!tracker || !tracker.image_path) {
-      return res.status(404).send('Not found');
-    }
-
-    const ua = req.headers['user-agent'] || 'unknown';
-
-    // If crawler bot → return OG HTML for social preview
-    if (isBot(ua)) {
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
-      const html = buildOgHtml(tracker, baseUrl);
-      return res.setHeader('Content-Type', 'text/html; charset=utf-8').send(html);
-    }
-
-    const ip = getClientIp(req);
-    const headers = sanitizeHeaders(req.headers);
-
-    db.run(`INSERT INTO ip_tracker_logs (tracker_id, ip, wan_ip, user_agent, headers, query_params) VALUES (?, ?, ?, ?, ?, ?)`,
-      [tracker.id, ip, wanIp, ua, JSON.stringify(headers), JSON.stringify(req.query || {})],
-      (logErr) => {
-        if (logErr) console.error('Log error:', logErr.message);
-      }
-    );
-
-    // Serve the original image
-    const imgExt = path.extname(tracker.image_name || '.png').toLowerCase();
-    const contentType = imgExt === '.jpg' || imgExt === '.jpeg' ? 'image/jpeg' : 'image/png';
-    res.setHeader('Content-Type', contentType);
-    res.sendFile(path.resolve(tracker.image_path), (sendErr) => {
-      if (sendErr) {
-        res.status(500).send('Error serving image');
-      }
+    const { visitorId: vid } = recordVisit(req, row, {
+      event: 'click',
+      wanIp: tracker.wanFor(trackerClientIp(req))
     });
-  } catch (err) {
-    console.error('i error:', err.message);
-    res.status(500).send('Error');
-  }
+    ensureVisitorCookie(res, vid);
+
+    const html = tracker.landingHtml({
+      token: row.token,
+      redirect: row.redirect_url || 'https://www.google.com',
+      title: row.og_title || `Chuyển đến ${safeHost(row.redirect_url)}`,
+      description: row.og_description || '',
+      image: ogImageUrlFor(row, baseUrl),
+      ms: 400
+    });
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Referrer-Policy', 'unsafe-url');
+    res.send(html);
+  });
 });
 
-// GET /d/:token - Download image with embedded tracking pixel
-app.get('/d/:token', async (req, res) => {
-  const { token } = req.params;
-  try {
-    const [tracker, wanIp] = await Promise.all([
-      new Promise((resolve, reject) => {
-        db.get('SELECT * FROM ip_tracker WHERE token = ? AND type = ?', [token, 'image'], (err, row) => {
-          if (err) reject(err); else resolve(row);
-        });
-      }),
-      getWanIp()
-    ]);
+function safeHost(u) {
+  try { return new URL(u).hostname; } catch (_) { return 'nội dung'; }
+}
 
-    if (!tracker || !tracker.image_path) {
-      return res.status(404).send('Not found');
+// ------------------------------------------------------------------
+// GET /i/:token — xem ảnh: phục vụ ảnh + log
+// ------------------------------------------------------------------
+app.get('/i/:token', (req, res) => {
+  const { token } = req.params;
+  db.get('SELECT * FROM ip_tracker WHERE token = ? AND type = ?', [token, 'image'], (err, row) => {
+    if (err) return res.status(500).send('Error');
+    if (!row || !row.image_path) return res.status(404).send('Not found');
+
+    const ua = req.headers['user-agent'] || '';
+
+    // Bot preview → OG (không tính view).
+    if (tracker.parseUa(ua, req.headers).bot) {
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(buildOgHtml(row, baseUrl));
     }
 
-    const ip = getClientIp(req);
-    const ua = req.headers['user-agent'] || 'unknown';
-    const headers = sanitizeHeaders(req.headers);
+    const { visitorId: vid } = recordVisit(req, row, { event: 'view', wanIp: tracker.wanFor(trackerClientIp(req)) });
+    ensureVisitorCookie(res, vid);
 
-    db.run(`INSERT INTO ip_tracker_logs (tracker_id, ip, wan_ip, user_agent, headers, query_params) VALUES (?, ?, ?, ?, ?, ?)`,
-      [tracker.id, ip, wanIp, ua, JSON.stringify(headers), JSON.stringify(req.query || {})],
-      (logErr) => {
-        if (logErr) console.error('Log error:', logErr.message);
+    const imgExt = path.extname(row.image_name || row.image_path || '.png').toLowerCase();
+    const contentType = ['.jpg', '.jpeg'].includes(imgExt) ? 'image/jpeg'
+      : imgExt === '.webp' ? 'image/webp'
+        : imgExt === '.gif' ? 'image/gif' : 'image/png';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.setHeader('Referrer-Policy', 'unsafe-url');
+    res.sendFile(path.resolve(row.image_path), (sendErr) => {
+      if (sendErr && !res.headersSent) res.status(500).end();
+    });
+  });
+});
+
+// ------------------------------------------------------------------
+// GET /og/:token — ảnh OG do người dùng tải lên (bot mạng xã hội tải ở đây,
+// KHÔNG ghi log vì đó là IP của Facebook/Telegram chứ không phải victim)
+// ------------------------------------------------------------------
+app.get('/og/:token', (req, res) => {
+  db.get('SELECT * FROM ip_tracker WHERE token = ?', [req.params.token], (err, row) => {
+    if (err) return res.status(500).send('Error');
+    if (!row) return res.status(404).send('Not found');
+    if (row.og_image_path && fs.existsSync(row.og_image_path)) {
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.sendFile(path.resolve(row.og_image_path));
+    }
+    // Chưa tải ảnh lên nhưng có ảnh gốc của bẫy dạng ảnh → dùng tạm.
+    if (row.image_path && fs.existsSync(row.image_path)) {
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      return res.sendFile(path.resolve(row.image_path));
+    }
+    if (row.og_image && /^https?:\/\//i.test(row.og_image)) return res.redirect(row.og_image);
+    res.status(404).send('Not found');
+  });
+});
+
+// ------------------------------------------------------------------
+// GET /px.js — beacon phía victim (cache 1 năm; dùng cho nhúng tay)
+// ------------------------------------------------------------------
+app.get('/px.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  res.send(`/* Cell.id.vn — beacon thu thông tin trình duyệt */\n${tracker.PX_JS.replace('__TOKEN__', JSON.stringify(String(req.query.token || '')))}`);
+});
+
+// ------------------------------------------------------------------
+// POST /px/:token — beacon: dữ liệu trình duyệt gửi lên (JSON / text / beacon)
+// ------------------------------------------------------------------
+function parseBeaconBody(req) {
+  const raw = req.body;
+  if (raw && typeof raw === 'object' && !Buffer.isBuffer(raw)) return raw;
+  let text = Buffer.isBuffer(raw) ? raw.toString('utf8') : String(raw || '');
+  if (!text) return null;
+  try { return JSON.parse(text); } catch (_) { /* fallback bên dưới */ }
+  try { return JSON.parse(decodeURIComponent(text.trim())); } catch (_) { /* fallback */ }
+  // Một số client gửi form-encoded
+  try {
+    const sp = new URLSearchParams(text);
+    const o = {};
+    for (const [k, v] of sp.entries()) o[k] = v;
+    return Object.keys(o).length ? o : null;
+  } catch (_) { return null; }
+}
+
+app.post('/px/:token', express.text({ type: '*/*', limit: '32kb' }), pxRateLimit, (req, res) => {
+  const { token } = req.params;
+  db.get('SELECT id, type FROM ip_tracker WHERE token = ?', [token], (err, row) => {
+    if (err || !row) return res.status(404).end();
+    const data = parseBeaconBody(req);
+    if (!data) return res.status(204).end();
+    const clean = tracker.cleanClientData(data);
+
+    // Gắn vào lượt xem/click gần nhất của CÙNG token + CÙNG IP trong 60 s.
+    // 60 s (không phải 30) vì beacon gửi nhiều gói: gói `battery`/`uaData`/`wanHint`
+    // có thể về sau gói đầu vài giây trên mạng chậm.
+    const ip = trackerClientIp(req);
+    db.get(
+      `SELECT id, client_json, wan_ip FROM ip_tracker_logs
+        WHERE tracker_id = ? AND ip = ? AND timestamp >= datetime('now','-60 seconds')
+        ORDER BY id DESC LIMIT 1`,
+      [row.id, ip],
+      (e2, log) => {
+        if (e2 || !log) return res.status(204).end();
+
+        // MERGE chứ không ghi đè: mỗi gói beacon chỉ mang vài trường.
+        let merged = {};
+        if (log.client_json) { try { merged = JSON.parse(log.client_json) || {}; } catch (_) { merged = {}; } }
+        Object.assign(merged, clean);
+
+        // IP WAN thật do trình duyệt victim hỏi ipify: chỉ điền khi server chưa biết
+        // (server thấy IP LAN → wan_ip rỗng).
+        let wanIp = log.wan_ip;
+        if (!wanIp && clean.wanHint && /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-f:]{3,}$/i.test(clean.wanHint)) {
+          wanIp = clean.wanHint;
+        }
+
+        db.run('UPDATE ip_tracker_logs SET client_json = ?, wan_ip = ? WHERE id = ?',
+          [JSON.stringify(merged), wanIp || '', log.id], () => {});
+        res.status(204).end();
       }
     );
+  });
+});
 
-    // Check if watermarked version exists
-    const originalExt = path.extname(tracker.image_name || '.png').toLowerCase();
-    const watermarkedPath = tracker.image_path + '_tracked' + (originalExt === '.png' ? '.png' : '.jpg');
-    const fileToServe = fs.existsSync(watermarkedPath) ? watermarkedPath : tracker.image_path;
+// ------------------------------------------------------------------
+// GET /d/:token — tải ảnh đã nhúng pixel
+// ------------------------------------------------------------------
+app.get('/d/:token', (req, res) => {
+  const { token } = req.params;
+  db.get('SELECT * FROM ip_tracker WHERE token = ? AND type = ?', [token, 'image'], (err, row) => {
+    if (err) return res.status(500).send('Error');
+    if (!row || !row.image_path) return res.status(404).send('Not found');
 
-    const contentType = originalExt === '.jpg' || originalExt === '.jpeg' ? 'image/jpeg' : 'image/png';
+    const { visitorId: vid } = recordVisit(req, row, { event: 'download', wanIp: tracker.wanFor(trackerClientIp(req)) });
+    ensureVisitorCookie(res, vid);
+
+    const originalExt = path.extname(row.image_name || row.image_path || '.png').toLowerCase();
+    const watermarkedPath = `${row.image_path}_tracked${originalExt === '.png' ? '.png' : '.jpg'}`;
+    const fileToServe = fs.existsSync(watermarkedPath) ? watermarkedPath : row.image_path;
+    const contentType = ['.jpg', '.jpeg'].includes(originalExt) ? 'image/jpeg' : 'image/png';
+
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${tracker.image_name || 'image'}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${String(row.image_name || 'image').replace(/["\\\r\n]/g, '_')}"`);
     res.sendFile(path.resolve(fileToServe), (sendErr) => {
-      if (sendErr) {
-        res.status(500).send('Error serving image');
-      }
+      if (sendErr && !res.headersSent) res.status(500).end();
     });
-  } catch (err) {
-    console.error('d error:', err.message);
-    res.status(500).send('Error');
-  }
+  });
 });
 
-// GET /api/tools/ip-tracker/list - List user's tracking links
+// ------------------------------------------------------------------
+// GET /api/tools/ip-tracker/list — danh sách bẫy của người dùng
+// ------------------------------------------------------------------
 app.get('/api/tools/ip-tracker/list', requireAuth, (req, res) => {
-  db.all(`SELECT t.*, 
-    (SELECT COUNT(*) FROM ip_tracker_logs WHERE tracker_id = t.id) as click_count,
-    (SELECT MAX(timestamp) FROM ip_tracker_logs WHERE tracker_id = t.id) as last_click
+  db.all(`SELECT t.*,
+    (SELECT COUNT(*) FROM ip_tracker_logs WHERE tracker_id = t.id AND (event IS NULL OR event != 'preview')) as click_count,
+    (SELECT MAX(timestamp) FROM ip_tracker_logs WHERE tracker_id = t.id) as last_click,
+    (SELECT COUNT(DISTINCT visitor_id) FROM ip_tracker_logs WHERE tracker_id = t.id AND visitor_id IS NOT NULL) as visitor_count
     FROM ip_tracker t WHERE t.user_id = ? ORDER BY t.created_at DESC`,
     [req.user.id],
     (err, rows) => {
@@ -5268,49 +6403,151 @@ app.get('/api/tools/ip-tracker/list', requireAuth, (req, res) => {
         ...r,
         trackingUrl: r.type === 'url' ? `${baseUrl}/r/${r.token}` : `${baseUrl}/i/${r.token}`,
         imageDownloadUrl: r.type === 'image' ? `${baseUrl}/d/${r.token}` : null,
+        ogImageUrl: r.og_image_path ? `${baseUrl}/og/${r.token}` : (r.og_image || null),
         shareUrl: `${baseUrl}/api/tools/ip-tracker/${r.id}/share`
       })));
     }
   );
 });
 
-// GET /api/tools/ip-tracker/:id/results - Get detailed logs
+// ------------------------------------------------------------------
+// GET /api/tools/ip-tracker/:id/results — log chi tiết + tóm tắt
+// ------------------------------------------------------------------
 app.get('/api/tools/ip-tracker/:id/results', requireAuth, (req, res) => {
-  const trackerId = req.params.id;
-
-  db.get('SELECT * FROM ip_tracker WHERE id = ? AND user_id = ?', [trackerId, req.user.id], (err, tracker) => {
+  const trackerId = Number(req.params.id);
+  db.get('SELECT * FROM ip_tracker WHERE id = ? AND user_id = ?', [trackerId, req.user.id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
-    if (!tracker) return res.status(404).json({ error: 'Tracker not found' });
+    if (!row) return res.status(404).json({ error: 'Tracker not found' });
 
-    db.all('SELECT * FROM ip_tracker_logs WHERE tracker_id = ? ORDER BY timestamp DESC', [trackerId], (err2, logs) => {
+    db.all('SELECT * FROM ip_tracker_logs WHERE tracker_id = ? ORDER BY timestamp DESC, id DESC', [trackerId], (err2, logs) => {
       if (err2) return res.status(500).json({ error: err2.message });
-      res.json({ tracker, logs: logs.map(l => ({
-        ...l,
-        headers: l.headers ? JSON.parse(l.headers) : {},
-        query_params: l.query_params ? JSON.parse(l.query_params) : {}
-      })) });
+      const parsed = (logs || []).map(l => {
+        const headers = safeJson(l.headers, {});
+        const uaInfo = headers['ua-parsed'] || tracker.parseUa(l.user_agent, headers);
+        if (headers['ua-parsed']) delete headers['ua-parsed'];
+        return {
+          ...l,
+          headers,
+          ua: uaInfo,
+          client: safeJson(l.client_json, null),
+          geo: safeJson(l.geo_json, null),
+          query_params: safeJson(l.query_params, {})
+        };
+      });
+      const ipSet = new Set(parsed.map(l => l.ip).filter(Boolean));
+      const visitorSet = new Set(parsed.map(l => l.visitor_id).filter(Boolean));
+      const clicks = parsed.filter(l => (l.event || 'click') === 'click').length;
+      res.json({
+        tracker: { ...row, ogImageUrl: row.og_image_path ? `${req.protocol}://${req.get('host')}/og/${row.token}` : (row.og_image || null) },
+        logs: parsed,
+        summary: {
+          total: parsed.length,
+          clicks,
+          uniqueIps: ipSet.size,
+          uniqueVisitors: visitorSet.size,
+          countries: [...new Set(parsed.map(l => l.country).filter(Boolean))],
+          devices: parsed.reduce((acc, l) => { const d = (l.ua && l.ua.device) || 'unknown'; acc[d] = (acc[d] || 0) + 1; return acc; }, {})
+        }
+      });
     });
   });
 });
 
-// GET /api/tools/ip-tracker/:id/share - Public share page (no auth, renders HTML)
-app.get('/api/tools/ip-tracker/:id/share', (req, res) => {
-  const trackerId = req.params.id;
-  db.get('SELECT * FROM ip_tracker WHERE id = ?', [trackerId], (err, tracker) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!tracker) return res.status(404).send('Not found');
+function safeJson(v, fallback) {
+  if (v == null || v === '') return fallback;
+  if (typeof v === 'object') return v;
+  try { return JSON.parse(v); } catch (_) { return fallback; }
+}
 
+// ------------------------------------------------------------------
+// GET /api/tools/ip-tracker/:id/share — thông tin chia sẻ (JSON)
+// ------------------------------------------------------------------
+app.get('/api/tools/ip-tracker/:id/share', (req, res) => {
+  const trackerId = Number(req.params.id);
+  if (!Number.isFinite(trackerId)) return res.status(400).json({ error: 'id không hợp lệ' });
+  db.get(`SELECT t.*,
+      (SELECT COUNT(*) FROM ip_tracker_logs WHERE tracker_id = t.id) AS click_count,
+      (SELECT MAX(timestamp) FROM ip_tracker_logs WHERE tracker_id = t.id) AS last_click
+      FROM ip_tracker t WHERE t.id = ?`, [trackerId], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) {
+      if (wantsHtml(req)) return res.status(404).type('html').send('<h1>Không tìm thấy bẫy</h1>');
+      return res.status(404).json({ error: 'Not found' });
+    }
     const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const html = buildOgHtml(tracker, baseUrl);
-    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(html);
+    const payload = {
+      ok: true,
+      clicked: Number(row.click_count) > 0,
+      clickCount: Number(row.click_count) || 0,
+      lastClick: row.last_click || null,
+      name: row.name || '',
+      type: row.type,
+      trackingUrl: row.type === 'url' ? `${baseUrl}/r/${row.token}` : `${baseUrl}/i/${row.token}`
+    };
+
+    // Cùng một URL phục vụ 2 kiểu người dùng:
+    //  - fetch()/XHR từ trang quản trị (Accept: */*) → JSON để vẽ modal.
+    //  - Người mở link bằng trình duyệt (Accept: text/html) → trang trạng thái dễ đọc.
+    // Trước đây route này luôn trả HTML trang OG nên client không đọc được gì.
+    if (!wantsHtml(req)) return res.json(payload);
+
+    const clicked = payload.clicked;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(`<!DOCTYPE html>
+<html lang="vi"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Trạng thái bẫy — Cell.id.vn</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.card{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:32px 28px;max-width:440px;width:100%;text-align:center}
+h1{font-size:16px;font-weight:600;color:#94a3b8;margin-bottom:18px;text-transform:uppercase;letter-spacing:.6px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}
+.on{background:#22c55e;box-shadow:0 0 8px #22c55e}
+.off{background:#64748b}
+.state{font-size:26px;font-weight:700;margin-bottom:6px}
+.big{font-size:44px;font-weight:800;color:#fbbf24;line-height:1.1;margin:14px 0 4px}
+.lbl{font-size:12px;color:#94a3b8}
+.meta{margin-top:20px;font-size:12px;color:#64748b;word-break:break-all}
+</style></head>
+<body><div class="card">
+<h1>Trạng thái bẫy</h1>
+<div class="state"><span class="dot ${clicked ? 'on' : 'off'}"></span>${clicked ? 'Đã có lượt truy cập' : 'Chưa có lượt nào'}</div>
+<div class="big">${payload.clickCount}</div>
+<div class="lbl">lượt truy cập</div>
+${payload.lastClick ? `<div class="meta">Lần gần nhất: ${escapeHtml(String(payload.lastClick))} (UTC)</div>` : ''}
+<div class="meta">${escapeHtml(row.name || 'Bẫy không tên')}</div>
+</div></body></html>`);
   });
 });
 
-// DELETE /api/tools/ip-tracker/:id - Delete tracker
+/** Trình duyệt điều hướng (Accept có text/html) hay client gọi API? */
+function wantsHtml(req) {
+  const accept = String(req.headers.accept || '');
+  return accept.indexOf('text/html') !== -1;
+}
+
+// ------------------------------------------------------------------
+// DELETE /api/tools/ip-tracker/:id
+// ------------------------------------------------------------------
 app.delete('/api/tools/ip-tracker/:id', requireAuth, (req, res) => {
-  db.run('DELETE FROM ip_tracker WHERE id = ? AND user_id = ?', [req.params.id, req.user.id], function(err) {
+  db.get('SELECT * FROM ip_tracker WHERE id = ? AND user_id = ?', [req.params.id, req.user.id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true, deleted: this.changes });
+    // FK chưa chắc bật PRAGMA foreign_keys → xoá log tay để không rò dữ liệu.
+    db.run('DELETE FROM ip_tracker_logs WHERE tracker_id = ?', [req.params.id], () => {
+      db.run('DELETE FROM ip_tracker WHERE id = ? AND user_id = ?', [req.params.id, req.user.id], function (e2) {
+        if (e2) return res.status(500).json({ error: e2.message });
+        if (row) {
+          for (const p of [row.image_path, row.image_path && `${row.image_path}_tracked.png`, row.image_path && `${row.image_path}_tracked.jpg`, row.og_image_path]) {
+            if (p) { try { fs.unlinkSync(p); } catch (_) { /* file đã mất */ } }
+          }
+        }
+        res.json({ success: true, deleted: this.changes });
+      });
+    });
   });
 });
 
@@ -5321,6 +6558,357 @@ app.get('/api/tools/ip-tracker/og-default.jpg', (req, res) => {
   res.setHeader('Content-Type', 'image/png');
   res.send(pixel);
 });
+
+// ========================
+// IP LOOKUP — tra cứu địa chỉ IP đa nguồn (DB-IP, IPinfo, ipwho.is…)
+// ========================
+// Module `ip-lookup.js` giữ toàn bộ logic nguồn/chuẩn hoá/tổng hợp; ở đây chỉ có
+// HTTP: xác thực, hạn mức, ghi log và hình dạng response.
+//
+// HAI LÀN ĐƯỜNG:
+//   - Khách chưa đăng nhập: GET /api/tools/ip-lookup/guest — CHỈ nguồn không cần
+//     API key, hạn mức theo IP người gọi (mặc định 1 lượt/ngày).
+//   - Đã đăng nhập: GET /api/tools/ip-lookup — mọi nguồn đang bật, hạn mức theo
+//     user/ngày (mặc định 50) để một tài khoản không đốt hết quota nguồn free.
+//
+// Rate limit theo IP (bucket riêng) chặn script quét IP hàng loạt; hạn mức ngày
+// mới là thứ bảo vệ quota của nhà cung cấp.
+const IP_LOOKUP_RATE_LIMIT = process.env.AUTH_TEST_NO_RATELIMIT === '1' ? Infinity : 300;
+const ipLookupHits = new Map();
+const ipLookupRateLimit = makeRateLimit(IP_LOOKUP_RATE_LIMIT, ipLookupHits);
+
+/** IP của người gọi, đã chuẩn hoá (bỏ tiền tố IPv4-mapped). */
+function callerIp(req) {
+  const raw = adminIp(req) || '';
+  const norm = ipLookup.normalizeIp(raw);
+  return norm.ok ? norm.ip : raw;
+}
+
+/** Tách tham số `sources=a,b` thành mảng loại nguồn hợp lệ (rỗng = tất cả). */
+function parseSourceFilter(v) {
+  return String(v || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
+/** Gói response tra cứu cho client — dùng chung cho cả 3 route. */
+function sendLookupResult(res, r, usage) {
+  if (!r.ok) {
+    return res.status(400).json({
+      ok: false, error: r.error, reason: 'LOOKUP_FAILED', ip: r.ip || null
+    });
+  }
+  return res.json({
+    ok: true,
+    ip: r.ip,
+    ipVersion: r.ipVersion,
+    queriedAt: new Date().toISOString(),
+    durationMs: r.durationMs,
+    cacheHits: r.cacheHits,
+    results: r.results.map(x => ({
+      source: x.source,
+      label: x.label,
+      ok: !!x.ok,
+      cached: !!x.cached,
+      ms: x.ms,
+      error: x.error || null,
+      data: x.data || null
+    })),
+    aggregate: r.aggregate,
+    usage: usage || null
+  });
+}
+
+// Cấu hình công khai cho trang công cụ: nguồn nào đang bật, có cần key không,
+// hạn mức ra sao. KHÔNG trả key, KHÔNG trả base_url nội bộ.
+app.get('/api/tools/ip-lookup/config', async (req, res) => {
+  try {
+    const [cfg, sources] = await Promise.all([ipLookup.getConfig(), ipLookup.listEnabledSources()]);
+    res.json({
+      ...cfg,
+      sources: sources.map(s => ({
+        type: s.type, label: s.name, requires_key: s.requiresKey
+      }))
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// IP của chính người gọi (nút "IP của tôi"). Chỉ trả IP, KHÔNG tra cứu gì —
+// nhờ vậy nút này không tiêu hạn mức và không gọi nguồn ngoài.
+//
+// `private`: IP server NHÌN THẤY là loopback/LAN (chạy dev, hoặc client cùng
+// mạng) → KHÔNG phải IP WAN, client phải tự dò bằng dịch vụ ngoài (ipify…).
+// `wan_ip`: chỉ có khi IP nhìn thấy là địa chỉ công khai thật.
+app.get('/api/tools/ip-lookup/me', requireAuth, (req, res) => {
+  const ip = callerIp(req);
+  const norm = ipLookup.normalizeIp(ip);
+  const publicIp = norm.ok ? norm.ip : null;
+  const priv = publicIp ? ipLookup.isPrivateIp(publicIp) : false;
+  res.json({
+    ok: true,
+    ip: publicIp || ip,
+    ipVersion: norm.ok ? norm.version : null,
+    private: priv,
+    wan_ip: publicIp && !priv ? publicIp : null,
+    // Ghi chú cho UI: `ip` là địa chỉ server thấy; muốn IP WAN thật của máy
+    // khách (sau NAT nhà mạng) phải hỏi dịch vụ ngoài qua đường IPv4/IPv6.
+    seen_by: 'server'
+  });
+});
+
+// IP công khai của CHÍNH MÁY CHỦ (do nguồn ngoài nhìn thấy) — dùng để kiểm tra
+// máy chủ có bị đánh dấu hosting/proxy không. TẮT mặc định vì đây là request do
+// máy chủ thay mặt người gọi thực hiện; bật lên là admin tự chịu về hạn mức.
+app.get('/api/tools/ip-lookup/console', ipLookupRateLimit, async (req, res) => {
+  try {
+    const cfg = await ipLookup.getConfig();
+    if (!cfg.console_enabled) {
+      return res.status(403).json({
+        error: 'Chức năng tra IP máy chủ đang tắt', code: 'CONSOLE_DISABLED'
+      });
+    }
+    const quota = await ipLookup.guestQuota('__console__', {
+      limit: cfg.console_per_day, cutoffHour: cfg.day_cutoff_hour, consume: false
+    });
+    if (quota.limit > 0 && !quota.allowed) {
+      return res.status(429).json({
+        error: 'Đã hết hạn mức tra IP máy chủ trong ngày', code: 'CONSOLE_QUOTA',
+        console: quota
+      });
+    }
+    const r = await ipLookup.lookupSelf();
+    if (!r.ok) return res.status(502).json({ ok: false, error: r.error, code: 'UPSTREAM_ERROR' });
+    await ipLookup.guestQuota('__console__', {
+      limit: cfg.console_per_day, cutoffHour: cfg.day_cutoff_hour, consume: true
+    });
+    res.json({ ok: true, ip: r.ip, data: r.data, source: r.source, usage: quota });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Khách chưa đăng nhập: chỉ nguồn KHÔNG cần API key + hạn mức theo IP.
+app.get('/api/tools/ip-lookup/guest', ipLookupRateLimit, async (req, res) => {
+  const started = Date.now();
+  const clientIp = callerIp(req);
+  try {
+    const cfg = await ipLookup.getConfig();
+    if (!cfg.public_enabled) {
+      return res.status(403).json({
+        error: 'Tính năng tra cứu IP công khai đang tắt. Đăng nhập để sử dụng.',
+        code: 'PUBLIC_DISABLED',
+        upgrade: { loginUrl: '/login.html', registerUrl: '/login.html#register' }
+      });
+    }
+
+    const norm = ipLookup.normalizeIp(req.query.ip);
+    if (!norm.ok) return res.status(400).json({ ok: false, error: norm.error, reason: 'INVALID_IP' });
+
+    const quota = await ipLookup.guestQuota(clientIp, {
+      limit: cfg.guest_daily, cutoffHour: cfg.day_cutoff_hour
+    });
+    if (quota.limit > 0 && !quota.allowed) {
+      await ipLookup.logLookup({
+        userId: null, ip: norm.ip, normalized: norm.ip, sourceTypes: null, status: 403,
+        durationMs: Date.now() - started, cacheHits: 0, error: 'guest quota exhausted',
+        ipAddress: clientIp, userAgent: req.headers['user-agent']
+      });
+      return res.status(403).json({
+        ok: false,
+        error: 'Bạn đã dùng hết lượt tra cứu IP miễn phí hôm nay.',
+        code: 'IP_TRIAL_EXHAUSTED',
+        guestTrial: quota,
+        upgrade: {
+          loginUrl: '/login.html',
+          registerUrl: '/login.html#register',
+          message: 'Đăng nhập để tra cứu IP đầy đủ nguồn (DB-IP có key, IPinfo…) và tăng hạn mức.'
+        }
+      });
+    }
+
+    const r = await ipLookup.runLookup({ ip: norm.ip, publicOnly: true });
+    if (!r.ok) {
+      await ipLookup.logLookup({
+        userId: null, ip: norm.ip, normalized: norm.ip, sourceTypes: null, status: 400,
+        durationMs: Date.now() - started, cacheHits: 0, error: r.error,
+        ipAddress: clientIp, userAgent: req.headers['user-agent']
+      });
+      return sendLookupResult(res, r, null);
+    }
+
+    const after = await ipLookup.guestQuota(clientIp, {
+      limit: cfg.guest_daily, cutoffHour: cfg.day_cutoff_hour, consume: true
+    });
+    await ipLookup.logLookup({
+      userId: null, ip: norm.ip, normalized: norm.ip,
+      sourceTypes: r.results.map(x => x.source), status: 200,
+      durationMs: Date.now() - started, cacheHits: r.cacheHits,
+      error: null, ipAddress: clientIp, userAgent: req.headers['user-agent']
+    });
+    return sendLookupResult(res, r, { guest: after });
+  } catch (e) {
+    console.error('ip-lookup guest error:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Đã đăng nhập: mọi nguồn đang bật + hạn mức theo user.
+app.get('/api/tools/ip-lookup', requireAuth, ipLookupRateLimit, async (req, res) => {
+  const started = Date.now();
+  const clientIp = callerIp(req);
+  try {
+    const cfg = await ipLookup.getConfig();
+    const useSelf = String(req.query.self || '') === '1';
+    const norm = ipLookup.normalizeIp(useSelf ? clientIp : req.query.ip);
+    if (!norm.ok) return res.status(400).json({ ok: false, error: norm.error, reason: 'INVALID_IP' });
+
+    const used = await ipLookup.countUserLookups(req.user.id, cfg.day_cutoff_hour);
+    if (cfg.user_daily > 0 && used >= cfg.user_daily) {
+      return res.status(429).json({
+        ok: false,
+        error: `Bạn đã dùng hết ${cfg.user_daily} lượt tra cứu IP trong ngày. Hạn mức tự làm mới lúc ${cfg.day_cutoff_hour}:00 (giờ Việt Nam).`,
+        code: 'IP_LOOKUP_QUOTA',
+        usage: { used, limit: cfg.user_daily, remaining: 0 }
+      });
+    }
+
+    const types = parseSourceFilter(req.query.sources);
+    const skipCache = String(req.query.fresh || '') === '1';
+    const r = await ipLookup.runLookup({ ip: norm.ip, types, skipCache });
+    const usage = {
+      used: used + (r.ok ? 1 : 0),
+      limit: cfg.user_daily,
+      remaining: cfg.user_daily > 0 ? Math.max(0, cfg.user_daily - used - (r.ok ? 1 : 0)) : null
+    };
+    if (!r.ok) {
+      await ipLookup.logLookup({
+        userId: req.user.id, ip: norm.ip, normalized: norm.ip, sourceTypes: types, status: 400,
+        durationMs: Date.now() - started, cacheHits: 0, error: r.error,
+        ipAddress: clientIp, userAgent: req.headers['user-agent']
+      });
+      return sendLookupResult(res, r, null);
+    }
+    await ipLookup.logLookup({
+      userId: req.user.id, ip: norm.ip, normalized: norm.ip,
+      sourceTypes: r.results.map(x => x.source), status: 200,
+      durationMs: Date.now() - started, cacheHits: r.cacheHits,
+      error: null, ipAddress: clientIp, userAgent: req.headers['user-agent']
+    });
+    return sendLookupResult(res, r, usage);
+  } catch (e) {
+    console.error('ip-lookup error:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ---------- Admin: quản trị nguồn + nhật ký + thống kê ----------
+app.get('/api/admin/ip-lookup/sources', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const [sources, cfg] = await Promise.all([ipLookup.listSourcesForAdmin(), ipLookup.getConfig()]);
+    res.json({ sources, config: cfg, catalog: Object.keys(ipLookup.SOURCE_DEFAULTS) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/ip-lookup/sources', requireAuth, requireAdmin, creditAdminRateLimit, async (req, res) => {
+  try {
+    const r = await ipLookup.addSource(req.body && req.body.type);
+    res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Reorder PHẢI khai báo trước '/:id' — Express so khớp theo thứ tự khai báo nên
+// nếu đứng sau, PUT /sources/reorder sẽ rơi vào updateSource(id='reorder').
+app.put('/api/admin/ip-lookup/sources/reorder', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const r = await ipLookup.reorderSources(req.body && req.body.order);
+    res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/admin/ip-lookup/sources/:id', requireAuth, requireAdmin, creditAdminRateLimit, async (req, res) => {
+  try {
+    const r = await ipLookup.updateSource(req.params.id, req.body || {});
+    res.status(r.ok ? 200 : 400).json({
+      ok: r.ok, error: r.error,
+      source: r.source ? ipLookup.publicSource(r.source) : null
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/ip-lookup/sources/:id/test', requireAuth, requireAdmin, creditAdminRateLimit, async (req, res) => {
+  try {
+    const sources = await ipLookup.listSourcesForAdmin();
+    const src = sources.find(s => String(s.id) === String(req.params.id));
+    if (!src) return res.status(404).json({ ok: false, error: 'Không tìm thấy nguồn' });
+    const r = await ipLookup.testSource(src.type, { ip: (req.body && req.body.ip) || '8.8.8.8' });
+    res.status(r.ok ? 200 : 502).json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/admin/ip-lookup/sources/:id', requireAuth, requireAdmin, creditAdminRateLimit, async (req, res) => {
+  try {
+    const r = await ipLookup.deleteSource(req.params.id);
+    res.status(r.ok ? 200 : 404).json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/ip-lookup/stats', requireAuth, requireAdmin, async (req, res) => {
+  try { res.json(await ipLookup.stats()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/ip-lookup/logs', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const logs = await ipLookup.listLogs({
+      ip: req.query.ip || null,
+      source: req.query.source || null,
+      limit: req.query.limit || 200
+    });
+    res.json(logs);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Chạy thử từ trang admin: KHÔNG tính hạn mức user, cho phép thử nguồn đang tắt
+// (kèm skipCache) để admin kiểm tra key/cấu hình ngay sau khi lưu.
+app.post('/api/admin/ip-lookup/run', requireAuth, requireAdmin, creditAdminRateLimit, async (req, res) => {
+  const started = Date.now();
+  try {
+    const body = req.body || {};
+    const norm = ipLookup.normalizeIp(body.ip);
+    if (!norm.ok) return res.status(400).json({ ok: false, error: norm.error, reason: 'INVALID_IP' });
+    const types = Array.isArray(body.sources) ? body.sources
+      : parseSourceFilter(body.sources);
+    const r = await ipLookup.runLookup({
+      ip: norm.ip,
+      types,
+      includeDisabled: !!body.include_disabled,
+      skipCache: !!body.skip_cache
+    });
+    if (r.ok) await ipLookup.logLookup({
+      userId: req.user.id, ip: norm.ip, normalized: norm.ip,
+      sourceTypes: r.results.map(x => x.source), status: 200,
+      durationMs: Date.now() - started, cacheHits: r.cacheHits, error: 'admin test run',
+      ipAddress: callerIp(req), userAgent: req.headers['user-agent']
+    });
+    return sendLookupResult(res, r, null);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Retention nhật ký + cache tra IP (chạy hằng ngày, giờ thấp điểm).
+async function runIpLookupRetention() {
+  const days = parseInt(await getSetting('ip_lookup_log_retention_days', '30'), 10);
+  if (!Number.isFinite(days) || days <= 0) return;
+  const removedLogs = await ipLookup.pruneLogs(days);
+  const removedCache = await ipLookup.pruneCache(Math.max(days, 30));
+  if (removedLogs || removedCache) {
+    console.log(`ip_lookup retention: removed ${removedLogs} log(s), ${removedCache} cache row(s) older than ${days} day(s)`);
+  }
+}
+
+function initIpLookupRetention() {
+  try {
+    cron.schedule('40 3 * * *', runIpLookupRetention, { timezone: 'Asia/Ho_Chi_Minh' });
+    console.log('IP lookup retention job scheduled (daily 03:40)');
+  } catch (e) {
+    console.error('Failed to schedule IP lookup retention job:', e.message);
+  }
+}
 
 // ========================
 // VNTA PORT CHECK PROXY
@@ -5493,17 +7081,61 @@ app.post('/api/tools/port-check/search', captchaRateLimit, async (req, res) => {
 });
 
 // ========================
+// JSON 404 cho mọi đường dẫn /api không khớp route
+// ========================
+// Express mặc định trả TRANG HTML ("<!DOCTYPE html>… Cannot GET /api/...") cho
+// route không tồn tại. Client gọi `res.json()` sẽ chết với
+// `Unexpected token '<', "<!DOCTYPE "... is not valid JSON` — thông báo này
+// không nói gì về nguyên nhân thật, thường chỉ là: bản server đang chạy CŨ hơn
+// mã nguồn (chưa restart sau khi cập nhật) hoặc gõ sai đường dẫn.
+// Middleware này phải nằm SAU toàn bộ route /api (đăng ký cuối) để chỉ bắt phần
+// còn sót lại; nhờ đó client luôn nhận JSON và hiển thị được lỗi có nghĩa.
+app.use('/api', (req, res) => {
+  res.status(404).json({
+    ok: false,
+    error: `Máy chủ không có endpoint ${req.method} ${req.originalUrl.split('?')[0]}`,
+    code: 'API_NOT_FOUND',
+    hint: 'Nếu endpoint là tính năng mới, khởi động lại máy chủ (node server.js) sau khi cập nhật mã nguồn.',
+    apiVersion: API_VERSION
+  });
+});
+
+// ========================
 // SERVER START
 // ========================
 
-// Create upload directories if not exist
-['uploads', 'uploads/tracker'].forEach(dir => {
-  const p = path.join(__dirname, dir);
-  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
-});
+// Create upload directories if not exist (thư mục có thể bị đổi bằng UPLOAD_DIR)
+ensureUploadDirs();
 
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+const HS_PORT = Number(process.env.HTTPS_PORT) || 0; // 0/không đặt/rỗng = không bật HTTPS
+
+if (HS_PORT) {
+  // HTTPS cho LAN: PWA (service worker + cài đặt) chỉ chạy trong secure context.
+  // Cert tự ký sinh bằng node:crypto — không cần OpenSSL. Bỏ qua bằng HTTPS_PORT=0.
+  try {
+    const tlsSelfSigned = require('./tls-selfsigned');
+    const cred = tlsSelfSigned.ensureCert({
+      dir: path.join(__dirname, '.certs'),
+      hosts: ['localhost', '127.0.0.1', ...tlsSelfSigned.lanAddresses()]
+    });
+    https.createServer({ key: cred.key, cert: cred.cert }, app).listen(HS_PORT, '0.0.0.0', () => {
+      console.log(`HTTPS (LAN, cert tự ký) tại https://localhost:${HS_PORT}`);
+      console.log(`  → điện thoại: https://<IP-LAN>:${HS_PORT}/m/  (IP: ${tlsSelfSigned.lanAddresses().join(', ') || 'n/a'})`);
+      if (cred.generated) console.log(`  cert mới: ${cred.path.cert}`);
+    }).on('error', (e) => console.error('Không mở được HTTPS:', e.message));
+  } catch (e) {
+    console.error('Bỏ qua HTTPS:', e.message);
+  }
+}
+
+function onListening() {
+  console.log(`Server running at http://${HOST || 'localhost'}:${port}`);
+  if (HOST && HOST !== 'localhost' && HOST !== '127.0.0.1') console.log(`  (bind ${HOST}, chỉ nhận kết nối tới interface này)`);
   initSyncScheduler();
   initLookupHistoryRetention();
-});
+  initApiLogRetention();
+  initIpLookupRetention();
+}
+
+if (HOST) app.listen(port, HOST, onListening);
+else app.listen(port, onListening);

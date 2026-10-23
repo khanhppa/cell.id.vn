@@ -55,7 +55,8 @@ const rcs = fnBody(app, 'resetCallSession');
 ok('resetCallSession là async', /async function resetCallSession/.test(app));
 ok('gọi clearCallSession() (local)', /clearCallSession\(\)/.test(rcs));
 ok('gọi apiRequest DELETE /api/call-logs', /apiRequest\(\s*['"]DELETE['"]\s*,\s*['"]\/api\/call-logs['"]\s*\)/.test(rcs));
-ok('có confirm() trước khi xoá', /confirm\(/.test(rcs));
+ok('xác nhận bằng popup tự dựng trước khi xoá (openConfirmDialog, không phải confirm() HĐH)',
+  /await openConfirmDialog\(\{/.test(rcs) && !/\bif \(!confirm\(/.test(rcs));
 ok('reset myLogsCache = []', /myLogsCache\s*=\s*\[\]/.test(rcs));
 ok('i18n calllogs.confirmReset tồn tại (EN)', /'calllogs\.confirmReset'/.test(app));
 ok('KHÔNG còn nút Xoá phiên topbar gọi resetCallSession() (đã gỡ khỏi HTML)',

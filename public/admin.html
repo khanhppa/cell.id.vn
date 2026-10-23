@@ -3,7 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Chặn trang khi website đang bảo trì (admin vẫn đi qua). Script chặn render. -->
+  <script src="/site-status.js"></script>
   <title>Cell Tracker - Admin</title>
+  <!-- Favicon dùng chung toàn ứng dụng (fav.png) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="/img/favicon-64.png">
+  <link rel="icon" type="image/png" sizes="256x256" href="/img/favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -208,6 +215,8 @@
     .upload-result.success { display: block; background: rgba(50,255,50,0.1); color: #66ff66; border: 1px solid rgba(50,255,50,0.2); }
     .upload-result.error { display: block; background: rgba(255,50,50,0.1); color: #ff6666; border: 1px solid rgba(255,50,50,0.2); }
     .search-table-wrap { max-height: 400px; overflow-y: auto; }
+    /* IP / dữ liệu máy đọc trong bảng (nhật ký tra cứu IP, nguồn dữ liệu). */
+    .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
     .loading { text-align: center; padding: 40px; color: var(--text-muted); }
     .loading i { margin-right: 8px; }
     .toast {
@@ -229,6 +238,50 @@
       z-index: 10000;
     }
     .modal-overlay.show { display: flex; }
+
+    /* ---------- Hộp thoại xác nhận / form dùng chung (.cf-*)
+       Dùng cho adminConfirm() và modal Tạo/Sửa khoá API — thay cho confirm()
+       mặc định của trình duyệt (không định dạng được, chặn JS). ---------- */
+    .cf-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(4px); display: flex; align-items: center;
+      justify-content: center; padding: 16px; z-index: 6100; box-sizing: border-box;
+    }
+    .cf-box {
+      background: var(--bg-surface); border: 1px solid var(--border-color);
+      border-radius: 14px; width: 100%; max-width: 460px; max-height: 86vh;
+      display: flex; flex-direction: column; color: var(--text-primary);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
+    .cf-hd {
+      display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+      border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 15px;
+    }
+    .cf-hd .cf-ico {
+      width: 30px; height: 30px; border-radius: 8px; flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,200,50,0.15); color: #ffcc44; font-size: 14px;
+    }
+    .cf-hd > span:nth-child(2) { flex: 1 1 auto; min-width: 0; }
+    .cf-x {
+      background: transparent; border: 0; color: var(--text-secondary);
+      cursor: pointer; padding: 4px 6px; border-radius: 6px; font-size: 14px;
+    }
+    .cf-x:hover { background: var(--bg-surface2); color: var(--text-primary); }
+    .cf-body { padding: 16px; overflow-y: auto; }
+    .cf-msg { font-size: 13px; line-height: 1.6; color: var(--text-secondary); margin-bottom: 10px; }
+    .cf-warn, .cf-info {
+      display: flex; gap: 8px; align-items: flex-start; font-size: 12px;
+      line-height: 1.55; padding: 10px 12px; border-radius: 8px; margin-top: 8px;
+    }
+    .cf-warn { background: rgba(255,200,50,0.12); color: #e0b048; }
+    .cf-warn.cf-danger { background: rgba(255,80,80,0.12); color: #ff7b7b; }
+    .cf-info { background: rgba(61,124,224,0.12); color: #7aa8ef; }
+    .cf-warn i, .cf-info i { margin-top: 2px; flex: 0 0 auto; }
+    .cf-ft {
+      display: flex; gap: 8px; justify-content: flex-end; padding: 12px 16px;
+      border-top: 1px solid var(--border-color);
+    }
     .modal {
       background: var(--bg-surface); border: 1px solid var(--border-color);
       border-radius: 16px; padding: 24px; width: 100%;
@@ -295,6 +348,119 @@
     .bulk-preview { max-height: 220px; overflow-y: auto; }
     .hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 
+    /* ==================== Dashboard tổng quan ==================== */
+    .dash-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:18px; }
+    .dash-head h3 { margin:0 0 4px; }
+    .dash-sub { margin:0; color:var(--text-muted); font-size:12.5px; }
+    .dash-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .dash-actions select {
+      padding:8px 12px; border:1px solid var(--border-color); border-radius:8px;
+      background:var(--bg-surface2); color:var(--text-primary); font-size:13px; outline:none;
+    }
+    .dash-grid { display:grid; gap:16px; margin-bottom:16px; }
+    .dash-grid-kpi { grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); }
+    .dash-grid-ga { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .dash-grid-charts { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+    .dash-grid-breakdowns { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .dash-grid-bottom { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+    .kpi-card {
+      position:relative; background:linear-gradient(160deg, var(--bg-surface), var(--bg-surface2));
+      border:1px solid var(--border-color); border-radius:14px; padding:16px 18px; overflow:hidden;
+    }
+    .kpi-card::after { content:''; position:absolute; inset:0 auto 0 0; width:3px; background:var(--accent, #4444cc); opacity:.75; }
+    .kpi-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .kpi-icon {
+      width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+      background:rgba(68,68,204,0.12); color:var(--border-focus); font-size:13px;
+    }
+    .kpi-delta { font-size:11.5px; font-weight:700; padding:2px 7px; border-radius:999px; background:var(--bg-surface2); color:var(--text-muted); white-space:nowrap; }
+    .kpi-delta.up { color:#2f9e5f; background:rgba(47,158,95,0.12); }
+    .kpi-delta.down { color:#d64545; background:rgba(214,69,69,0.12); }
+    .kpi-delta.flat { color:var(--text-muted); }
+    .kpi-num { font-size:26px; font-weight:800; letter-spacing:-0.5px; margin-top:10px; line-height:1.15; }
+    .kpi-label { font-size:12.5px; color:var(--text-secondary); margin-top:2px; }
+    .kpi-sub { font-size:11px; color:var(--text-muted); margin-top:6px; line-height:1.45; }
+    .dash-card { background:var(--bg-surface2); }
+    .card-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+    .card-head h4 { margin:0; }
+    .chart-wrap { position:relative; min-height:240px; }
+    .chart-wrap canvas { width:100% !important; height:230px !important; }
+    .empty-state { text-align:center; padding:26px 14px; color:var(--text-muted); font-size:13px; }
+    .empty-state i { font-size:26px; margin-bottom:8px; display:block; opacity:.6; }
+    .dash-error {
+      border:1px solid rgba(214,69,69,0.35); background:rgba(214,69,69,0.08); color:#d64545;
+      border-radius:10px; padding:12px 14px; font-size:12.5px; line-height:1.6; margin-bottom:12px;
+    }
+    .dash-error b { display:block; margin-bottom:2px; }
+    .breakdown-list { display:flex; flex-direction:column; gap:9px; }
+    .breakdown-row { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:4px 10px; font-size:12.5px; }
+    .breakdown-row .br-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary); }
+    .breakdown-row .br-val { color:var(--text-primary); font-weight:600; white-space:nowrap; }
+    .breakdown-bar { grid-column:1 / -1; height:6px; border-radius:999px; background:var(--bg-hover); overflow:hidden; }
+    .breakdown-bar > span { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg, #4444cc, #6f7bff); }
+    .breakdown-empty { color:var(--text-muted); font-size:12.5px; padding:8px 0; }
+    .donut-wrap { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+    .donut { width:120px; height:120px; border-radius:50%; flex:0 0 auto; position:relative; }
+    .donut::after { content:''; position:absolute; inset:22px; border-radius:50%; background:var(--bg-surface2); }
+    .donut-legend { display:flex; flex-direction:column; gap:6px; font-size:12px; min-width:110px; }
+    .donut-legend .dot { width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:6px; }
+    .activity-list { display:flex; flex-direction:column; gap:10px; }
+    .activity-item { display:flex; gap:10px; align-items:flex-start; font-size:12.5px; }
+    .activity-item .ai-ico {
+      width:26px; height:26px; border-radius:8px; background:var(--bg-hover); color:var(--text-secondary);
+      display:flex; align-items:center; justify-content:center; flex:0 0 auto; font-size:11px;
+    }
+    .activity-item .ai-body { min-width:0; flex:1; }
+    .activity-item .ai-title { color:var(--text-primary); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .activity-item .ai-meta { color:var(--text-muted); font-size:11.5px; margin-top:1px; }
+    .health-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; }
+    .health-item { background:var(--bg-surface); border:1px solid var(--border-color); border-radius:10px; padding:10px 12px; }
+    .health-item .h-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px; }
+    .health-item .h-val { font-size:14px; font-weight:700; margin-top:3px; word-break:break-word; }
+    .skeleton { position:relative; overflow:hidden; background:var(--bg-hover); border-radius:8px; color:transparent !important; }
+    .skeleton::after {
+      content:''; position:absolute; inset:0; transform:translateX(-100%);
+      background:linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+      animation:dashShimmer 1.4s infinite;
+    }
+    @keyframes dashShimmer { 100% { transform:translateX(100%); } }
+    @media (max-width: 700px) {
+      .dash-actions { width:100%; }
+      .dash-actions select { flex:1; }
+      .kpi-num { font-size:22px; }
+      .chart-wrap canvas { height:200px !important; }
+    }
+
+    /* Admin trên màn hình hẹp: sidebar thành thanh ngang, nội dung full width.
+       Trước đây sidebar cố định 260px khiến dashboard bị bóp còn ~170px. */
+    @media (max-width: 900px) {
+      html, body { max-width: 100%; overflow-x: hidden; }
+      .container { flex-direction: column; width: 100%; max-width: 100vw; height: auto; min-height: calc(100vh - 48px); }
+      .sidebar {
+        width: 100%; max-width: 100vw; min-width: 0;
+        display: flex; flex-wrap: wrap; align-items: stretch;
+        padding: 4px 0; border-right: 0; border-bottom: 1px solid var(--border-color);
+        overflow-x: auto; overflow-y: hidden;
+      }
+      .sidebar-item {
+        flex: 0 0 auto; white-space: nowrap; padding: 10px 14px;
+        border-left: 0; border-bottom: 3px solid transparent;
+      }
+      .sidebar-item.active { border-left-color: transparent; border-bottom-color: var(--border-focus); background: rgba(100,100,255,0.08); }
+      .sidebar-caret { display: none; }
+      .sidebar-sub { flex-basis: 100%; min-width: 0; background: transparent; }
+      .sidebar-sub.open { display: flex; flex-wrap: wrap; border-top: 1px solid var(--border-color); }
+      .sidebar-sub-item { flex: 0 0 auto; white-space: nowrap; padding: 8px 14px 8px 26px; border-left: 0; border-bottom: 2px solid transparent; }
+      .sidebar-sub-item.active { border-left-color: transparent; border-bottom-color: var(--border-focus); }
+      .content { min-width: 0; width: 100%; max-width: 100vw; padding: 16px; overflow-y: visible; }
+      .navbar { overflow-x: auto; }
+      .dash-head, .dash-actions, .dash-grid, .card, .chart-wrap { min-width: 0; }
+      .dash-actions { width: 100%; }
+      .dash-actions select { flex: 1 1 120px; min-width: 0; }
+      .dash-actions .btn { flex: 0 0 auto; }
+      .dash-grid { gap: 12px; }
+    }
+
     /* Version history (render bởi public/version.js → renderChangelog) */
     #verAdminList { font-size: 13px; }
     .ver-head {
@@ -360,6 +526,12 @@
       <div class="sidebar-item" data-section="payments" onclick="switchSection('payments')">
         <i class="fas fa-credit-card"></i> Nạp điểm (payOS)
       </div>
+      <div class="sidebar-item" data-section="api" onclick="switchSection('api')">
+        <i class="fas fa-plug"></i> API
+      </div>
+      <div class="sidebar-item" data-section="ipx" onclick="switchSection('ipx')">
+        <i class="fas fa-globe"></i> Tra cứu IP
+      </div>
       <div class="sidebar-item" data-section="settings" onclick="switchSection('settings')">
         <i class="fas fa-sliders-h"></i> Cấu hình
       </div>
@@ -371,18 +543,332 @@
     <div class="content">
       <!-- Dashboard -->
       <div id="section-dashboard" class="section active">
-        <h3>Dashboard</h3>
-        <div class="stats-grid" id="dashStats">
-          <div class="stat-card"><div class="num" id="statUsers">0</div><div class="label">Users</div></div>
-          <div class="stat-card"><div class="num" id="statCells">0</div><div class="label">Cell IDs</div></div>
-          <div class="stat-card"><div class="num" id="statRecords">0</div><div class="label">Records</div></div>
-          <div class="stat-card"><div class="num" id="statPending">0</div><div class="label">Pending Users</div></div>
+        <div class="dash-head">
+          <div>
+            <h3>Tổng quan</h3>
+            <p class="dash-sub">Toàn bộ chỉ số website · <span id="dashUpdated">Đang tải…</span></p>
+          </div>
+          <div class="dash-actions">
+            <select id="dashRange" onchange="loadDashboard()" title="Khoảng thời gian">
+              <option value="7">7 ngày</option>
+              <option value="14">14 ngày</option>
+              <option value="28" selected>28 ngày</option>
+              <option value="90">90 ngày</option>
+            </select>
+            <button class="btn btn-sm" onclick="loadDashboard({refresh:true})"><i class="fas fa-rotate"></i> Làm mới</button>
+            <button class="btn btn-sm" onclick="openGaSettings()"><i class="fas fa-chart-line"></i> Cấu hình GA</button>
+          </div>
         </div>
-        <div class="card">
-          <h4>Recent Activity</h4>
-          <div id="dashActivity" class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+
+        <!-- Trạng thái bảo trì: hiện khi website đang đóng, để admin mở lại nhanh. -->
+        <div class="card" id="dashSiteBanner" style="display:none;border-color:rgba(224,68,68,.45);background:rgba(224,68,68,.06);margin-bottom:18px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div style="min-width:0">
+              <b style="color:#e04444"><i class="fas fa-power-off"></i> Website đang ĐÓNG (bảo trì)</b>
+              <div class="hint" id="dashSiteBannerMsg" style="margin-top:4px">Người dùng đang thấy thông báo bảo trì. Chỉ admin truy cập được.</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-sm" onclick="openSiteSettings()"><i class="fas fa-gear"></i> Cấu hình thông báo</button>
+              <button class="btn btn-sm btn-primary" onclick="quickReopenSite()"><i class="fas fa-power-off"></i> Mở lại website</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPI local -->
+        <div class="dash-grid dash-grid-kpi" id="dashLocalKpis">
+          <div class="kpi-card">
+            <div class="kpi-top"><span class="kpi-icon"><i class="fas fa-users"></i></span><span class="kpi-delta" id="kpiUsersDelta">—</span></div>
+            <div class="kpi-num" id="kpiUsers">—</div><div class="kpi-label">Người dùng</div>
+            <div class="kpi-sub" id="kpiUsersSub">Đang tải…</div>
+          </div>
+          <div class="kpi-card" style="--accent:#3d7ce0">
+            <div class="kpi-top"><span class="kpi-icon" style="background:rgba(61,124,224,.12);color:#3d7ce0"><i class="fas fa-database"></i></span><span class="kpi-delta" id="kpiCellsDelta">—</span></div>
+            <div class="kpi-num" id="kpiCells">—</div><div class="kpi-label">Cell IDs</div>
+            <div class="kpi-sub" id="kpiCellsSub">Đang tải…</div>
+          </div>
+          <div class="kpi-card" style="--accent:#f0a020">
+            <div class="kpi-top"><span class="kpi-icon" style="background:rgba(240,160,32,.14);color:#f0a020"><i class="fas fa-location-crosshairs"></i></span><span class="kpi-delta" id="kpiLookupsDelta">—</span></div>
+            <div class="kpi-num" id="kpiLookups">—</div><div class="kpi-label">Lượt tra cứu</div>
+            <div class="kpi-sub" id="kpiLookupsSub">Đang tải…</div>
+          </div>
+          <div class="kpi-card" style="--accent:#2f9e5f">
+            <div class="kpi-top"><span class="kpi-icon" style="background:rgba(47,158,95,.12);color:#2f9e5f"><i class="fas fa-coins"></i></span><span class="kpi-delta" id="kpiRevenueDelta">—</span></div>
+            <div class="kpi-num" id="kpiRevenue">—</div><div class="kpi-label">Doanh thu</div>
+            <div class="kpi-sub" id="kpiRevenueSub">Đang tải…</div>
+          </div>
+          <div class="kpi-card" style="--accent:#8b5cf6">
+            <div class="kpi-top"><span class="kpi-icon" style="background:rgba(139,92,246,.14);color:#8b5cf6"><i class="fas fa-bolt"></i></span><span class="kpi-delta" id="kpiCreditsDelta">—</span></div>
+            <div class="kpi-num" id="kpiCredits">—</div><div class="kpi-label">Điểm đã dùng</div>
+            <div class="kpi-sub" id="kpiCreditsSub">Đang tải…</div>
+          </div>
+          <div class="kpi-card" style="--accent:#e0619b">
+            <div class="kpi-top"><span class="kpi-icon" style="background:rgba(224,97,155,.12);color:#e0619b"><i class="fas fa-plug"></i></span><span class="kpi-delta" id="kpiApiDelta">—</span></div>
+            <div class="kpi-num" id="kpiApi">—</div><div class="kpi-label">API request 24h</div>
+            <div class="kpi-sub" id="kpiApiSub">Đang tải…</div>
+          </div>
+        </div>
+
+        <!-- Google Analytics -->
+        <div class="card dash-card" id="dashGaSection">
+          <div class="card-head">
+            <h4><i class="fab fa-google"></i> Google Analytics</h4>
+            <span id="dashGaBadge" class="badge badge-pending">Đang tải…</span>
+          </div>
+          <div id="dashGaEmpty" class="empty-state" style="display:none">
+            <i class="fas fa-chart-line"></i>
+            Chưa kết nối Google Analytics. Cấu hình Measurement ID + Property ID + Service Account để xem số liệu truy cập.
+            <div style="margin-top:12px"><button class="btn btn-primary btn-sm" onclick="openGaSettings()"><i class="fas fa-gear"></i> Cấu hình ngay</button></div>
+          </div>
+          <div id="dashGaError" class="dash-error" style="display:none"></div>
+          <div id="dashGaContent">
+            <div class="dash-grid dash-grid-ga" id="dashGaKpis" style="margin-bottom:0">
+              <div class="kpi-card"><div class="kpi-top"><span class="kpi-icon"><i class="fas fa-signal"></i></span><span class="kpi-delta" id="gaRealtimeDelta">—</span></div><div class="kpi-num" id="gaRealtime">—</div><div class="kpi-label">Đang online</div><div class="kpi-sub" id="gaRealtimeSub">30 phút gần nhất</div></div>
+              <div class="kpi-card"><div class="kpi-top"><span class="kpi-icon"><i class="fas fa-user-group"></i></span><span class="kpi-delta" id="gaUsersDelta">—</span></div><div class="kpi-num" id="gaUsers">—</div><div class="kpi-label">Người dùng</div><div class="kpi-sub" id="gaUsersSub">Đang tải…</div></div>
+              <div class="kpi-card"><div class="kpi-top"><span class="kpi-icon"><i class="fas fa-arrows-rotate"></i></span><span class="kpi-delta" id="gaSessionsDelta">—</span></div><div class="kpi-num" id="gaSessions">—</div><div class="kpi-label">Phiên</div><div class="kpi-sub" id="gaSessionsSub">Đang tải…</div></div>
+              <div class="kpi-card"><div class="kpi-top"><span class="kpi-icon"><i class="fas fa-eye"></i></span><span class="kpi-delta" id="gaViewsDelta">—</span></div><div class="kpi-num" id="gaViews">—</div><div class="kpi-label">Lượt xem trang</div><div class="kpi-sub" id="gaViewsSub">Đang tải…</div></div>
+              <div class="kpi-card"><div class="kpi-top"><span class="kpi-icon"><i class="fas fa-heart"></i></span><span class="kpi-delta" id="gaEngagementDelta">—</span></div><div class="kpi-num" id="gaEngagement">—</div><div class="kpi-label">Tỷ lệ tương tác</div><div class="kpi-sub" id="gaEngagementSub">Đang tải…</div></div>
+              <div class="kpi-card"><div class="kpi-top"><span class="kpi-icon"><i class="fas fa-clock"></i></span><span class="kpi-delta" id="gaDurationDelta">—</span></div><div class="kpi-num" id="gaDuration">—</div><div class="kpi-label">Thời lượng TB</div><div class="kpi-sub" id="gaDurationSub">mỗi phiên</div></div>
+              <div class="kpi-card"><div class="kpi-top"><span class="kpi-icon"><i class="fas fa-right-from-bracket"></i></span><span class="kpi-delta" id="gaBounceDelta">—</span></div><div class="kpi-num" id="gaBounce">—</div><div class="kpi-label">Tỷ lệ thoát</div><div class="kpi-sub" id="gaBounceSub">càng thấp càng tốt</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="dash-grid dash-grid-charts">
+          <div class="card dash-card">
+            <div class="card-head"><h4>Lưu lượng truy cập</h4><span class="muted-text" id="dashTrafficRange"></span></div>
+            <div class="chart-wrap">
+              <canvas id="dashTrafficChart"></canvas>
+              <div id="dashTrafficEmpty" class="empty-state" style="display:none"><i class="fas fa-chart-area"></i>Chưa có dữ liệu truy cập.</div>
+            </div>
+          </div>
+          <div class="card dash-card">
+            <div class="card-head"><h4>Hoạt động tra cứu</h4><span class="muted-text" id="dashLocalRange"></span></div>
+            <div class="chart-wrap">
+              <canvas id="dashLocalChart"></canvas>
+              <div id="dashLocalEmpty" class="empty-state" style="display:none"><i class="fas fa-chart-column"></i>Chưa có lượt tra cứu trong khoảng này.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Breakdowns -->
+        <div class="dash-grid dash-grid-breakdowns">
+          <div class="card dash-card"><h4>Trang xem nhiều</h4><div id="dashTopPages" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải…</div></div>
+          <div class="card dash-card"><h4>Nguồn truy cập</h4><div id="dashChannels" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải…</div></div>
+          <div class="card dash-card"><h4>Thiết bị</h4><div id="dashDevices" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải…</div></div>
+          <div class="card dash-card"><h4>Quốc gia</h4><div id="dashCountries" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải…</div></div>
+          <div class="card dash-card"><h4>User tra cứu nhiều</h4><div id="dashTopUsers" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải…</div></div>
+        </div>
+
+        <!-- Activity + system -->
+        <div class="dash-grid dash-grid-bottom">
+          <div class="card dash-card"><h4>Hoạt động gần đây</h4><div id="dashActivity" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải…</div></div>
+          <div class="card dash-card"><h4>Sức khoẻ hệ thống</h4><div id="dashHealth" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải…</div></div>
         </div>
       </div>
+
+      <!-- ============================================================
+           API — quản lý key cho ứng dụng/website khác gọi tra cứu cell.
+           Chia 3 tab: Khoá API / Nhật ký / Tài liệu (switchApiTab()).
+           ============================================================ -->
+      <div id="section-api" class="section">
+        <h3>API cho ứng dụng khác</h3>
+
+        <div class="stats-grid" id="apiStats">
+          <div class="stat-card"><div class="num" id="apiStatKeys">0</div><div class="label">Tổng số key</div></div>
+          <div class="stat-card"><div class="num" id="apiStatActive">0</div><div class="label">Đang hoạt động</div></div>
+          <div class="stat-card"><div class="num" id="apiStatRevoked">0</div><div class="label">Đã thu hồi</div></div>
+          <div class="stat-card"><div class="num" id="apiStatReq24">0</div><div class="label">Request 24h</div></div>
+          <div class="stat-card"><div class="num" id="apiStatErr24">0</div><div class="label">Lỗi 24h</div></div>
+          <div class="stat-card"><div class="num" id="apiStatCells24">0</div><div class="label">Cell đã tra 24h</div></div>
+        </div>
+
+        <div class="tabs" id="apiTabs">
+          <button class="tab-btn active" data-apitab="keys" onclick="switchApiTab('keys')">
+            <i class="fas fa-key"></i> Khoá API
+          </button>
+          <button class="tab-btn" data-apitab="logs" onclick="switchApiTab('logs')">
+            <i class="fas fa-list-ul"></i> Nhật ký gọi API
+          </button>
+          <button class="tab-btn" data-apitab="docs" onclick="switchApiTab('docs')">
+            <i class="fas fa-book"></i> Tài liệu tích hợp
+          </button>
+        </div>
+
+        <!-- Tab: Khoá API -->
+        <div class="tab-pane active" id="apitab-keys">
+          <div class="card">
+            <div class="page-actions" style="margin-bottom:12px">
+              <button class="btn btn-primary" onclick="apiKeyOpenCreate()">
+                <i class="fas fa-plus"></i> Tạo khoá API
+              </button>
+              <button class="btn" onclick="loadApiKeys()">
+                <i class="fas fa-rotate"></i> Làm mới
+              </button>
+            </div>
+            <div class="hint" style="margin-bottom:10px">
+              Mỗi khoá gắn với 1 tài khoản: mọi lượt tra qua khoá đó sẽ <b>trừ điểm của tài khoản ấy</b>.
+              Khoá chỉ hiển thị <b>đầy đủ 1 lần</b> lúc tạo — server chỉ lưu bản băm, không xem lại được.
+            </div>
+            <div style="overflow-x:auto">
+              <table class="table" id="apiKeyTable">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Tên</th>
+                    <th>Đăng nhập</th>
+                    <th>Tiền tố khoá</th>
+                    <th>Quyền</th>
+                    <th>Hạn mức</th>
+                    <th>Request 24h</th>
+                    <th>Dùng lần cuối</th>
+                    <th>Trạng thái</th>
+                    <th style="text-align:right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="apiKeyTableBody">
+                  <tr><td colspan="10" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div><!-- /apitab-keys -->
+
+        <!-- Tab: Nhật ký -->
+        <div class="tab-pane" id="apitab-logs">
+          <div class="card">
+            <div class="page-actions" style="margin-bottom:12px">
+              <select id="apiLogStatus" onchange="loadApiLogs()" style="padding:7px 10px;border-radius:8px">
+                <option value="">Mọi trạng thái</option>
+                <option value="200">200 — thành công</option>
+                <option value="error">Lỗi (≥400)</option>
+                <option value="401">401 — không xác thực</option>
+                <option value="403">403 — không có quyền</option>
+                <option value="404">404 — không tìm thấy cell</option>
+                <option value="429">429 — vượt hạn mức</option>
+              </select>
+              <select id="apiLogKey" onchange="loadApiLogs()" style="padding:7px 10px;border-radius:8px">
+                <option value="">Mọi khoá</option>
+              </select>
+              <button class="btn" onclick="loadApiLogs()"><i class="fas fa-rotate"></i> Làm mới</button>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="table" id="apiLogTable">
+                <thead>
+                  <tr>
+                    <th>Thời gian</th>
+                    <th>Khoá</th>
+                    <th>Tài khoản</th>
+                    <th>Method</th>
+                    <th>Path</th>
+                    <th>Status</th>
+                    <th>ms</th>
+                    <th>Cell</th>
+                    <th>Điểm</th>
+                    <th>IP</th>
+                    <th>Lỗi</th>
+                  </tr>
+                </thead>
+                <tbody id="apiLogTableBody">
+                  <tr><td colspan="11" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div><!-- /apitab-logs -->
+
+        <!-- Tab: Tài liệu -->
+        <div class="tab-pane" id="apitab-docs">
+          <div class="card">
+            <div class="page-actions" style="margin-bottom:10px">
+              <button class="btn" onclick="apiCopyCurl()"><i class="fas fa-copy"></i> Copy ví dụ cURL</button>
+            </div>
+            <div class="hint" style="margin-bottom:12px">
+              Base URL: <code id="apiBaseUrl">—</code> — không bật CORS, API dành cho gọi
+              <b>server-to-server</b>. Tài liệu đầy đủ nằm ở <code>/API.md</code> trong mã nguồn.
+            </div>
+            <div id="apiDocsBody">
+              <div class="hint" style="margin-bottom:14px;padding:10px 12px;border-radius:8px;background:rgba(61,124,224,.12)">
+                <b>Khoá API là cổng kết nối, không gắn tài khoản.</b> Mỗi ứng dụng ngoài giữ 1 khoá
+                để chứng minh được cấp phép và chịu hạn mức. Muốn tra cứu, ứng dụng phải cho người
+                dùng <b>đăng nhập</b> (lấy JWT) rồi gửi kèm khoá — điểm sẽ trừ vào tài khoản đăng nhập.
+              </div>
+
+              <h4>1. Xác thực</h4>
+              <p>Tra cứu cần <b>cả hai</b> header: khoá (cổng) + JWT (tài khoản bị trừ điểm).</p>
+              <pre><code>X-API-Key: sk_live_xxxxxxxxxxxxxxxx
+Authorization: Bearer eyJhbGciOi...   # JWT từ /api/v1/login</code></pre>
+              <p class="hint">Chỉ gửi khoá mà không có JWT → <code>401 USER_REQUIRED</code>.
+                 Endpoint công khai (<code>/health</code>) không cần header nào.</p>
+
+              <h4>2. Kiểm tra kết nối (không cần xác thực)</h4>
+              <pre><code>GET /api/v1/health</code></pre>
+
+              <h4>3. Đăng nhập — trả JWT + thông tin tài khoản</h4>
+              <pre><code>POST /api/v1/login
+Content-Type: application/json
+
+{ "username": "user01", "password": "matkhau" }
+
+→ 200 { "ok": true, "apiVersion": "v1", "token": "eyJ...",
+        "expires_in": 86400,
+        "user": { "id": 12, "username": "user01", "email": "...",
+                  "role": "user", "status": "active",
+                  "credit_balance": 95 } }</code></pre>
+
+              <h4>4. Thông tin tài khoản đang đăng nhập</h4>
+              <pre><code>GET /api/v1/me
+→ 200 { "ok": true, "user": { ...số dư, email, vai trò... },
+        "auth_type": "key+jwt",
+        "key": { "id": 3, "name": "My app", "scopes": ["lookup","account"],
+                 "rate_limit_per_min": 60, "require_user": true } }</code></pre>
+
+              <h4>5. Tra cứu cell</h4>
+              <p>Query: <code>mcc</code>, <code>mnc</code>, <code>lac</code>, <code>cellid</code> (bắt buộc);
+                 <code>sector</code>, <code>radio</code> (tuỳ chọn).</p>
+              <pre><code>GET /api/v1/cells/resolve?mcc=452&amp;mnc=01&amp;lac=9000&amp;cellid=123456
+
+→ 200 { "ok": true, "found": true, "source": "local",
+        "radio_source": "declared", "radio_confident": true,
+        "credit": { "balance": 94, "charged": 1 },
+        "cell": { "mcc": "452", "mnc": "01", "lac": "9000",
+                  "cellid": "123456", "sector": "1",
+                  "lat": 21.0278, "lon": 105.8342,
+                  "range": 500, "radio": "LTE",
+                  "address": "..." } }
+
+→ 404 { "ok": false, "found": false, "reason": "CELL_NOT_FOUND" }
+→ 402 { "ok": false, "found": false, "reason": "INSUFFICIENT_CREDIT" }
+→ 429 { "ok": false, "reason": "RATE_LIMITED", "retryAfter": 42 }</code></pre>
+
+              <h4>6. Hạn mức</h4>
+              <p>Mỗi response kèm header:</p>
+              <pre><code>X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 58
+X-RateLimit-Limit-Day: 5000
+X-RateLimit-Remaining-Day: 4912
+Retry-After: 42        (chỉ khi 429)</code></pre>
+
+              <h4>7. Mã lỗi</h4>
+              <table class="table" style="max-width:720px">
+                <thead><tr><th>HTTP</th><th>reason</th><th>Ý nghĩa</th></tr></thead>
+                <tbody>
+                  <tr><td>400</td><td>BAD_REQUEST</td><td>Thiếu/sai tham số</td></tr>
+                  <tr><td>401</td><td>NO_CREDENTIALS</td><td>Không gửi header xác thực</td></tr>
+                  <tr><td>401</td><td>USER_REQUIRED</td><td>Có khoá nhưng chưa đăng nhập — cần gửi kèm JWT</td></tr>
+                  <tr><td>401</td><td>INVALID_KEY / INVALID_TOKEN</td><td>Khoá hoặc token sai</td></tr>
+                  <tr><td>401</td><td>KEY_REVOKED / KEY_EXPIRED</td><td>Khoá bị thu hồi hoặc hết hạn</td></tr>
+                  <tr><td>402</td><td>INSUFFICIENT_CREDIT</td><td>Tài khoản không đủ điểm</td></tr>
+                  <tr><td>403</td><td>KEY_DISABLED / ACCOUNT_DISABLED</td><td>Khoá bị tắt / tài khoản bị khoá</td></tr>
+                  <tr><td>403</td><td>INSUFFICIENT_SCOPE</td><td>Khoá thiếu quyền <code>lookup</code>/<code>account</code></td></tr>
+                  <tr><td>404</td><td>CELL_NOT_FOUND</td><td>Không nguồn nào có cell này</td></tr>
+                  <tr><td>429</td><td>RATE_LIMITED</td><td>Vượt hạn mức, xem <code>Retry-After</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div><!-- /apitab-docs -->
+      </div><!-- /section-api -->
 
       <!-- Settings — chia tab theo nhóm (điều hướng bằng switchSettingsTab()).
            Mọi id field giữ NGUYÊN; saveSettings() vẫn gửi toàn bộ form 1 lần. -->
@@ -393,6 +879,9 @@
           <button class="tab-btn active" data-settingstab="general" onclick="switchSettingsTab('general')">
             <i class="fas fa-sliders-h"></i> Chung
           </button>
+          <button class="tab-btn" data-settingstab="site" onclick="switchSettingsTab('site')">
+            <i class="fas fa-power-off"></i> Website
+          </button>
           <button class="tab-btn" data-settingstab="credit" onclick="switchSettingsTab('credit')">
             <i class="fas fa-coins"></i> Điểm
           </button>
@@ -401,6 +890,9 @@
           </button>
           <button class="tab-btn" data-settingstab="topup" onclick="switchSettingsTab('topup')">
             <i class="fas fa-money-bill-wave"></i> Quy đổi &amp; nạp
+          </button>
+          <button class="tab-btn" data-settingstab="ga" onclick="switchSettingsTab('ga')">
+            <i class="fas fa-chart-line"></i> Google Analytics
           </button>
           <button class="tab-btn" data-settingstab="smtp" onclick="switchSettingsTab('smtp')">
             <i class="fas fa-envelope"></i> Email (SMTP)
@@ -427,6 +919,23 @@
             <div class="hint">Lịch sử tra cứu cũ hơn số ngày này sẽ tự động bị xóa (job chạy 03:30 mỗi ngày).</div>
           </div>
           </div><!-- /settingstab-general -->
+
+          <!-- Tab: Website (bật/đóng bảo trì) -->
+          <div class="tab-pane" id="settingstab-site">
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
+              <input type="checkbox" id="setSiteOpen" checked style="width:auto;margin:0">
+              <span>Website đang MỞ (bỏ chọn = đóng website để bảo trì)</span>
+            </label>
+            <div class="hint">Khi đóng: người dùng thấy trang thông báo bảo trì ở trang chủ và mọi API nghiệp vụ bị chặn. Chỉ admin đăng nhập được và có thể bật lại.</div>
+          </div>
+          <div class="form-group">
+            <label>Thông báo bảo trì (site_closed_message)</label>
+            <textarea id="setSiteClosedMessage" rows="5" maxlength="2000" placeholder="Để trống để dùng thông báo mặc định…"></textarea>
+            <div class="hint">Hiển thị ở trang <code>/maintenance.html</code>. Để trống = thông báo mặc định. Nội dung là văn bản thuần (không dùng HTML).</div>
+          </div>
+          <div class="hint" id="setSiteStatus" style="margin-top:8px"></div>
+          </div><!-- /settingstab-site -->
 
           <!-- Tab: Điểm -->
           <div class="tab-pane" id="settingstab-credit">
@@ -533,6 +1042,72 @@
             <div class="hint">Áp dụng cho cả nạp tự do lẫn các gói nạp bên dưới.</div>
           </div>
           </div><!-- /settingstab-topup -->
+
+          <!-- Tab: Google Analytics -->
+          <div class="tab-pane" id="settingstab-ga">
+          <div class="form-group">
+            <label>Google Analytics 4 — theo dõi lưu lượng truy cập</label>
+            <div class="hint" style="margin-bottom:12px">
+              Bật để gắn thẻ GA4 vào các trang public qua <code>/ga.js</code>. Điền thêm Property ID +
+              Service Account JSON để xem số liệu truy cập ngay trong Dashboard.
+            </div>
+
+            <label class="toggle-row" style="margin-bottom:12px">
+              <span class="toggle-text">Bật Google Analytics</span>
+              <span class="toggle-switch">
+                <input type="checkbox" id="setGaEnabled">
+                <span class="toggle-track"></span>
+              </span>
+            </label>
+
+            <label style="display:block;font-weight:400">Measurement ID (G-XXXXXXXXXX)</label>
+            <input type="text" id="setGaMeasurementId" placeholder="G-XXXXXXXXXX" autocomplete="off"
+                   style="margin-bottom:4px">
+            <div class="hint" style="margin-bottom:10px">GA4 → Admin → Data streams → Web stream → Measurement ID.</div>
+
+            <label style="display:block;font-weight:400">GA4 Property ID (Property ID dạng số)</label>
+            <input type="text" id="setGaPropertyId" placeholder="123456789" autocomplete="off"
+                   style="margin-bottom:4px">
+            <div class="hint" style="margin-bottom:10px">GA4 → Admin → Property settings → Property ID (KHÔNG phải Measurement ID).</div>
+
+            <label style="display:block;font-weight:400">Service Account JSON (để đọc báo cáo)</label>
+            <textarea id="setGaServiceAccount" rows="5" placeholder="Dán toàn bộ nội dung file JSON của service account…"
+                      autocomplete="off" spellcheck="false"
+                      style="font-family:ui-monospace, Consolas, monospace;font-size:12px;line-height:1.5"></textarea>
+            <div class="hint" id="setGaServiceAccountHint" style="margin-bottom:8px"></div>
+
+            <div class="form-group" id="gaAccountEmailRow" style="display:none;margin-top:10px">
+              <label style="font-weight:400">Email service account (copy sang GA → Property Access Management)</label>
+              <div style="display:flex;gap:8px;align-items:stretch">
+                <input type="text" id="gaAccountEmail" readonly style="flex:1;font-family:ui-monospace, Consolas, monospace;font-size:12px">
+                <button class="btn" onclick="copyGaEmail()" title="Copy email"><i class="fas fa-copy"></i></button>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+              <button class="btn btn-primary" id="gaSaveBtn" onclick="saveGaSettings()"><i class="fas fa-save"></i> Lưu Google Analytics</button>
+              <button class="btn" id="gaTestBtn" onclick="testGaConnection()"><i class="fas fa-vial"></i> Kiểm tra kết nối</button>
+              <button class="btn" onclick="openGaGuide()"><i class="fas fa-circle-question"></i> Hướng dẫn</button>
+            </div>
+            <div class="hint" id="setGaStatus" style="margin-top:8px"></div>
+
+            <details id="gaGuide" style="margin-top:14px;font-size:12.5px;line-height:1.7;color:var(--text-secondary)">
+              <summary style="cursor:pointer;font-weight:600">Các bước lấy thông số Google Analytics</summary>
+              <ol style="margin:10px 0 0 18px;padding:0">
+                <li>Vào <b>Google Cloud Console</b> → tạo project → bật <b>Google Analytics Data API</b>.</li>
+                <li>Tạo <b>Service Account</b> → Keys → Add key → JSON → tải file về.</li>
+                <li>Trong <b>GA4</b> → Admin → Property Access Management → thêm email service account làm <b>Viewer</b>.</li>
+                <li>GA4 → Admin → Property settings → copy <b>Property ID</b> (dãy số).</li>
+                <li>GA4 → Admin → Data streams → copy <b>Measurement ID</b> (G-…).</li>
+                <li>Dán JSON + 2 ID ở trên → Lưu cấu hình → Kiểm tra kết nối.</li>
+              </ol>
+              <div class="hint" style="margin-top:10px">
+                Thẻ tracking được chèn tự động vào các trang public qua <code>/ga.js</code>.
+                Trang admin không bị tính vào traffic.
+              </div>
+            </details>
+          </div>
+          </div><!-- /settingstab-ga -->
 
           <!-- Tab: Email (SMTP) -->
           <div class="tab-pane" id="settingstab-smtp">
@@ -943,6 +1518,17 @@
           <div class="filter-bar" style="align-items:center">
             <button class="btn btn-primary btn-sm" onclick="showAddUserModal()"><i class="fas fa-plus"></i> Add User</button>
             <input type="text" id="creditUserFilter" placeholder="Lọc theo username..." oninput="renderUsersTable()">
+            <select id="userRoleFilter" onchange="renderUsersTable()" title="Lọc theo vai trò">
+              <option value="">Mọi vai trò</option>
+              <option value="admin">Admin</option>
+              <option value="user">User</option>
+            </select>
+            <select id="userStatusFilter" onchange="renderUsersTable()" title="Lọc theo trạng thái">
+              <option value="">Mọi trạng thái</option>
+              <option value="active">Active</option>
+              <option value="pending">Pending</option>
+              <option value="disabled">Disabled</option>
+            </select>
             <button class="btn btn-sm" onclick="loadCreditUsers()"><i class="fas fa-redo"></i> Làm mới</button>
             <button class="btn btn-sm" id="btnReconcile" onclick="runReconcile()"><i class="fas fa-balance-scale"></i> Đối soát</button>
             <span id="reconcileResult" class="muted-text" style="font-size:12px"></span>
@@ -996,6 +1582,218 @@
         </div>
       </div>
 
+      <!-- ============================================================
+           TRA CỨU IP — quản trị nguồn dữ liệu địa chỉ IP (DB-IP, IPinfo,
+           ipwho.is…). 3 tab: Nguồn / Nhật ký / Cấu hình & chạy thử.
+           Điều hướng bằng switchIpTab(); dữ liệu từ /api/admin/ip-lookup/*.
+           ============================================================ -->
+      <div id="section-ipx" class="section">
+        <h3>Tra cứu địa chỉ IP</h3>
+
+        <div class="stats-grid" id="ipxStats">
+          <div class="stat-card"><div class="num" id="ipxStatTotal">0</div><div class="label">Lượt tra (tổng)</div></div>
+          <div class="stat-card"><div class="num" id="ipxStat24">0</div><div class="label">Lượt tra 24h</div></div>
+          <div class="stat-card"><div class="num" id="ipxStatErr">0</div><div class="label">Lỗi 24h</div></div>
+          <div class="stat-card"><div class="num" id="ipxStatCache">0</div><div class="label">Cache hit 24h</div></div>
+          <div class="stat-card"><div class="num" id="ipxStatIps">0</div><div class="label">IP khác nhau</div></div>
+          <div class="stat-card"><div class="num" id="ipxStatRows">0</div><div class="label">Dòng cache</div></div>
+        </div>
+
+        <div class="tabs" id="ipxTabs">
+          <button class="tab-btn active" data-ipxtab="sources" onclick="switchIpTab('sources')">
+            <i class="fas fa-server"></i> Nguồn dữ liệu
+          </button>
+          <button class="tab-btn" data-ipxtab="logs" onclick="switchIpTab('logs')">
+            <i class="fas fa-list-ul"></i> Nhật ký tra cứu
+          </button>
+          <button class="tab-btn" data-ipxtab="config" onclick="switchIpTab('config')">
+            <i class="fas fa-sliders-h"></i> Cấu hình &amp; chạy thử
+          </button>
+        </div>
+
+        <!-- Tab 1: Nguồn -->
+        <div class="tab-pane active" id="ipxtab-sources">
+          <div class="card">
+            <div class="sub-head">
+              <h4 style="margin:0">Danh sách nguồn</h4>
+              <div class="filter-bar" style="margin:0">
+                <button class="btn btn-sm" onclick="loadIpSources()"><i class="fas fa-redo"></i> Làm mới</button>
+              </div>
+            </div>
+            <p class="hint" style="margin:0 0 10px">
+              Ưu tiên: số nhỏ chạy trước (thứ tự hiển thị). Nguồn cần API key mà chưa nhập key sẽ
+              bị bỏ qua khi tra cứu. DB-IP free và ip-api.com free chỉ chạy trên <b>HTTP</b>
+              (không mã hoá) — chỉ dùng cho dữ liệu tham khảo.
+            </p>
+            <div class="search-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ưu tiên</th><th>Nguồn</th><th>Loại</th><th>Cần key</th><th>Bật</th>
+                    <th>Timeout</th><th>Cache</th><th>Lỗi gần nhất</th><th style="text-align:right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="ipxSourceBody">
+                  <tr><td colspan="9" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card" id="ipxFormCard" style="max-width:760px">
+            <h4 id="ipxFormTitle">Thêm nguồn</h4>
+            <div class="online-row">
+              <div class="form-group">
+                <label>Loại nguồn</label>
+                <select id="ipxType" onchange="onIpTypeChange()"></select>
+              </div>
+              <div class="form-group">
+                <label>Tên hiển thị</label>
+                <input type="text" id="ipxName" placeholder="DB-IP">
+              </div>
+              <div class="form-group">
+                <label>Plan (chỉ IPinfo)</label>
+                <select id="ipxPlan">
+                  <option value="lite">lite (country + ASN)</option>
+                  <option value="core">core (city + toạ độ + flags)</option>
+                </select>
+              </div>
+            </div>
+            <div class="online-row">
+              <div class="form-group">
+                <label>Base URL</label>
+                <input type="text" id="ipxBaseUrl" placeholder="http://api.db-ip.com/v2">
+              </div>
+              <div class="form-group">
+                <label>API key</label>
+                <input type="text" id="ipxApiKey" autocomplete="off" placeholder="Để trống nếu không đổi">
+              </div>
+            </div>
+            <div class="online-row">
+              <div class="form-group">
+                <label>Timeout (ms)</label>
+                <input type="number" id="ipxTimeout" min="1000" max="60000" placeholder="10000">
+              </div>
+              <div class="form-group">
+                <label>Cache (ngày)</label>
+                <input type="number" id="ipxCacheDays" min="0" max="365" placeholder="7">
+              </div>
+              <div class="form-group">
+                <label>Trạng thái</label>
+                <select id="ipxEnabled">
+                  <option value="1">Bật</option>
+                  <option value="0">Tắt</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Ghi chú</label>
+              <input type="text" id="ipxNotes" placeholder="Ghi chú nội bộ">
+            </div>
+            <div class="hint" id="ipxHint"></div>
+            <div class="btn-row" style="justify-content:flex-start">
+              <button class="btn btn-primary" onclick="saveIpSource()"><i class="fas fa-save"></i> Lưu nguồn</button>
+              <button class="btn" onclick="resetIpSourceForm()"><i class="fas fa-plus"></i> Thêm mới</button>
+              <button class="btn" id="ipxTestBtn" onclick="testIpSourceForm()" style="display:none"><i class="fas fa-vial"></i> Kiểm tra</button>              <span class="hint" id="ipxTestResult"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Nhật ký -->
+        <div class="tab-pane" id="ipxtab-logs">
+          <div class="card">
+            <div class="filter-bar" style="align-items:center">
+              <input type="text" id="ipxLogIp" placeholder="Lọc theo IP đã tra…" style="width:220px">
+              <select id="ipxLogSource" onchange="loadIpLogs()"><option value="">Mọi nguồn</option></select>
+              <button class="btn btn-sm" onclick="loadIpLogs()"><i class="fas fa-redo"></i> Làm mới</button>
+            </div>
+            <div class="search-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Thời gian</th><th>User</th><th>IP tra</th><th>Nguồn</th>
+                    <th>Trạng thái</th><th>Thời gian xử lý</th><th>Cache</th><th>IP người gọi</th>
+                  </tr>
+                </thead>
+                <tbody id="ipxLogBody">
+                  <tr><td colspan="8" class="loading"><i class="fas fa-spinner fa-spin"></i> Đang tải…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Cấu hình & chạy thử -->
+        <div class="tab-pane" id="ipxtab-config">
+          <div class="card" style="max-width:760px">
+            <h4>Cấu hình chung</h4>
+            <label class="toggle-row" style="margin-bottom:10px">
+              <span class="toggle-text">Cho phép khách (chưa đăng nhập) tra cứu IP</span>
+              <span class="toggle-switch">
+                <input type="checkbox" id="ipxPublicEnabled">
+                <span class="toggle-track"></span>
+              </span>
+            </label>
+            <div class="online-row">
+              <div class="form-group">
+                <label>Lượt/ngày cho mỗi IP khách</label>
+                <input type="number" id="ipxGuestDaily" min="0" placeholder="1">
+              </div>
+              <div class="form-group">
+                <label>Lượt/ngày cho mỗi tài khoản</label>
+                <input type="number" id="ipxUserDaily" min="0" placeholder="50">
+              </div>
+              <div class="form-group">
+                <label>Giờ reset hạn mức (0–23)</label>
+                <input type="number" id="ipxCutoff" min="0" max="23" placeholder="2">
+              </div>
+            </div>
+            <label class="toggle-row" style="margin-bottom:10px">
+              <span class="toggle-text">Cho phép tra IP công khai của máy chủ</span>
+              <span class="toggle-switch">
+                <input type="checkbox" id="ipxConsoleEnabled">
+                <span class="toggle-track"></span>
+              </span>
+            </label>
+            <div class="online-row">
+              <div class="form-group">
+                <label>Lượt/ngày cho tra IP máy chủ</label>
+                <input type="number" id="ipxConsolePerDay" min="0" placeholder="1000">
+              </div>
+              <div class="form-group">
+                <label>Lưu nhật ký (ngày)</label>
+                <input type="number" id="ipxRetention" min="1" placeholder="30">
+              </div>
+            </div>
+            <div class="btn-row" style="justify-content:flex-start">
+              <button class="btn btn-primary" onclick="saveIpSettings()"><i class="fas fa-save"></i> Lưu cấu hình</button>
+            </div>
+          </div>
+
+          <div class="card" style="max-width:760px">
+            <h4>Chạy thử</h4>
+            <p class="hint" style="margin:0 0 10px">
+              Chạy thử KHÔNG tính vào hạn mức của tài khoản. Bật “gồm nguồn đang tắt” để kiểm tra
+              cấu hình/key trước khi bật nguồn đó cho người dùng.
+            </p>
+            <div class="online-row">
+              <div class="form-group"><label>IP cần tra</label><input type="text" id="ipxRunIp" placeholder="8.8.8.8"></div>
+              <div class="form-group">
+                <label>Tuỳ chọn</label>
+                <div style="font-size:12px;color:var(--text-secondary);line-height:2">
+                  <label><input type="checkbox" id="ipxRunDisabled"> gồm nguồn đang tắt</label><br>
+                  <label><input type="checkbox" id="ipxRunFresh"> bỏ qua cache</label>
+                </div>
+              </div>
+            </div>
+            <div class="btn-row" style="justify-content:flex-start">
+              <button class="btn btn-primary" onclick="runIpLookupTest()"><i class="fas fa-play"></i> Chạy thử</button>
+            </div>
+            <pre id="ipxRunOutput" style="max-height:360px;overflow:auto;font-size:11px;background:var(--bg-surface2);border:1px solid var(--border-color);border-radius:8px;padding:10px;margin-top:12px;display:none"></pre>
+          </div>
+        </div>
+      </div>
+
       <!-- Version (chỉ admin — dữ liệu từ /api/version/changelog, LỌC còn phiên bản đang chạy) -->
       <div id="section-version" class="section">
         <h3>Phiên bản</h3>
@@ -1011,17 +1809,44 @@
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
-  <!-- Add User Modal -->
+  <!-- Add / Edit User Modal -->
   <div class="modal-overlay" id="addUserModal">
-    <div class="modal">
-      <h3><span id="userModalTitle">Add User</span></h3>
-      <div class="form-group"><label>Username</label><input type="text" id="userFormUsername"></div>
-      <div class="form-group"><label>Password</label><input type="password" id="userFormPassword" placeholder="Leave blank to keep"></div>
-      <div class="form-group"><label>Role</label><select id="userFormRole"><option value="user">User</option><option value="admin">Admin</option></select></div>
-      <div class="form-group"><label>Status</label><select id="userFormStatus"><option value="pending">Pending</option><option value="active">Active</option></select></div>
+    <div class="modal" style="max-width:560px">
+      <h3><span id="userModalTitle">Thêm người dùng</span></h3>
+      <input type="hidden" id="userEditId">
+      <div class="form-group"><label>Username <span style="color:#d64545">*</span></label><input type="text" id="userFormUsername" maxlength="32" autocomplete="off"></div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="userFormEmail" autocomplete="off" placeholder="user@example.com">
+        <div class="hint">Đổi email sẽ tự bỏ trạng thái xác thực (trừ khi tick ô bên dưới).</div>
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="userFormVerified" style="width:auto">
+        <label for="userFormVerified" style="margin:0;text-transform:none;letter-spacing:0;font-size:13px;font-weight:400">Email đã xác thực</label>
+      </div>
+      <div class="form-group">
+        <label>Mật khẩu mới</label>
+        <input type="password" id="userFormPassword" autocomplete="new-password" placeholder="Để trống nếu không đổi" minlength="6">
+        <div class="hint">Tối thiểu 6 ký tự. Khi sửa, để trống = giữ mật khẩu cũ.</div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Vai trò</label>
+          <select id="userFormRole"><option value="user">User</option><option value="admin">Admin</option></select>
+        </div>
+        <div class="form-group">
+          <label>Trạng thái</label>
+          <select id="userFormStatus">
+            <option value="pending">Pending — chờ xác thực</option>
+            <option value="active">Active — hoạt động</option>
+            <option value="disabled">Disabled — khoá</option>
+          </select>
+        </div>
+      </div>
+      <div id="userFormMeta" class="hint" style="display:none;background:var(--bg-surface2);border:1px solid var(--border-color);border-radius:10px;padding:10px 12px;line-height:1.8;margin-bottom:14px"></div>
       <div class="btn-row">
-        <button class="btn" onclick="document.getElementById('addUserModal').classList.remove('show')">Cancel</button>
-        <button class="btn btn-primary" onclick="saveUser()">Save</button>
+        <button class="btn" onclick="closeUserModal()">Huỷ</button>
+        <button class="btn btn-primary" onclick="saveUser()">Lưu</button>
       </div>
     </div>
   </div>

@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5">
+  <meta name="theme-color" content="#1a6cf0">
+  <meta name="color-scheme" content="dark light">
+  <!-- Chặn trang khi website đang bảo trì (admin vẫn đi qua). Script chặn render. -->
+  <script src="/site-status.js"></script>
+  <meta name="description" content="Cell.id.vn — tra cứu cell, lịch sử tra cứu và công cụ di động.">
+
+  <title>Cell.id.vn</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/m/manifest.webmanifest">
+  <!-- Favicon dùng chung toàn ứng dụng (fav.png) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="/img/favicon-64.png">
+  <link rel="icon" type="image/png" sizes="256x256" href="/img/favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Cell.id.vn">
+  <script async src="/ga.js"></script>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Leaflet (bản đồ) — nạp không chặn render; app.js tự ẩn nút Bản đồ nếu
+       thư viện không tải được (mất mạng / CDN bị chặn). -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+  <link rel="stylesheet" href="/m/app.css">
+</head>
+<body>
+
+<!-- ============================================================
+     MÀN HÌNH ĐĂNG NHẬP / ĐĂNG KÝ
+     ============================================================ -->
+<div class="auth" id="authScreen" hidden>
+  <div class="auth-head">
+    <span class="auth-brand" role="img" aria-label="Cell.id.vn"></span>
+    <p class="auth-sub" id="authSub">Đăng nhập để tra cứu cell</p>
+  </div>
+
+  <!-- Tab chuyển Đăng nhập / Đăng ký -->
+  <div class="auth-tabs" role="tablist">
+    <button type="button" class="auth-tab active" id="authTabLogin" role="tab"
+            aria-selected="true" onclick="mAuthTab('login')">Đăng nhập</button>
+    <button type="button" class="auth-tab" id="authTabRegister" role="tab"
+            aria-selected="false" onclick="mAuthTab('register')">Đăng ký</button>
+  </div>
+
+  <!-- ĐĂNG NHẬP -->
+  <form class="auth-form" id="mLoginForm" onsubmit="mDoLogin(event)" novalidate>
+    <label class="fld">
+      <span class="fld-lbl">Tên đăng nhập hoặc email</span>
+      <span class="fld-wrap"><i class="fas fa-user"></i>
+        <input type="text" id="mLoginUser" autocomplete="username" autocapitalize="none"
+               spellcheck="false" placeholder="username hoặc email" required>
+      </span>
+    </label>
+    <label class="fld">
+      <span class="fld-lbl">Mật khẩu</span>
+      <span class="fld-wrap"><i class="fas fa-lock"></i>
+        <input type="password" id="mLoginPass" autocomplete="current-password" placeholder="••••••" required>
+        <button type="button" class="fld-eye" onclick="mTogglePass('mLoginPass', this)" aria-label="Hiện mật khẩu">
+          <i class="fas fa-eye"></i>
+        </button>
+      </span>
+    </label>
+    <div class="auth-err" id="mLoginErr" hidden></div>
+    <button type="submit" class="btn-primary" id="mLoginBtn">
+      <span class="btn-txt">Đăng nhập</span>
+    </button>
+    <button type="button" class="link-line" onclick="mForgot()">Quên mật khẩu?</button>
+  </form>
+
+  <!-- ĐĂNG KÝ -->
+  <form class="auth-form" id="mRegisterForm" onsubmit="mDoRegister(event)" novalidate hidden>
+    <label class="fld">
+      <span class="fld-lbl">Tên đăng nhập</span>
+      <span class="fld-wrap"><i class="fas fa-user"></i>
+        <input type="text" id="mRegUser" autocomplete="username" autocapitalize="none"
+               spellcheck="false" placeholder="3–32 ký tự: chữ, số, . _ -" required>
+      </span>
+    </label>
+    <label class="fld">
+      <span class="fld-lbl">Email</span>
+      <span class="fld-wrap"><i class="fas fa-envelope"></i>
+        <input type="email" id="mRegEmail" autocomplete="email" autocapitalize="none"
+               spellcheck="false" placeholder="ban@example.com" required>
+      </span>
+    </label>
+    <label class="fld">
+      <span class="fld-lbl">Mật khẩu</span>
+      <span class="fld-wrap"><i class="fas fa-lock"></i>
+        <input type="password" id="mRegPass" autocomplete="new-password" placeholder="ít nhất 6 ký tự" required>
+        <button type="button" class="fld-eye" onclick="mTogglePass('mRegPass', this)" aria-label="Hiện mật khẩu">
+          <i class="fas fa-eye"></i>
+        </button>
+      </span>
+    </label>
+    <label class="fld">
+      <span class="fld-lbl">Nhập lại mật khẩu</span>
+      <span class="fld-wrap"><i class="fas fa-lock"></i>
+        <input type="password" id="mRegPass2" autocomplete="new-password" placeholder="nhập lại mật khẩu" required>
+      </span>
+    </label>
+
+    <!-- CAPTCHA -->
+    <label class="fld">
+      <span class="fld-lbl">Mã xác nhận</span>
+      <span class="cap-row">
+        <input type="text" id="mRegCaptcha" class="cap-inp" inputmode="text"
+               autocapitalize="characters" autocomplete="off" spellcheck="false"
+               placeholder="Nhập mã bên phải" required>
+        <button type="button" class="cap-img" id="mCapBox" onclick="mLoadCaptcha()"
+                title="Bấm để đổi mã khác" aria-label="Đổi mã xác nhận khác">
+          <img id="mCapImg" alt="Mã xác nhận" hidden>
+          <span class="cap-ph" id="mCapPh"><i class="fas fa-rotate-right"></i></span>
+        </button>
+      </span>
+    </label>
+
+    <label class="chk">
+      <input type="checkbox" id="mRegTerms">
+      <span>Đồng ý với <a href="/terms.html" target="_blank" rel="noopener">điều khoản sử dụng</a></span>
+    </label>
+
+    <div class="auth-err" id="mRegErr" hidden></div>
+    <button type="submit" class="btn-primary" id="mRegBtn">
+      <span class="btn-txt">Tạo tài khoản</span>
+    </button>
+  </form>
+
+  <!-- XÁC NHẬN EMAIL (khi server yêu cầu) -->
+  <form class="auth-form" id="mVerifyForm" onsubmit="mDoVerify(event)" novalidate hidden>
+    <p class="auth-note" id="mVerifyNote">Nhập mã 6 số đã gửi tới email của bạn.</p>
+    <label class="fld">
+      <span class="fld-lbl">Mã xác nhận</span>
+      <span class="fld-wrap"><i class="fas fa-key"></i>
+        <input type="text" id="mVerifyCode" inputmode="numeric" maxlength="6"
+               autocomplete="one-time-code" placeholder="123456" class="code-inp" required>
+      </span>
+    </label>
+    <div class="auth-err" id="mVerifyErr" hidden></div>
+    <button type="submit" class="btn-primary" id="mVerifyBtn">
+      <span class="btn-txt">Kích hoạt</span>
+    </button>
+    <button type="button" class="link-line" onclick="mResendVerify()">Gửi lại mã</button>
+    <button type="button" class="link-line muted" onclick="mAuthTab('login')">Quay lại đăng nhập</button>
+  </form>
+
+  <!-- QUÊN MẬT KHẨU: nhập email + captcha -->
+  <form class="auth-form" id="mForgotForm" onsubmit="mDoForgot(event)" novalidate hidden>
+    <p class="auth-note">Nhập email đã đăng ký, chúng tôi sẽ gửi mã 6 số để đặt lại mật khẩu.</p>
+    <label class="fld">
+      <span class="fld-lbl">Email</span>
+      <span class="fld-wrap"><i class="fas fa-envelope"></i>
+        <input type="email" id="mForgotEmail" autocomplete="email" autocapitalize="none"
+               spellcheck="false" placeholder="ban@example.com" required>
+      </span>
+    </label>
+    <label class="fld">
+      <span class="fld-lbl">Mã xác nhận</span>
+      <span class="cap-row">
+        <input type="text" id="mForgotCaptcha" class="cap-inp" inputmode="text"
+               autocapitalize="characters" autocomplete="off" spellcheck="false"
+               placeholder="Nhập mã bên phải" required>
+        <button type="button" class="cap-img" id="mCapBoxF" onclick="mLoadCaptcha('forgot')"
+                title="Bấm để đổi mã khác" aria-label="Đổi mã xác nhận khác">
+          <img id="mCapImgF" alt="Mã xác nhận" hidden>
+          <span class="cap-ph" id="mCapPhF"><i class="fas fa-rotate-right"></i></span>
+        </button>
+      </span>
+    </label>
+    <div class="auth-err" id="mForgotErr" hidden></div>
+    <button type="submit" class="btn-primary" id="mForgotBtn">
+      <span class="btn-txt">Gửi mã đặt lại</span>
+    </button>
+    <button type="button" class="link-line muted" onclick="mAuthTab('login')">Quay lại đăng nhập</button>
+  </form>
+
+  <!-- ĐẶT LẠI MẬT KHẨU: mã 6 số + mật khẩu mới -->
+  <form class="auth-form" id="mResetForm" onsubmit="mDoReset(event)" novalidate hidden>
+    <p class="auth-note" id="mResetNote">Nhập mã 6 số đã gửi tới email của bạn và mật khẩu mới.</p>
+    <label class="fld">
+      <span class="fld-lbl">Email</span>
+      <span class="fld-wrap"><i class="fas fa-envelope"></i>
+        <input type="email" id="mResetEmail" autocomplete="email" autocapitalize="none"
+               spellcheck="false" placeholder="ban@example.com" required>
+      </span>
+    </label>
+    <label class="fld">
+      <span class="fld-lbl">Mã xác nhận</span>
+      <span class="fld-wrap"><i class="fas fa-key"></i>
+        <input type="text" id="mResetCode" inputmode="numeric" maxlength="6"
+               autocomplete="one-time-code" placeholder="123456" class="code-inp" required>
+      </span>
+    </label>
+    <label class="fld">
+      <span class="fld-lbl">Mật khẩu mới</span>
+      <span class="fld-wrap"><i class="fas fa-lock"></i>
+        <input type="password" id="mResetPass" autocomplete="new-password" placeholder="ít nhất 6 ký tự" required>
+        <button type="button" class="fld-eye" onclick="mTogglePass('mResetPass', this)" aria-label="Hiện mật khẩu">
+          <i class="fas fa-eye"></i>
+        </button>
+      </span>
+    </label>
+    <label class="fld">
+      <span class="fld-lbl">Nhập lại mật khẩu mới</span>
+      <span class="fld-wrap"><i class="fas fa-lock"></i>
+        <input type="password" id="mResetPass2" autocomplete="new-password" placeholder="nhập lại mật khẩu" required>
+      </span>
+    </label>
+    <div class="auth-err" id="mResetErr" hidden></div>
+    <button type="submit" class="btn-primary" id="mResetBtn">
+      <span class="btn-txt">Đổi mật khẩu</span>
+    </button>
+    <button type="button" class="link-line" onclick="mAuthView('forgot')">Gửi lại mã</button>
+    <button type="button" class="link-line muted" onclick="mAuthTab('login')">Quay lại đăng nhập</button>
+  </form>
+</div>
+
+<!-- ============================================================
+     KHU VỰC ĐÃ ĐĂNG NHẬP — 4 TAB
+     ============================================================ -->
+<div class="app" id="appScreen" hidden>
+
+  <header class="topbar">
+    <div class="topbar-main">
+      <div class="topbar-hello" id="topHello">Xin chào</div>
+      <div class="topbar-title" id="topTitle">Tra cứu cell</div>
+    </div>
+    <button type="button" class="credit-pill" id="topCredit" onclick="mTab('account')" title="Số dư điểm">
+      <i class="fas fa-gem"></i><span id="topCreditTxt">—</span>
+    </button>
+  </header>
+
+  <main class="pages" id="pages">
+
+    <!-- ================= TRA CỨU CELL ================= -->
+    <section class="page active" id="page-lookup" data-page="lookup">
+      <form class="card" id="mLookupForm" onsubmit="mDoLookup(event)" novalidate>
+        <div class="card-hd"><i class="fas fa-crosshairs"></i> Tra cứu cell</div>
+        <div class="grid4">
+          <label class="fld"><span class="fld-lbl">MCC</span>
+            <input type="tel" inputmode="numeric" id="mLkMcc" placeholder="452" value="452" required>
+          </label>
+          <label class="fld"><span class="fld-lbl">MNC</span>
+            <input type="tel" inputmode="numeric" id="mLkMnc" placeholder="04" required>
+          </label>
+          <label class="fld"><span class="fld-lbl">LAC / TAC</span>
+            <input type="tel" inputmode="numeric" id="mLkLac" placeholder="25157" required>
+          </label>
+          <label class="fld"><span class="fld-lbl">Cell ID</span>
+            <input type="tel" inputmode="numeric" id="mLkCell" placeholder="151755778" required>
+          </label>
+        </div>
+        <div class="grid2">
+          <label class="fld"><span class="fld-lbl">Sector <em>(tuỳ chọn)</em></span>
+            <input type="tel" inputmode="numeric" id="mLkSector" placeholder="—">
+          </label>
+          <label class="fld"><span class="fld-lbl">Công nghệ <em>(tuỳ chọn)</em></span>
+            <select id="mLkRadio">
+              <option value="">Tự động</option>
+              <option value="GSM">GSM / 2G</option>
+              <option value="UMTS">UMTS / 3G</option>
+              <option value="LTE">LTE / 4G</option>
+              <option value="NR">NR / 5G</option>
+            </select>
+          </label>
+        </div>
+        <button type="submit" class="btn-primary" id="mLkBtn">
+          <span class="btn-txt"><i class="fas fa-magnifying-glass"></i> Tra cứu</span>
+        </button>
+        <p class="hint" id="mLkCost">Mỗi cell tra thành công tốn điểm theo cấu hình hệ thống.</p>      </form>
+
+      <!-- Kết quả -->
+      <div class="result" id="mLkResult" hidden></div>
+
+      <!-- Mở bản đồ cho cell vừa tra. Mặc định ẨN: chỉ hiện khi lần tra gần nhất
+           có toạ độ (xem mLkMapBtnToggle trong app.js) — tránh trường hợp bấm vào
+           khi chưa tra gì lại bị đá sang bản máy tính. -->
+      <button type="button" class="link-line wide" id="mLkMapBtn" onclick="mOpenMap()" hidden>
+        <i class="fas fa-map-location-dot"></i> Xem vị trí trên bản đồ
+      </button>
+    </section>
+
+    <!-- ================= LỊCH SỬ TRA CỨU ================= -->
+    <section class="page" id="page-history" data-page="history">
+      <div class="hist-toolbar">
+        <button type="button" class="chip active" data-mode="all" onclick="mHistMode('all')">Tất cả</button>
+        <button type="button" class="chip" data-mode="found" onclick="mHistMode('found')">Đã tra được</button>
+        <button type="button" class="chip" data-mode="miss" onclick="mHistMode('miss')">Không có kết quả</button>
+      </div>
+      <div class="hist-list" id="mHistList"></div>
+      <div class="hist-pager" id="mHistPager" hidden></div>
+      <button type="button" class="btn-ghost" id="mHistMore" onclick="mHistMore()" hidden>Xem thêm</button>
+    </section>
+
+    <!-- ================= CÔNG CỤ ================= -->
+    <!-- Mỗi công cụ là một accordion: bấm tiêu đề để mở/đóng. Mặc định đóng cả
+         ba; mở công cụ này thì công cụ đang mở tự đóng (xem mToolToggle). -->
+    <section class="page" id="page-tools" data-page="tools">
+
+      <!-- Check số điện thoại -->
+      <form class="card tool-card" id="mPhoneCard" onsubmit="mCheckPhone(event)" novalidate>
+        <button type="button" class="card-hd tool-hd" id="mPhoneHd"
+                onclick="mToolToggle('phone')" aria-expanded="false" aria-controls="mPhoneBody">
+          <i class="fas fa-phone"></i>
+          <span class="tool-ttl">Check số điện thoại</span>
+          <i class="fas fa-chevron-down tool-chev" aria-hidden="true"></i>
+        </button>
+        <div class="tool-body" id="mPhoneBody" hidden>
+          <label class="fld">
+            <span class="fld-lbl">Số điện thoại</span>
+            <span class="fld-wrap"><i class="fas fa-hashtag"></i>
+              <input type="tel" id="mPhoneInp" inputmode="tel" autocomplete="off"
+                     placeholder="0912345678" required>
+            </span>
+          </label>
+          <label class="fld">
+            <span class="fld-lbl">Mã xác nhận</span>
+            <span class="cap-row">
+              <input type="text" id="mPhoneCaptcha" class="cap-inp" inputmode="text"
+                     autocapitalize="characters" autocomplete="off" spellcheck="false"
+                     placeholder="Nhập mã bên phải" required>
+              <button type="button" class="cap-img" id="mPhoneCap" onclick="mLoadPhoneCaptcha()"
+                      title="Bấm để đổi mã khác" aria-label="Đổi mã xác nhận khác">
+                <img id="mPhoneCapImg" alt="Mã xác nhận" hidden>
+                <span class="cap-ph" id="mPhoneCapPh"><i class="fas fa-rotate-right"></i></span>
+              </button>
+            </span>
+          </label>
+          <button type="submit" class="btn-primary" id="mPhoneBtn">
+            <span class="btn-txt"><i class="fas fa-magnifying-glass"></i> Kiểm tra</span>
+          </button>
+          <p class="hint">Tra nhà mạng hiện tại của số (đã chuyển mạng giữ số hay chưa) qua cổng thông tin VNTA.</p>
+          <div class="result" id="mPhoneResult" hidden></div>
+        </div>
+      </form>
+
+      <!-- Chuyển đổi Cell ID -->
+      <form class="card tool-card" id="mConvCard" onsubmit="mDoConvert(event)" novalidate>
+        <button type="button" class="card-hd tool-hd" id="mConvHd"
+                onclick="mToolToggle('convert')" aria-expanded="false" aria-controls="mConvBody">
+          <i class="fas fa-right-left"></i>
+          <span class="tool-ttl">Chuyển đổi Cell ID</span>
+          <i class="fas fa-chevron-down tool-chev" aria-hidden="true"></i>
+        </button>
+        <div class="tool-body" id="mConvBody" hidden>
+          <label class="fld">
+            <span class="fld-lbl">Cell ID (eNB ngắn hoặc ECI dài)</span>
+            <input type="tel" inputmode="numeric" id="mConvInp" placeholder="151755778 hoặc 592796" required>
+          </label>
+          <label class="fld">
+            <span class="fld-lbl">Sector <em>(chỉ dùng khi nhập eNB ngắn)</em></span>
+            <input type="tel" inputmode="numeric" id="mConvSector" placeholder="0">
+          </label>
+          <button type="submit" class="btn-primary" id="mConvBtn">
+            <span class="btn-txt"><i class="fas fa-arrow-right-arrow-left"></i> Chuyển đổi</span>
+          </button>
+          <div class="result" id="mConvResult" hidden></div>
+        </div>
+      </form>
+
+      <!-- Tra cứu IP -->
+      <form class="card tool-card" id="mIpCard" onsubmit="mLookupIp(event)" novalidate>
+        <button type="button" class="card-hd tool-hd" id="mIpHd"
+                onclick="mToolToggle('ip')" aria-expanded="false" aria-controls="mIpBody">
+          <i class="fas fa-globe"></i>
+          <span class="tool-ttl">Tra cứu địa chỉ IP</span>
+          <i class="fas fa-chevron-down tool-chev" aria-hidden="true"></i>
+        </button>
+        <div class="tool-body" id="mIpBody" hidden>
+          <label class="fld">
+            <span class="fld-lbl">Địa chỉ IP (IPv4 hoặc IPv6)</span>
+            <input type="text" id="mIpInp" inputmode="text" autocomplete="off"
+                   autocapitalize="off" spellcheck="false"
+                   placeholder="8.8.8.8 hoặc 2001:4860:4860::8888" required>
+          </label>
+          <button type="submit" class="btn-primary" id="mIpBtn">
+            <span class="btn-txt"><i class="fas fa-magnifying-glass"></i> Tra cứu IP</span>
+          </button>
+          <button type="button" class="btn-ghost" id="mIpSelfBtn" onclick="mUseMyIp()">
+            <i class="fas fa-user"></i> IP của tôi (IPv4/IPv6)
+          </button>
+          <div class="m-ip-self" id="mIpSelfBox" hidden></div>
+          <div class="result" id="mIpResult" hidden></div>
+        </div>
+      </form>
+
+      <button type="button" class="link-line wide" onclick="mOpenDesktop()">
+        <i class="fas fa-desktop"></i> Mở bản máy tính (đầy đủ tính năng)
+      </button>
+    </section>
+
+    <!-- ================= TÀI KHOẢN ================= -->
+    <section class="page" id="page-account" data-page="account">
+      <div class="card acct-card">
+        <div class="acct-avatar" id="mAcctAvatar">?</div>
+        <div class="acct-info">
+          <div class="acct-name" id="mAcctName">—</div>
+          <div class="acct-role" id="mAcctRole"></div>
+        </div>
+      </div>
+      <div class="card acct-row">
+        <span><i class="fas fa-gem"></i> Số dư điểm</span>
+        <b id="mAcctCredit">—</b>
+      </div>
+      <button type="button" class="btn-ghost" id="mAcctTopup" onclick="mOpenTopup()">
+        <i class="fas fa-plus-circle"></i> Nạp thêm điểm
+      </button>
+      <button type="button" class="btn-ghost" onclick="mRefreshMe()">
+        <i class="fas fa-rotate"></i> Làm mới thông tin
+      </button>
+      <button type="button" class="btn-ghost danger" onclick="mLogout()">
+        <i class="fas fa-right-from-bracket"></i> Đăng xuất
+      </button>
+      <span class="acct-brand" role="img" aria-label="Cell.id.vn"></span>
+      <p class="ver" id="mVer"></p>
+    </section>
+  </main>
+
+  <!-- Bottom navigation -->
+  <nav class="tabbar" role="tablist">
+    <button type="button" class="tabbtn active" data-tab="lookup" role="tab" onclick="mTab('lookup')">
+      <i class="fas fa-crosshairs"></i><span>Tra cứu</span>
+    </button>
+    <button type="button" class="tabbtn" data-tab="history" role="tab" onclick="mTab('history')">
+      <i class="fas fa-clock-rotate-left"></i><span>Lịch sử</span>
+    </button>
+    <button type="button" class="tabbtn" data-tab="tools" role="tab" onclick="mTab('tools')">
+      <i class="fas fa-toolbox"></i><span>Công cụ</span>
+    </button>
+    <button type="button" class="tabbtn" data-tab="account" role="tab" onclick="mTab('account')">
+      <i class="fas fa-user"></i><span>Tài khoản</span>
+    </button>
+  </nav>
+</div>
+
+<!-- ============================================================
+     NẠP ĐIỂM (toàn màn hình; mở từ tab Tài khoản hoặc khi thiếu điểm)
+     ============================================================ -->
+<div class="mapsheet topupsheet" id="mTopupSheet" hidden aria-hidden="true" role="dialog" aria-modal="true"
+     aria-labelledby="mTopupTitle">
+  <div class="mapsheet-hd">
+    <div class="mapsheet-ttl">
+      <i class="fas fa-gem"></i>
+      <div>
+        <b id="mTopupTitle">Nạp điểm</b>
+        <small id="mTopupSub">Số dư: —</small>
+      </div>
+    </div>
+    <button type="button" class="mapsheet-x" id="mTopupClose" onclick="mCloseTopup()" aria-label="Đóng trang nạp">
+      <i class="fas fa-xmark"></i>
+    </button>
+  </div>
+
+  <!-- Nội dung do app.js dựng (chọn gói → đơn chờ → kết quả) -->
+  <div class="topup-body" id="mTopupBody">
+    <div class="topup-loading"><i class="fas fa-spinner spin"></i> Đang tải…</div>
+  </div>
+</div>
+
+<!-- ============================================================
+     BẢN ĐỒ (toàn màn hình, mở từ kết quả tra cứu / lịch sử)
+     ============================================================ -->
+<div class="mapsheet" id="mMapSheet" hidden aria-hidden="true" role="dialog" aria-modal="true"
+     aria-labelledby="mMapTitle">
+  <div class="mapsheet-hd">
+    <div class="mapsheet-ttl">
+      <i class="fas fa-map-location-dot"></i>
+      <div>
+        <b id="mMapTitle">Bản đồ cell</b>
+        <small id="mMapSub">—</small>
+      </div>
+    </div>
+    <button type="button" class="mapsheet-x" id="mMapClose" onclick="mCloseMap()" aria-label="Đóng bản đồ">
+      <i class="fas fa-xmark"></i>
+    </button>
+  </div>
+
+  <div class="mapbody">
+    <div class="map" id="mMap" role="application" aria-label="Bản đồ vị trí cell"></div>
+
+    <!-- Lớp nền: Đường phố / Vệ tinh / Địa hình (giống bản máy tính) -->
+    <div class="map-layers" id="mMapLayers" role="group" aria-label="Lớp bản đồ">
+      <button type="button" class="chip active" data-layer="streets" onclick="mMapLayer('streets')">Đường phố</button>
+      <button type="button" class="chip" data-layer="satellite" onclick="mMapLayer('satellite')">Vệ tinh</button>
+      <button type="button" class="chip" data-layer="terrain" onclick="mMapLayer('terrain')">Địa hình</button>
+    </div>
+
+    <div class="map-ctrl">
+      <button type="button" class="map-btn" id="mMapZoomIn" onclick="mMapZoom(1)" aria-label="Phóng to">
+        <i class="fas fa-plus"></i>
+      </button>
+      <button type="button" class="map-btn" id="mMapZoomOut" onclick="mMapZoom(-1)" aria-label="Thu nhỏ">
+        <i class="fas fa-minus"></i>
+      </button>
+      <button type="button" class="map-btn" id="mMapCenter" onclick="mMapRecenter()" aria-label="Về vị trí cell">
+        <i class="fas fa-crosshairs"></i>
+      </button>
+    </div>
+
+    <div class="map-fallback" id="mMapFallback" hidden>
+      <i class="fas fa-wifi"></i>
+      <p>Không tải được bản đồ (mất mạng hoặc bị chặn).</p>
+      <button type="button" class="btn-ghost" onclick="mMapGoogle()">
+        <i class="fas fa-arrow-up-right-from-square"></i> Mở bằng Google Maps
+      </button>
+    </div>
+  </div>
+
+  <div class="mapsheet-ft">
+    <button type="button" class="btn-ghost" onclick="mMapCopy()">
+      <i class="fas fa-copy"></i> Copy toạ độ
+    </button>
+    <button type="button" class="btn-ghost" onclick="mMapGoogle()">
+      <i class="fas fa-arrow-up-right-from-square"></i> Google Maps
+    </button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-wrap" id="mToast" aria-live="polite"></div>
+
+<!-- Nút cài PWA -->
+<div class="install" id="mInstall" hidden>
+  <span><i class="fas fa-mobile-screen"></i> Cài ứng dụng vào màn hình chính</span>
+  <button type="button" class="install-btn" id="mInstallBtn" onclick="mInstallAction()">Cài</button>
+  <button type="button" class="install-x" onclick="mDismissInstall()" aria-label="Đóng"><i class="fas fa-xmark"></i></button>
+</div>
+
+<!-- Hướng dẫn cài thủ công (iOS/Firefox/HTTP) -->
+<div class="mapsheet" id="mInstallHelp" hidden aria-hidden="true" role="dialog" aria-modal="true"
+     aria-labelledby="mInstallHelpTitle">
+  <div class="mapsheet-hd">
+    <div class="mapsheet-ttl">
+      <i class="fas fa-circle-down"></i>
+      <div>
+        <b id="mInstallHelpTitle">Cài ứng dụng</b>
+        <small>Cách thêm app vào màn hình chính</small>
+      </div>
+    </div>
+    <button type="button" class="mapsheet-x" onclick="mCloseInstallHelp()" aria-label="Đóng">
+      <i class="fas fa-xmark"></i>
+    </button>
+  </div>
+  <div class="ih-body" id="mInstallHelpBody"></div>
+  <div class="mapsheet-ft">
+    <button type="button" class="btn-ghost" onclick="mCloseInstallHelp()">Đóng</button>
+  </div>
+</div>
+
+<script src="/auth.js"></script>
+<script src="/m/app.js"></script>
+</body>
+</html>

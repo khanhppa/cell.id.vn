@@ -3,7 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Chặn trang khi website đang bảo trì (admin vẫn đi qua). Script chặn render. -->
+<script src="/site-status.js"></script>
 <title>Kết quả thanh toán — Cell Tracker</title>
+<!-- Favicon dùng chung toàn ứng dụng (fav.png) -->
+<link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="64x64" href="/img/favicon-64.png">
+<link rel="icon" type="image/png" sizes="256x256" href="/img/favicon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
   :root {
@@ -120,6 +127,7 @@
 
 <script src="auth.js"></script>
 <script src="version.js"></script>
+<script async src="/ga.js"></script>
 <script>
 // ============================================================================
 // Trang kết quả thanh toán payOS (/payment-result.html?order=<code>&status=...)

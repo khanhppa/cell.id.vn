@@ -3,7 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Chặn trang khi website đang bảo trì (admin vẫn đi qua). Script chặn render,
+       đặt sớm để không nháy nội dung trước khi biết trạng thái. -->
+  <script src="/site-status.js"></script>
   <title data-i18n="app.title">Cell.id.vn</title>
+  <!-- Favicon dùng chung toàn ứng dụng (fav.png) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="/img/favicon-64.png">
+  <link rel="icon" type="image/png" sizes="256x256" href="/img/favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
@@ -17,13 +25,14 @@
   <script src="/auth.js"></script>
   <script src="/auth-popup.js"></script>
   <script src="/version.js"></script>
+  <script async src="/ga.js"></script>
   <style>
     :root {
       --bg-body: #f0f2f5;
       --bg-surface: rgba(255,255,255,0.97);
       --bg-surface2: rgba(0,0,0,0.03);
       /* Nền ĐẶC (opaque) cho các phần tử sticky (header bảng) — --bg-surface là rgba
-         nên n"i dung cu"n bên dư:i vẫn l" qua. */
+         nên nội dung cuộn bên dưới vẫn lộ qua. */
       --bg-solid: #ffffff;
       --bg-hover: rgba(0,0,0,0.06);
       --bg-btn-primary: #4444cc;
@@ -102,7 +111,7 @@
       transition: opacity 0.15s, color 0.15s;
       touch-action: none;
     }
-    /* Vạch ch0 báo: ch0 hi!n khi hover/kéo (không chiếm di!n tích khi tính). */
+    /* Vạch chỉ báo: chỉ hiện khi hover/kéo (không chiếm diện tích khi tính). */
     .sidebar-resizer::before {
       content: ''; position: absolute; top: 0; right: 0; width: 2px; height: 100%;
       background: transparent; transition: background 0.15s;
@@ -112,10 +121,10 @@
     .sidebar-resizer:hover::before, .sidebar-resizer.dragging::before { background: var(--border-focus); }
     /* Panel thu gọn thì không kéo được. */
     .sidebar.collapsed .sidebar-resizer { display: none; }
-    /* Handle b9 overlay (modal / panel chú thích) che thì thôi nhận chu"t. */
+    /* Handle bị overlay (modal / panel chú thích) che thì thôi nhận chuột. */
     .sidebar-resizer.blocked { pointer-events: none; }
     /* Bảng cell (overlay) phủ cả panel nhưng user vẫn phải kéo giãn panel được:
-       handle nối TRÊN overlay, vạch chỉ báo cho thấy mép panel đang ở đâu. */
+       handle nổi TRÊN overlay, vạch chỉ báo cho thấy mép panel đang ở đâu. */
     .sidebar-resizer.over-sheet { z-index: 4950; pointer-events: auto; opacity: 0.55; }
     .sidebar-resizer.over-sheet::before { background: var(--border-color); }
     /* Đang kéo: chặn bôi đen text và map nuốt pointer. */
@@ -345,7 +354,7 @@
     .legend-panel.show { display: block; }
     .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; color: var(--text-secondary); }
     .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-    /* Sub-section thu gọn trong legend (vd: Công ngh! mạng) */
+    /* Sub-section thu gọn trong legend (vd: Công nghệ mạng) */
     .legend-sub { border-top: 1px solid var(--border-color); margin-top: 8px; padding-top: 6px; }
     .legend-sub-toggle {
       display: flex; align-items: center; gap: 6px; width: 100%;
@@ -413,25 +422,15 @@
       padding: 8px 8px 8px 10px; margin-bottom: 8px;
       border: 1px solid var(--border-color); border-left: 3px solid var(--accent, #3d7ce0);
       border-radius: 8px; background: var(--bg-surface2);
+      flex: 0 0 auto;
     }
     .cl-session-card[hidden] { display: none; }
     .cls-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; }
-    .cls-badge {
-      flex: 0 0 auto; width: 26px; height: 26px; border-radius: 6px;
-      display: inline-flex; align-items: center; justify-content: center;
-      background: rgba(61,124,224,0.14); color: var(--accent, #3d7ce0); font-size: 12px;
-    }
     .cls-body { min-width: 0; flex: 1 1 auto; }
     .cls-detail { display: flex; align-items: center; gap: 5px; min-width: 0;
       font-size: 12px; color: var(--text-primary); }
     .cls-detail > i { color: #22a06b; flex: 0 0 auto; }
     .cls-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-    .cls-meta {
-      display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px;
-      font-size: 10.5px; color: var(--text-muted);
-    }
-    .cls-meta > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
-    .cls-meta b { font-weight: 600; color: var(--text-secondary); }
     .cls-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
     .cls-actions .cls-btn { margin: 0; padding: 4px 7px; font-size: 11.5px; }
     .cls-actions .cls-close { color: var(--text-secondary); }
@@ -442,9 +441,10 @@
     }
     .cl-records-block[hidden] { display: none; }
 
-    /* Nạp Excel NGAY trong tab (không qua popup): chọn mạng bên trên, khung upload bên dư:i.
+    /* Nạp Excel NGAY trong tab (không qua popup): chọn mạng bên trên, khung upload bên dưới.
        Input file phủ toàn khung & trong suốt → bấm bất kỳ chỗ nào là mở hộp chọn file. */
     .cl-inline-up { margin-bottom: 8px; }
+    .cl-inline-up[hidden] { display: none; }
     .cl-inline-drop {
       position: relative; display: block; padding: 0; overflow: hidden;
       border-style: solid; border-width: 1.5px; border-radius: 8px;
@@ -492,7 +492,7 @@
     }
     /* Chọn mạng: 1 hàng gọn — nhãn + select, select có logo thật của mạng đang chọn.
        <select> native để phủ toàn ô (bấm là mở list); phần hiển thị (logo + tên) là
-       l:p .cl-net-face nằm dư:i, không nhận chu"t. */
+       lớp .cl-net-face nằm dưới, không nhận chuột. */
     .cl-net-field {
       display: flex; align-items: center; gap: 6px; margin: 0 26px 6px 0;
     }
@@ -521,8 +521,8 @@
       flex: 0 0 auto; height: 14px; width: auto; max-width: 52px;
       object-fit: contain; display: block;
     }
-    .cl-net-logo.is-icon { height: 16px; width: 16px; max-width: 16px; }
-    .cl-net-logo.auto { display: none; }
+    /* Mạng "Tự động" không có logo → icon tia lửa. */
+    .cl-net-auto { color: var(--accent, #3d7ce0); font-size: 11px; }
     /* Mũi tên xuống ở mép phải ô. */
     .cl-net-pick::after {
       content: ''; position: absolute; right: 8px; top: 50%; width: 6px; height: 6px;
@@ -535,13 +535,18 @@
       opacity: 0; margin: 0; padding: 0; border: 0; cursor: pointer;
       -webkit-appearance: none; appearance: none;
     }
-    /* Popup giải thích (nút ? cạnh ô chọn mạng; mặc định neo dưới nút). */
+    /* Hàng tiêu đề "Tra Cứu Cell ID" + nút ? hướng dẫn tra cứu đơn lẻ. */
+    .cell-lookup-hd { position: relative; padding-right: 30px; }
+    .cell-lookup-hd .cell-help-btn { position: absolute; top: 0; right: 0; }
+    /* Popup giải thích (nút ?): bề rộng do JS đặt = bề rộng PANEL, canh giữa panel
+       (xem showHelpPopup). Ở đây chỉ khai báo tối thiểu + giới hạn để không tràn. */
     .cl-help-pop {
-      position: absolute; z-index: 60;
+      position: fixed; z-index: 6000;
       width: min(340px, 92%); max-height: min(70vh, 480px); overflow-y: auto;
+      box-sizing: border-box;
       padding: 10px 12px;
       border: 1px solid var(--border-color); border-radius: 10px;
-      background: var(--bg-surface); box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+      background: var(--bg-solid, var(--bg-surface)); box-shadow: 0 8px 24px rgba(0,0,0,0.28);
       font-size: 11.5px; color: var(--text-secondary); text-align: left;
     }
     .cl-help-hd {
@@ -557,14 +562,10 @@
     .cl-help-hd > button:hover { color: var(--text-primary); }
     .cl-help-pop ul { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 4px; }
     .cl-help-pop li { line-height: 1.45; }
-    /* Hàng tiêu đề "Tra Cứu Cell ID" + nút ? hướng dẫn tra cứu đơn lẻ. */
-    .cell-lookup-hd { position: relative; padding-right: 30px; }
-    .cell-lookup-hd .cell-help-btn { position: absolute; top: 0; right: 0; }
-
+    /* Hướng dẫn từng bước + tiêu đề phụ "đọc file". */
     .cl-help-pop .cl-help-steps {
       margin: 0 0 8px; padding-left: 18px; display: flex; flex-direction: column; gap: 4px;
     }
-    .cl-help-pop .cl-help-steps li { line-height: 1.45; }
     .cl-help-pop .cl-help-sub {
       margin: 0 0 4px; padding-top: 8px; border-top: 1px solid var(--border-color);
       font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
@@ -613,7 +614,7 @@
     .cl-up-actions { display: flex; gap: 6px; margin-top: 12px; }
     .cl-up-actions .btn { flex: 1; margin: 0; }
 
-    /* Popup hư:ng dẫn. */
+    /* Popup hướng dẫn. */
     .cl-guide-list {
       margin: 6px 0 0; padding-left: 18px;
       font-size: 12px; line-height: 1.6; color: var(--text-secondary);
@@ -634,7 +635,7 @@
 
     /* =====================================================
        Popup full-window: bảng CELL sau khi nạp Excel
-       Nằm DƯaI navbar   top:48px (kh:p .sidebar / map controls).
+       Nằm DƯỚI navbar → top:48px (khớp .sidebar / map controls).
        ===================================================== */
     .cl-fullsheet {
       position: fixed; inset: 48px 0 0 0; z-index: 4900;
@@ -667,14 +668,14 @@
     .cl-tbl-wrap {
       flex: 1 1 auto; min-height: 0; overflow: auto;
       border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-surface2);
-    /* Nền đặc để header sticky không lộ dòng phía dưới khi cuộn. */
+      /* Nền đặc để header sticky không lộ dòng phía dưới khi cuộn. */
       position: relative; isolation: isolate;
     }
     .cl-tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11.5px; table-layout: fixed; }
     /* Header dính trên: nền ĐẶC (không dùng màu trong suốt) + viền dưới + bóng mờ
        để nội dung cuộn bên dưới không lộ qua. z-index cao hơn mọi cell.
-       `border-collapse: separate` là bắt bu"c: v:i `collapse` trình duy!t bỏ qua
-       background/border của <th> sticky ! dòng vẫn "xuyên" qua header. */
+       `border-collapse: separate` là bắt buộc: với `collapse` trình duyệt bỏ qua
+       background/border của <th> sticky ⇒ dòng vẫn "xuyên" qua header. */
     .cl-tbl thead th {
       position: sticky; top: 0; z-index: 3;
       background: var(--bg-solid, #fff);
@@ -683,10 +684,10 @@
       box-shadow: 0 1px 0 var(--border-color), 0 4px 8px -4px rgba(0,0,0,0.45);
       padding: 6px 7px; text-align: left; font-weight: 600; color: var(--text-secondary);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    /* Độ rộng do <colgroup> quyết định (xem renderClTable) → khớp tuyệt đối. */
+      /* Độ rộng do <colgroup> quyết định (xem renderClTable) → khớp tuyệt đối. */
       box-sizing: border-box;
     }
-    /* Không cho c"t co lại nhỏ hơn n"i dung header (tránh nhảy c"t khi cu"n). */
+    /* Không cho cột co lại nhỏ hơn nội dung header (tránh nhảy cột khi cuộn). */
     .cl-tbl thead th.cl-tbl-sort { cursor: pointer; user-select: none; }
     .cl-tbl thead th.cl-tbl-sort:hover { color: var(--text-primary); }
     .cl-tbl thead th .cl-sort-ico { opacity: 0.35; font-size: 10px; margin-left: 3px; }
@@ -705,7 +706,7 @@
       color: var(--text-secondary);
     }
     .cl-tbl .cl-tbl-unknown { color: var(--text-faint); }
-    /* C"t Cell: 1 dòng `mcc-mnc-lac/tac-cellid` (không wrap) + dòng phụ eNB·sector. */
+    /* Cột Cell: 1 dòng `mcc-mnc-lac/tac-cellid` (không wrap) + dòng phụ eNB·sector. */
     .cl-tbl td.cl-tbl-cell {
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       font-variant-numeric: tabular-nums;
@@ -716,7 +717,7 @@
       font-variant-numeric: tabular-nums;
     }
     /* Cột: `table-layout: fixed` → độ rộng lấy theo <colgroup>, các cột số liệu có
-       width cố định (đủ rộng cho nội dung, không xuống dòng), cột địa chỉ ẩn phần dư. */
+       width cố định (đủ rộng cho nội dung, không xuống dòng), cột Địa chỉ ăn phần dư. */
     .cl-tbl col { width: auto; }
     .cl-tbl .cl-col-idx { width: 62px; }
     .cl-tbl .cl-col-cell { width: 170px; }
@@ -728,12 +729,12 @@
     .cl-tbl .cl-col-loc { width: 150px; }
     .cl-tbl .cl-col-status { width: 150px; }
     /* Kéo dãn cột: tay nắm ở mép phải mỗi <th>. Bề rộng ghi vào <col> tương ứng
-       (table-layout: fixed) nên header và body luôn kh:p nhau. */
+       (table-layout: fixed) nên header và body luôn khớp nhau. */
     .cl-tbl thead th { position: relative; }
     .cl-tbl th .cl-col-grip {
       position: absolute; top: 0; right: -3px; width: 7px; height: 100%;
       cursor: col-resize; z-index: 3;
-    /* Chỉ bắt sự kiện ở dải mảnh → không cản bấm sort vào chữ tiêu đề. */
+      /* Chỉ bắt sự kiện ở dải mảnh → không cản bấm sort vào chữ tiêu đề. */
       background: transparent;
     }
     .cl-tbl th .cl-col-grip::after {
@@ -748,7 +749,7 @@
     /* Đang kéo: không cho bôi đen chữ + tắt transition để cột theo tay ngay. */
     body.cl-col-resizing { cursor: col-resize !important; user-select: none; }
     body.cl-col-resizing .cl-tbl * { transition: none !important; }
-    /* Hàng kẻ sọc cho d& dò theo hàng (bảng nhiều c"t). */
+    /* Hàng kẻ sọc cho dễ dò theo hàng (bảng nhiều cột). */
     .cl-tbl tbody tr.cl-row:nth-child(even) { background: rgba(127,127,127,0.05); }
     .cl-tbl tbody tr.cl-row:hover { background: var(--bg-hover); }
     .cl-tbl tbody tr.cl-row-sel { background: rgba(51,102,255,0.12); }
@@ -768,14 +769,14 @@
       white-space: nowrap;
     }
     .cl-radio-badge i { font-size: 9px; opacity: 0.85; }
-    /* Ở trạng thái: pill + thanh tiến trình nhỏ khi cell đang được tra. */
+    /* Ô trạng thái: pill + thanh tiến trình nhỏ khi cell đang được tra. */
     .cl-tbl-status-wrap { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
     .cl-row-busy { display: flex; align-items: center; gap: 4px; width: 100%; }
     .cl-row-busy-bar {
       position: relative; flex: 1 1 auto; height: 3px; min-width: 34px;
       border-radius: 999px; background: rgba(61,124,224,0.22); overflow: hidden;
     }
-    /* Thanh chạy vô định (không biết trước % của 1 cell) → dải sáng trượt qua lại. */
+    /* Thanh chạy vô định (không biết trước % của 1 cell) — dải sáng trượt qua lại. */
     .cl-row-busy-bar > i {
       position: absolute; top: 0; left: 0; height: 100%; width: 40%;
       background: #3d7ce0; border-radius: 999px;
@@ -804,13 +805,6 @@
       font-size: 10.5px; color: var(--text-secondary);
       font-variant-numeric: tabular-nums; white-space: nowrap;
     }
-    /* Badge nguồn kết quả sau pill trạng thái. */
-    .cl-src-badge {
-      display: inline-flex; align-items: center; margin-left: 4px;
-      font-size: 9px; color: var(--text-faint);
-    }
-    .cl-src-badge.local { color: #3d7ce0; }
-    .cl-src-badge.online { color: #22aa44; }
     /* Viền trái theo trạng thái (found/miss/unpaid...) — thấy ngay cell nào chưa có. */
     .cl-tbl tbody tr.cl-row { box-shadow: inset 3px 0 0 transparent; }
     .cl-tbl tbody tr.st-found { box-shadow: inset 3px 0 0 #22aa44; }
@@ -858,8 +852,8 @@
     .cl-row-status.found { color: #22aa44; }
     .cl-row-status.miss { color: #ee6666; }
     .cl-row-status.unpaid { color: #ff8800; }
-    /* C"t Trạng thái ch0 hi!n ICON cho gọn; chữ trạng thái nằm trong tooltip
-       (title)   hover là thấy, không chiếm bề ngang dòng. Bỏ padding/border của
+    /* Cột Trạng thái chỉ hiện ICON cho gọn; chữ trạng thái nằm trong tooltip
+       (title) → hover là thấy, không chiếm bề ngang dòng. Bỏ padding/border của
        "viên thuốc" để icon đứng một mình cho thẳng hàng với các cột khác. */
     .cl-row-status.cl-row-status-ico {
       display: inline-flex; align-items: center; justify-content: center;
@@ -868,12 +862,11 @@
       cursor: help;
     }
     .cl-row-status.cl-row-status-ico > i { font-size: 13px; }
-    .cl-row-status.cl-row-status-ico .cl-src-badge { font-size: 10px; }
     /* Gợi ý trạng thái hiện đầy đủ khi hover (title gốc của trình duyệt vẫn giữ
        để không phụ thuộc JS). */
     .cl-row-status.cl-row-status-ico:hover { transform: scale(1.12); transition: transform .12s ease; }
     /* ===== Danh sách bản ghi call-log (#logRecordList) =====
-       Cùng ngôn ngữ th9 giác v:i bảng cell (.cl-tbl): viền trái theo trạng thái,
+       Cùng ngôn ngữ thị giác với bảng cell (.cl-tbl): viền trái theo trạng thái,
        sọc chẵn/lẻ, badge RAT + pill trạng thái dùng lại class của bảng. */
     .log-list { display: flex; flex-direction: column; gap: 4px; }
     .log-card {
@@ -904,6 +897,25 @@
     .log-detail .log-coords { font-variant-numeric: tabular-nums; }
     .log-detail .log-copy { cursor: pointer; color: var(--text-faint); margin-left: 4px; opacity: 1; }
     .log-detail .log-copy:hover { color: var(--text-primary); }
+
+    /* Cặp icon thao tác cạnh toạ độ: Copy + Mở Google Maps (dùng chung mọi popup).
+       Inline-flex để 2 icon đứng cạnh nhau, không bị xuống dòng lệch hàng. */
+    .cell-coord-acts {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-left: 5px; vertical-align: middle;
+    }
+    .cell-coord-acts > i {
+      cursor: pointer; font-size: 11px; line-height: 1;
+      color: var(--text-muted); opacity: 0.85;
+      transition: color 0.15s, opacity 0.15s;
+    }
+    .cell-coord-acts > i:hover { color: var(--accent, #3d7ce0); opacity: 1; }
+    .cell-coord-acts > i:focus-visible {
+      outline: 2px solid var(--border-focus); outline-offset: 1px; border-radius: 2px;
+    }
+    /* Trong popup bản đồ (nền sáng/tối theo theme) icon phải đọc được. */
+    .leaflet-popup-content .cell-coord-acts > i { color: #666; }
+    .leaflet-popup-content .cell-coord-acts > i:hover { color: #3d7ce0; }
     .log-card-hd {
       display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
       font-size: 11.5px; line-height: 1.4;
@@ -924,13 +936,50 @@
       display: flex; align-items: baseline; gap: 5px; margin-top: 2px;
       font-size: 10px; color: var(--text-muted); min-width: 0;
     }
+    /* Cell ID hiện ĐẦY ĐỦ dạng MCC-MNC-LAC-CELLID (chuỗi dài) → cho chiếm trọn dòng,
+       chỉ cắt khi thật sự không đủ chỗ; title vẫn giữ nguyên chuỗi đầy đủ. */
     .log-card-cell {
       color: var(--text-secondary); font-variant-numeric: tabular-nums;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
     }
     .log-card-addr {
       margin-top: 1px; font-size: 10px; color: var(--text-faint);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    /* Dòng KHÔNG có cuộc gọi: chỗ SĐT hiện chính cell ID → đậm hơn 1 chút cho thấy
+       đây là định danh chính của dòng. */
+    .log-card-cell-lead {
+      font-size: 11px; font-weight: 600; color: var(--text-primary);
+    }
+    /* Nút tra cứu 1 cell ở CUỐI dòng — chỉ hiện với cell chưa tra / chưa đủ điểm. */
+    .log-card-go {
+      flex: 0 0 auto; width: 22px; height: 22px; display: inline-flex;
+      align-items: center; justify-content: center; padding: 0;
+      border: 1px solid var(--accent, #3d7ce0); border-radius: 6px;
+      background: rgba(61,124,224,0.10); color: var(--accent, #3d7ce0);
+      cursor: pointer; font-size: 10px; transition: background 0.15s, color 0.15s;
+    }
+    .log-card-go:hover { background: var(--accent, #3d7ce0); color: #fff; }
+    .log-card-go:disabled { opacity: 0.65; cursor: progress; }
+    /* Thanh trạng thái tra 1 cell (đang tra / xong / không ra / thiếu điểm). */
+    .log-lookup-bar {
+      display: flex; align-items: center; gap: 5px; margin-top: 3px;
+      padding: 3px 7px; border-radius: 5px; font-size: 10.5px; line-height: 1.35;
+      border: 1px solid transparent;
+    }
+    .log-lookup-bar > i { flex: 0 0 auto; font-size: 10px; }
+    .log-lookup-bar > span { flex: 1 1 auto; min-width: 0; }
+    .log-lookup-bar.busy {
+      background: rgba(61,124,224,0.12); border-color: rgba(61,124,224,0.45); color: #2c5fb8;
+    }
+    .log-lookup-bar.done {
+      background: rgba(46,158,91,0.12); border-color: rgba(46,158,91,0.45); color: #1f7a45;
+    }
+    .log-lookup-bar.miss, .log-lookup-bar.fail {
+      background: rgba(217,83,79,0.11); border-color: rgba(217,83,79,0.45); color: #b03a37;
+    }
+    .log-lookup-bar.nofunds {
+      background: rgba(217,149,42,0.13); border-color: rgba(217,149,42,0.5); color: #96650f;
     }
     /* Phiên đang mở (card phiên trong tab Lịch sử) — viền trái theo accent. */
     .hist-session.is-open { border-color: var(--border-focus); box-shadow: inset 3px 0 0 var(--accent, #3d7ce0); }
@@ -955,12 +1004,12 @@
       border-radius: 8px; padding: 7px 9px; background: rgba(255,136,0,0.09);
       display: flex; gap: 8px; align-items: flex-start;
       transition: border-color 0.2s, background 0.2s;
-    /* Card là grid item của danh sách → không được tràn/đè card kế tiếp. */
+      /* Card là grid item của danh sách → không được tràn/đè card kế tiếp. */
       min-width: 0; overflow: hidden;
     }
     .hist-session:hover { border-color: var(--border-hover); background: var(--bg-hover); }
     .hist-session.active { border-color: var(--border-focus); border-left-color: var(--accent, #3d7ce0); }
-    /* Phiên ĐANG mở ở tab "Tra cứu danh sách" → viền xanh để nhận ra ngay. */
+    /* Phiên ĐANG mở ở tab Xem rút list → viền xanh để nhận ra ngay. */
     .hist-session.is-open { border-color: var(--border-focus); border-left-color: var(--accent, #3d7ce0); }
     .hist-session-meta {
       display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px;
@@ -1003,9 +1052,10 @@
     }
     .hs-cal:hover { color: var(--text-primary); border-color: var(--border-hover); }
     .hs-cal.on { color: var(--accent, #3d7ce0); border-color: var(--accent, #3d7ce0); }
-    /* Popup lịch (absolute theo nút) — lưới tháng tự dựng bằng JS. */
+    /* Popup lịch — neo SÁT icon lịch (JS đặt toạ độ: canh phải trùng mép phải nút,
+       cách đáy nút 2px). z-index cao hơn card phiên + popup hướng dẫn. */
     .hs-cal-pop {
-      position: fixed; z-index: 3000; width: 232px;
+      position: fixed; z-index: 6100; width: 232px;
       background: var(--bg-solid, #fff); border: 1px solid var(--border-color);
       border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.28);
       padding: 8px; font-size: 11.5px; color: var(--text-primary);
@@ -1042,7 +1092,7 @@
       gap: 4px; margin-bottom: 8px; max-height: 46vh; overflow-y: auto;
       display: flex; flex-direction: column;
       padding-right: 2px;
-      /* Card bên trong tự co giãn theo bề r"ng thực của danh sách (container query). */
+      /* Card bên trong tự co giãn theo bề rộng thực của danh sách (container query). */
       container-type: inline-size;
       container-name: histlist;
     }
@@ -1057,9 +1107,9 @@
       padding: 7px 8px; cursor: pointer;
       box-sizing: border-box; height: auto;
       min-width: 0;
-    /* BẮT BUỘC: danh sách là flex column, mặc định item bị flex-shrink co lại cho
-         vừa max-height   card b9 bóp còn ~16px và n"i dung b9 cắt (overflow hidden x
-       .hist-session). Không co, để danh sách tự cuộn thay vì ép nhỏ card. */
+      /* BẮT BUỘC: danh sách là flex column, mặc định item bị flex-shrink co lại cho
+         vừa max-height → card bị bóp còn ~16px và nội dung bị cắt (overflow hidden ở
+         .hist-session). Không co, để danh sách tự cuộn thay vì ép nhỏ card. */
       flex: 0 0 auto;
     }
     /* Cột nội dung: chiếm hết chỗ còn lại, tự cao theo nội dung. */
@@ -1140,7 +1190,7 @@
     #histBatchList .hist-session-open:hover {
       border-color: var(--border-hover); color: var(--text-primary); background: var(--bg-hover);
     }
-    /* Panel r"ng: giãn khoảng thx + chip to hơn m"t nh9p. */
+    /* Panel rộng: giãn khoảng thở + chip to hơn một nhịp. */
     @container histlist (min-width: 420px) {
       #histBatchList .hist-session { padding: 8px 10px; gap: 10px; }
       #histBatchList .hs-main { gap: 5px; }
@@ -1151,7 +1201,7 @@
       #histBatchList .hist-session-stats { gap: 4px 10px; }
       #histBatchList .hs-state { font-size: 10.5px; }
     }
-    /* Panel hẹp: nút dàn ngang cho gọn chiều cao, chữ nhỏ lại m"t nh9p. */
+    /* Panel hẹp: nút dàn ngang cho gọn chiều cao, chữ nhỏ lại một nhịp. */
     @container histlist (max-width: 300px) {
       #histBatchList .hist-session { padding: 6px 7px; gap: 6px; align-items: flex-start; }
       #histBatchList .hs-main { gap: 3px; }
@@ -1180,13 +1230,13 @@
       background: linear-gradient(90deg, #33bb66, #2ea35c);
       transition: width 0.3s ease;
     }
-    /* Nhãn "n/t · x%" — nhỏ, chỉ đủ đọc nhanh tiến độ. */
+    /* Nhãn "n/t · x%" — nhỏ, chỉ để đọc nhanh tiến độ. */
     #histBatchList .hist-session-prog-txt {
       font-size: 10px; font-weight: 600; color: var(--text-faint);
       white-space: nowrap; font-variant-numeric: tabular-nums; line-height: 1;
       flex: 0 0 auto;
     }
-    /* Nhãn cảnh báo "còn N cell chưa tra" (không đủ điểm / bị dừng) — bấm để mở lại. */
+    /* Nhãn cảnh báo "còn N cell chưa tra" (không đủ điểm / bỏ dở) — bấm để mở lại. */
     .hist-pending-badge {
       display: inline-flex; align-items: center; gap: 4px; margin-top: 4px;
       font-size: 10.5px; font-weight: 600; color: var(--warning, #d9952a);
@@ -1214,6 +1264,23 @@
     .hist-batch-pager button:disabled { opacity: 0.4; cursor: default; }
     /* ===== Mục con thu gọn "Tra cứu đơn lẻ" (trong tab Lịch sử) ===== */
     .hist-sub { margin-top: 8px; border-top: 1px solid var(--border-color); padding-top: 6px; }
+    /* Mục đang MỞ chiếm hết chiều cao panel; mục đang ĐÓNG chỉ còn dòng tiêu đề.
+       (Tab Lịch sử là accordion: chỉ 1 mục mở tại một thời điểm.) */
+    .hist-pane > .hist-sub { display: flex; flex-direction: column; min-height: 0; }
+    .hist-sub.is-collapsed { flex: 0 0 auto; }
+    .hist-sub.is-expanded { flex: 1 1 auto; min-height: 0; }
+    .hist-sub.is-collapsed > .hist-section-hd { margin-bottom: 0; }
+    .hist-sub.is-expanded > .hist-section-hd { flex: 0 0 auto; }
+    /* Thân mục đang mở: giãn hết phần còn lại, danh sách bên trong tự cuộn. */
+    .hist-sub.is-expanded > .hist-sub-body {
+      flex: 1 1 auto; min-height: 0;
+    }
+    .hist-sub.is-expanded .hist-list {
+      flex: 1 1 auto; min-height: 0; overflow-y: auto; max-height: none;
+    }
+    .hist-sub.is-expanded .hist-batch-list { max-height: none; }
+    /* Pager ghim đáy, không co theo danh sách. */
+    .hist-sub .hist-pager { flex: 0 0 auto; }
     .hist-sub-toggle {
       display: flex; align-items: center; gap: 6px; width: 100%;
       background: none; border: none; cursor: pointer; padding: 4px 2px;
@@ -1227,7 +1294,7 @@
     .hist-sub-toggle .hist-count { margin-left: auto; text-transform: none; letter-spacing: 0; }
     .hist-sub-body { margin-top: 5px; display: flex; flex-direction: column; gap: 6px; }
     .hist-sub-body[hidden] { display: none; }
-    /* Ở lọc ngày + nút bỏ lọc của mục tra đơn lẻ */
+    /* Ô lọc ngày + nút bỏ lọc của mục tra đơn lẻ */
     .hist-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .hist-toolbar input[type="date"] {
       flex: 0 0 auto; width: auto; min-width: 132px;
@@ -1246,7 +1313,7 @@
       border: 1px solid var(--border-color); border-left: 3px solid #6666ee;
       border-radius: 8px; padding: 7px 9px; background: rgba(68,68,204,0.10);
       transition: border-color 0.2s, background 0.2s;
-      display: flex; gap: 8px; align-items: center;
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
     }
     .hist-card--rat { border-left-width: 4px; }
     .hist-card:hover { border-color: var(--border-hover); background: var(--bg-hover); }
@@ -1267,6 +1334,38 @@
       flex-shrink: 0;
     }
     .hist-del:hover { color: #ee6666; background: rgba(204,51,51,0.1); }
+    /* Cụm nút bên phải thẻ (Tra lại + Xoá) — dọc, không cho co lại. */
+    .hist-card-acts {
+      display: flex; align-items: center; gap: 2px; flex: 0 0 auto;
+    }
+    /* Nút "Tra lại" chỉ hiện với cell KHÔNG tra được — cạnh nút xoá, cùng khuôn. */
+    .hist-retry {
+      background: none; border: none; color: var(--text-faint); cursor: pointer;
+      font-size: 12px; padding: 2px 4px; border-radius: 4px; transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .hist-retry:hover { color: #3d7ce0; background: rgba(61,124,224,0.12); }
+    .hist-retry:disabled { opacity: 0.6; cursor: progress; }
+    /* Thanh trạng thái của lần "Tra lại" — nằm dưới toàn bộ thân thẻ. */
+    .hist-retry-bar {
+      flex: 1 0 100%; display: flex; align-items: center; gap: 5px;
+      margin-top: 5px; padding: 3px 7px; border-radius: 5px;
+      font-size: 10.5px; line-height: 1.35; border: 1px solid transparent;
+    }
+    .hist-retry-bar > i { flex: 0 0 auto; font-size: 10px; }
+    .hist-retry-bar > span { flex: 1 1 auto; min-width: 0; }
+    .hist-retry-bar.busy {
+      background: rgba(61,124,224,0.12); border-color: rgba(61,124,224,0.45); color: #2c5fb8;
+    }
+    .hist-retry-bar.done {
+      background: rgba(46,158,91,0.12); border-color: rgba(46,158,91,0.45); color: #1f7a45;
+    }
+    .hist-retry-bar.miss, .hist-retry-bar.fail {
+      background: rgba(217,83,79,0.11); border-color: rgba(217,83,79,0.45); color: #b03a37;
+    }
+    .hist-retry-bar.nofunds {
+      background: rgba(217,149,42,0.13); border-color: rgba(217,149,42,0.5); color: #96650f;
+    }
     .hist-empty { text-align: center; color: var(--text-faint); padding: 16px 0; }
     .hist-cell {
       font-family: ui-monospace, monospace; font-weight: 600; color: var(--text-primary);
@@ -1275,9 +1374,6 @@
     .hist-coords { font-family: ui-monospace, monospace; color: #33bb66; font-size: 11px; margin-top: 3px; }
     .hist-coords.miss { color: var(--text-faint); font-family: inherit; }
     /* Nguồn dữ liệu: chỉ icon, tên nguồn nằm trong tooltip */
-    .hist-src-i { font-size: 10px; flex-shrink: 0; }
-    .hist-src-i.local { color: #3366ff; }
-    .hist-src-i.online { color: #22aa44; }
     .hist-source {
       display: inline-block; padding: 1px 6px; border-radius: 10px;
       font-size: 10px; background: var(--bg-surface2); border: 1px solid var(--border-color);
@@ -1337,6 +1433,65 @@
     }
     .modal-close:hover { color: var(--text-primary); }
 
+    /* ===== Popup xác nhận XOÁ (dùng chung, thay confirm() của hệ điều hành) ===== */
+    .cf-overlay { z-index: 5200; }
+    .cf-box {
+      max-width: 420px; width: calc(100% - 24px); padding: 0; overflow: hidden;
+      border-radius: 12px; border: 1px solid var(--border-color);
+    }
+    .cf-hd {
+      display: flex; align-items: center; gap: 9px; padding: 12px 12px 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .cf-hd h2 {
+      flex: 1 1 auto; min-width: 0; margin: 0; padding: 0; border: 0;
+      font-size: 13.5px; font-weight: 700; color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .cf-ico {
+      flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: rgba(229,72,77,0.16); color: #e5484d; font-size: 12px;
+    }
+    .cf-x {
+      flex: 0 0 auto; width: 24px; height: 24px; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 0; border-radius: 6px; background: none; color: var(--text-muted);
+      font-size: 12px; cursor: pointer; font-family: inherit;
+    }
+    .cf-x:hover { color: var(--text-primary); background: var(--bg-hover); }
+    .cf-body {
+      padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+      max-height: min(52vh, 380px); overflow-y: auto;
+    }
+    .cf-msg { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-primary); }
+    .cf-warn {
+      display: flex; gap: 7px; padding: 8px 10px; border-radius: 8px;
+      font-size: 11.5px; line-height: 1.45; border: 1px solid transparent;
+    }
+    .cf-warn[hidden] { display: none; }
+    .cf-warn > i { flex: 0 0 auto; margin-top: 2px; font-size: 11px; }
+    .cf-warn ul { margin: 0; padding-left: 14px; display: flex; flex-direction: column; gap: 3px; }
+    .cf-danger { color: #f07275; background: rgba(229,72,77,0.1); border-color: rgba(229,72,77,0.34); }
+    .cf-info { color: var(--text-secondary); background: var(--bg-surface2); border-color: var(--border-color); }
+    .cf-info > i { color: var(--accent, #3d7ce0); }
+    /* Chi tiết đối tượng sẽ xoá (tên file, số cell, thời gian...). */
+    .cf-detail {
+      padding: 8px 10px; border-radius: 8px; background: var(--bg-surface2);
+      border: 1px dashed var(--border-color); font-size: 11px; color: var(--text-muted);
+      display: flex; flex-direction: column; gap: 3px; word-break: break-word;
+    }
+    .cf-detail[hidden] { display: none; }
+    .cf-detail b { color: var(--text-secondary); font-weight: 600; }
+    .cf-ft {
+      display: flex; gap: 8px; justify-content: flex-end;
+      padding: 10px 14px; border-top: 1px solid var(--border-color);
+      background: var(--bg-surface2);
+    }
+    .cf-ft .btn { margin: 0; min-width: 84px; justify-content: center; }
+    .btn.btn-danger { background: #d94045; border-color: #d94045; color: #fff; }
+    .btn.btn-danger:hover { background: #e5484d; border-color: #e5484d; }
+
     /* My data table in modal */
     .my-data-table { width: 100%; border-collapse: collapse; font-size: 11px; }
     .my-data-table th { color: var(--text-muted); padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 9px; text-transform: uppercase; }
@@ -1354,7 +1509,7 @@
     }
 
     /* =====================================================
-       Tab Tra cứu danh sách — bộ lọc thu gọn + chip lọc hành động
+       Tab Xem rút list — bộ lọc thu gọn + chip lọc hành động
        ===================================================== */
     .cl-filter-toggle {
       display: flex; align-items: center; justify-content: center; gap: 5px;
@@ -1363,10 +1518,10 @@
       border-radius: 6px; font-size: 12px; cursor: pointer;
       color: var(--text-secondary);
     }
-    /* Hàng tìm kiếm: input co giãn + nút b" lọc (ch0 icon) ngang hàng. */
+    /* Hàng tìm kiếm: input co giãn + nút bộ lọc (chỉ icon) ngang hàng. */
     .cl-search-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-    /* Ở tìm kiếm có icon kính lúp + nút xoá nhanh — style đầy đủ, đồng bộ .form-group input
-       (input này KHÔNG nằm trong .form-group nên phải khai báo border/background/height tại đây) */
+    /* Ô tìm kiếm có icon kính lúp + nút xoá nhanh — style đầy đủ, đồng bộ .form-group input
+       (input này KHÔNG nằm trong .form-group nên phải khai báo border/background/height tại đây). */
     .cl-search-box {
       position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center;
       height: 30px; border: 1px solid var(--border-color); border-radius: 6px;
@@ -1398,7 +1553,7 @@
     }
     .cl-badge.show { display: inline-block; }
     .cl-filter-panel { margin-bottom: 6px; }
-    /* Icon chips thay cho <select> lọc loại → gọn, 1 hàng, bấm nhanh. */
+    /* Icon chips thay cho <select> lọc loại — gọn, 1 hàng, bấm nhanh. */
     .cl-filter-chips { display: flex; gap: 4px; margin-bottom: 8px; }
     .cl-chip {
       flex: 1 1 0; height: 30px; display: flex; align-items: center; justify-content: center;
@@ -1427,58 +1582,140 @@
     .cl-status-chips .cl-chip-found:not(.active) { color: var(--success, #2e9e5b); border-color: rgba(46,158,91,0.45); }
     .cl-status-chips .cl-chip-miss:not(.active) { color: var(--danger, #d9534f); border-color: rgba(217,83,79,0.45); }
     .cl-status-chips .cl-chip-unpaid:not(.active) { color: var(--warning, #d9952a); border-color: rgba(217,149,42,0.45); }
+    /* Bộ lọc trạng thái trong PANEL của tab "Tra cứu danh sách": đồng bộ nhịp với
+       .cl-filter-chips (cùng chiều cao 30px, cùng gap 4px, cùng bo góc 6px, cùng
+       dàn đều flex:1) để 2 hàng chip xếp khít như một khối lọc duy nhất. Nhãn dài
+       nên cho chữ nhỏ 11px; màn hẹp thì ẩn chữ, còn icon + số (title giữ mô tả). */
+    #clRecordStatusChips { margin: 0 0 10px; gap: 4px; }
+    #clRecordStatusChips .cl-chip {
+      flex: 1 1 0; min-width: 0; height: 30px; padding: 0 4px; gap: 4px;
+      font-size: 11px; border-radius: 6px; white-space: nowrap; overflow: hidden;
+    }
+    #clRecordStatusChips .cl-chip i { flex: 0 0 auto; font-size: 11px; }
+    #clRecordStatusChips .cl-chip span {
+      flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    }
+    #clRecordStatusChips .cl-chip b {
+      flex: 0 0 auto; font-weight: 700; font-size: 10.5px; min-width: 15px;
+      text-align: center; padding: 1px 3px; border-radius: 999px;
+      background: rgba(0,0,0,0.10); font-variant-numeric: tabular-nums;
+    }
+    #clRecordStatusChips .cl-chip.active b { background: rgba(255,255,255,0.28); }
+    /* Giữ đúng bảng màu trạng thái của overlay bảng cell. */
+    #clRecordStatusChips .cl-chip-found:not(.active) { color: var(--success, #2e9e5b); border-color: rgba(46,158,91,0.45); }
+    #clRecordStatusChips .cl-chip-miss:not(.active) { color: var(--danger, #d9534f); border-color: rgba(217,83,79,0.45); }
+    #clRecordStatusChips .cl-chip-unpaid:not(.active) { color: var(--warning, #d9952a); border-color: rgba(217,149,42,0.45); }
+    /* Màn hẹp: bỏ nhãn chữ, chỉ còn icon + số (title vẫn giữ mô tả đầy đủ). */
+    @media (max-width: 420px) {
+      #clRecordStatusChips .cl-chip span { display: none; }
+    }
     /* Mũi tên nhỏ (đến/đi) góc phải chip — phân biệt SMS Đến/Đi khi base icon trùng. */
     .cl-chip-dir {
       position: absolute; right: 5px; bottom: 3px;
       font-size: 7px; line-height: 1; opacity: 0.85; pointer-events: none;
     }
-    /* Khoảng thời gian: 2 ô (từ → đến). Input date native phủ đầy ô (trong suốt) nên
-       bấm vào ô là bấm thẳng input   trình duy!t mx luôn bảng chọn ngày (không cần JS). */
-    /* Ở chọn ngày: icon fas fa-calendar-days nằm BÊN TRÁI và là nút bấm mở
-       date-picker (input native phủ lên toàn ô nhưng trong suốt). Icon đổi màu
-       khi ô đang có giá trị (.active) để user thấy ngay đang lọc. */
-    .cl-date-range { display: flex; align-items: center; gap: 5px; margin-bottom: 8px; }
-    .cl-date-field {
-      position: relative; flex: 1 1 0; min-width: 0; height: 30px;
+    /* =====================================================
+       Chọn ngày / KHOẢNG ngày bằng 1 bảng lịch duy nhất.
+       1 nút lịch mở popup; click 1 ngày = lọc đúng ngày đó, click 2 ngày = khoảng.
+       ===================================================== */
+    /* Khối chứa dòng "khoảng đang lọc" — KHÔNG đặt position:relative để .cl-cal-pop
+       (nằm trực tiếp trong .cl-filter-panel) neo đúng vào panel. */
+    .cl-date-range { display: block; }
+    /* Chip lịch nằm CHUNG hàng .cl-filter-chips → kế thừa nguyên .cl-chip (cùng cao
+       30px, flex:1, bo 6px, active nền accent). Chỉ thêm dấu hiệu "đang lọc ngày". */
+    .cl-chip-date.open {
+      border-color: var(--accent, #3d7ce0); color: var(--accent, #3d7ce0);
+      background: var(--bg-hover);
+    }
+    /* Chấm báo đang lọc ngày — cùng vị trí/kích thước với mũi tên .cl-chip-dir. */
+    .cl-chip-date .cl-date-dot { font-size: 6px; opacity: 1; color: #e5484d; }
+    .cl-chip-date.active .cl-date-dot { color: #fff; }
+    /* Dòng hiện khoảng ngày đang lọc (chỉ hiện khi có lọc) + nút bỏ lọc. */
+    .cl-date-active {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
+      padding: 0 4px 0 8px; height: 28px; border-radius: 6px;
+      border: 1px solid var(--border-focus, #3d7ce0); background: rgba(61,124,224,0.08);
+      color: var(--text-primary); font-size: 11.5px;
+    }
+    .cl-date-active > i { flex: 0 0 auto; font-size: 11px; color: var(--accent, #3d7ce0); }
+    .cl-date-active-txt {
+      flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600;
+    }
+    .cl-date-clear {
+      flex: 0 0 auto; width: 22px; height: 22px; display: inline-flex; align-items: center;
+      justify-content: center; border: 0; background: transparent;
+      color: var(--text-muted); border-radius: 4px; cursor: pointer; font-size: 10px; padding: 0;
+    }
+    .cl-date-clear:hover { color: #e5484d; background: rgba(229,72,77,0.12); }
+    /* Popup lịch — neo vào .cl-filter-panel, canh theo JS (set ở toggleClDatePicker)
+       để luôn nằm ngay dưới hàng chip, không phụ thuộc padding của panel. */
+    .cl-filter-panel { position: relative; }
+    .cl-cal-pop {
+      position: absolute; top: 0; left: 0; z-index: 40;
+      width: 268px; padding: 10px; border-radius: 10px;
+      background: var(--bg-surface, #fff); border: 1px solid var(--border-color);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+      -webkit-user-select: none; user-select: none;
+    }
+    .cl-cal-head { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
+    .cl-cal-nav {
+      flex: 0 0 auto; width: 26px; height: 26px; display: inline-flex; align-items: center;
+      justify-content: center; border: 1px solid var(--border-color); background: var(--bg-surface2);
+      color: var(--text-secondary); border-radius: 6px; cursor: pointer; font-size: 10px; padding: 0;
+    }
+    .cl-cal-nav:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .cl-cal-title {
+      flex: 1 1 auto; text-align: center; font-size: 12px; font-weight: 600;
+      color: var(--text-primary); font-variant-numeric: tabular-nums;
+    }
+    .cl-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+    .cl-cal-dow {
+      text-align: center; font-size: 9.5px; font-weight: 600; color: var(--text-faint);
+      padding: 2px 0 4px; text-transform: uppercase;
+    }
+    .cl-cal-day {
+      height: 30px; display: flex; align-items: center; justify-content: center;
+      border: 0; background: transparent; color: var(--text-primary); border-radius: 6px;
+      font-size: 11.5px; cursor: pointer; font-variant-numeric: tabular-nums; padding: 0;
+      position: relative;
+    }
+    .cl-cal-day:hover { background: var(--bg-hover); }
+    .cl-cal-day.other { color: var(--text-faint); opacity: 0.55; }
+    /* Ngày đầu/cuối khoảng + ngày đang chọn giữa chừng. */
+    .cl-cal-day.in-range { background: rgba(61,124,224,0.14); border-radius: 0; }
+    .cl-cal-day.range-start, .cl-cal-day.range-end {
+      background: var(--accent, #3d7ce0); color: #fff; font-weight: 600;
+    }
+    .cl-cal-day.range-start { border-radius: 6px 0 0 6px; }
+    .cl-cal-day.range-end { border-radius: 0 6px 6px 0; }
+    .cl-cal-day.range-start.range-end { border-radius: 6px; }
+    .cl-cal-day.today::after {
+      content: ''; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
+      width: 4px; height: 4px; border-radius: 50%; background: var(--accent, #3d7ce0);
+    }
+    .cl-cal-day.range-start.today::after, .cl-cal-day.range-end.today::after { background: #fff; }
+    .cl-cal-foot {
+      display: flex; align-items: center; gap: 6px; margin-top: 8px;
+      padding-top: 8px; border-top: 1px solid var(--border-color);
+    }
+    .cl-cal-hint {
+      flex: 1 1 auto; font-size: 10.5px; color: var(--text-muted); line-height: 1.3;
+    }
+    .cl-cal-act {
+      flex: 0 0 auto; height: 26px; padding: 0 9px; border-radius: 6px; cursor: pointer;
       border: 1px solid var(--border-color); background: var(--bg-surface2);
-      color: var(--text-muted); border-radius: 6px; font-size: 11px;
-      transition: border-color 0.15s, background 0.15s, color 0.15s;
+      color: var(--text-secondary); font-size: 11px;
     }
-    .cl-date-field:hover { background: var(--bg-hover); color: var(--text-primary); }
-    .cl-date-field.active { border-color: var(--accent, #3d7ce0); color: var(--text-primary); }
-    .cl-date-face {
-      position: absolute; inset: 0; display: flex; align-items: center; gap: 6px;
-      padding: 0 8px; pointer-events: none;
+    .cl-cal-act:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .cl-cal-act.primary {
+      background: var(--accent, #3d7ce0); border-color: var(--accent, #3d7ce0); color: #fff;
     }
-    /* Icon lịch — to & rõ hơn để nhận ra đây là ô chọn ngày. */
-    .cl-date-field .cl-date-ico {
-      flex: 0 0 auto; font-size: 13px; line-height: 1;
-      color: var(--text-faint); transition: color 0.15s;
-      pointer-events: auto; cursor: pointer;
-    }
-    .cl-date-field:hover .cl-date-ico { color: var(--text-primary); }
-    .cl-date-field.active .cl-date-ico { color: var(--accent, #3d7ce0); }
-    .cl-date-field .cl-date-label {
-      flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      text-align: left; font-variant-numeric: tabular-nums;
-    }
-    .cl-date-field.active .cl-date-label { font-weight: 600; }
-    .cl-date-field .cl-date-x {
-      flex: 0 0 auto; opacity: 0.55; font-size: 11px; pointer-events: auto; cursor: pointer;
-    }
-    .cl-date-field .cl-date-x:hover { opacity: 1; }
-    /* Input native phủ khít ô, trong suốt → nhận click để mở date-picker.
-       `showPicker()` (JS) cũng gọi trên input này khi bấm icon. */
-    .cl-date-field .cl-date-native {
-      position: absolute; inset: 0; width: 100%; height: 100%;
-      opacity: 0; cursor: pointer; border: 0; padding: 0; margin: 0; background: transparent;
-      -webkit-appearance: none; appearance: none; z-index: 1;
-    }
-    .cl-date-sep { flex: 0 0 auto; color: var(--text-faint); font-size: 9px; }
+    .cl-cal-act.primary:hover { filter: brightness(1.08); color: #fff; }
     /* =====================================================
        Danh sách phiên — chỉ còn ở tab Lịch sử tra cứu
-       (tab "Tra cứu danh sách" không còn block phiên: #clCurrentSession,
-       #clSessionPicker, #clSessionsList đã bỏ)
+       (tab Xem rút list không còn block phiên: #clCurrentSession,
+        #clSessionPicker, #clSessionsList đã bỏ)
        ===================================================== */
     /* Khối "Phiên rút list" trong tab Lịch sử */
     .cl-sessions {
@@ -1493,7 +1730,15 @@
     .cl-sessions > summary::-webkit-details-marker { display: none; }
     .cl-sessions > summary .cl-count { font-size: 10.5px; font-weight: 600; color: var(--text-faint); }
 
-    /* Tổng kết nhanh phiên đang xem ở tab "Tra cứu danh sách" (thay dòng phiên cũ). */
+    /* Tổng kết nhanh — nằm TRONG card phiên (#clSessionCard). Card đã có khung/nền
+       riêng nên bỏ viền + nền ở đây, chỉ giữ dòng chữ gọn dưới phần tên file.
+       Tên file đã hiện ở .cls-detail phía trên → ẩn .cls-name trong card để khỏi lặp. */
+    .cl-session-card .cl-list-summary {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 2px 8px;
+      padding: 0; margin: 3px 0 0; font-size: 10.5px;
+      color: var(--text-faint); background: none; border: 0; border-radius: 0;
+    }
+    .cl-session-card .cl-list-summary .cls-name { display: none; }
     .cl-list-summary {
       display: flex; align-items: center; flex-wrap: wrap; gap: 3px 7px;
       padding: 4px 8px; margin-bottom: 6px; font-size: 10.5px;
@@ -1570,7 +1815,7 @@
     body.guest-mode .tl-zoom { bottom: 24px; }
 
     /* Khách chỉ thấy tab Tra cứu (chế độ guest); mọi phần cần đăng nhập đều ẩn
-       → kể cả tab Lịch sử tra cứu trên sidebar. Không tạo liên kết dư thừa. */
+       — kể cả tab Lịch sử tra cứu trên sidebar. Không tạo liên kết dư thừa. */
     .guest-only { display: none; }
     body.guest-mode .member-only { display: none !important; }
     body.guest-mode .guest-only { display: block; }
@@ -1578,7 +1823,7 @@
     body.guest-mode .sidebar-tab[data-tab="calllogs"] { display: none !important; }
 
     /* Chân left bar — số phiên bản, góc dưới-phải; luôn hiện (cả khách lẫn
-       người dùng). Ch0 là nhãn, không phải liên kết. */
+       người dùng). Chỉ là nhãn, không phải liên kết. */
     .panel-foot {
       flex: 0 0 auto;
       margin-top: auto;
@@ -1590,7 +1835,7 @@
     .panel-foot .panel-foot-row {
       display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap;
     }
-    /* Nhãn phiên bản: tĩnh, không gạch chân/di chu"t. */
+    /* Nhãn phiên bản: tĩnh, không gạch chân/di chuột. */
     .panel-foot .panel-foot-ver {
       font-size: 10.5px; font-weight: 700; letter-spacing: 0.3px;
       color: var(--text-faint); cursor: default; user-select: none;
@@ -1675,7 +1920,7 @@
     .call-session-banner i { color: #4f7cff; }
     .call-session-banner span { flex: 1; }
 
-    /* ===== Thanh t"ng kết nhanh tab "Tra cứu danh sách" ===== */
+    /* ===== Thanh tổng kết nhanh tab Xem rút list ===== */
     .call-log-summary {
       display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
       padding: 6px 8px; margin: 6px 0;
@@ -1703,17 +1948,17 @@
   <!-- Header -->
   <div class="header"></div>
 
-      <!-- Overlay mời đăng ký (chỉ hiện với khách) -->
+  <!-- Overlay mời đăng ký (chỉ hiện với khách) -->
   <div id="guestGate">
     <div class="guest-gate-card">
       <div class="gg-text">
         <b><i class="fas fa-user-shield"></i> Bạn đang xem ở chế độ khách.</b>
-               Tra cứu thử <b>1 cell</b> từ dữ liệu nội bộ — miễn phí. Đăng ký tài khoản để dùng
-               bản đầy đủ, lịch sử tra cứu, tải call log và tra cứu thêm nguồn OpenCellID.
+        Tra cứu thử <b>1 cell</b> từ dữ liệu nội bộ — miễn phí. Đăng ký tài khoản để dùng
+        bản đồ, lịch sử tra cứu, tải call log và tra cứu thêm nguồn OpenCellID.
       </div>
       <div class="gg-actions">
-        <a class="gg-primary" href="#" onclick="event.preventDefault();AuthPopup.open('register')"><i class="fas fa-user-plus"></i> ĐĒng ký mi&n phí</a>
-        <a href="#" onclick="event.preventDefault();AuthPopup.open('login')"><i class="fas fa-sign-in-alt"></i> ĐĒng nhập</a>
+        <a class="gg-primary" href="#" onclick="event.preventDefault();AuthPopup.open('register')"><i class="fas fa-user-plus"></i> Đăng ký miễn phí</a>
+        <a href="#" onclick="event.preventDefault();AuthPopup.open('login')"><i class="fas fa-sign-in-alt"></i> Đăng nhập</a>
       </div>
       <button class="guest-gate-close" title="Ẩn" onclick="document.getElementById('guestGate').style.display='none'">
         <i class="fas fa-times"></i>
@@ -1740,7 +1985,7 @@
         <i class="fas fa-history"></i> <span data-i18n="tab.callLogs">Tra cứu danh sách</span>
       </div>
       <div class="sidebar-tab" data-tab="lookuphistory" onclick="switchTab('lookuphistory')">
-        <i class="fas fa-clipboard-list"></i> <span data-i18n="tab.lookupHistory">L9ch sử tra cứu</span>
+        <i class="fas fa-clipboard-list"></i> <span data-i18n="tab.lookupHistory">Lịch sử tra cứu</span>
       </div>
     </div>
     <div class="sidebar-body">
@@ -1757,9 +2002,9 @@
           </button>
         </div>
 
-        <!-- Nạp Excel ngay trong tab: chọn mạng (1 hàng gọn) x trên, khung upload x dư:i.
-             Bấm vào khung = mx h"p chọn file (input phủ toàn khung).
-             CHỈ hiện khi chưa có danh sách cell; có danh sách → ẩn (xem #clSessionCard). -->
+        <!-- Nạp Excel ngay trong tab: chọn mạng (1 hàng gọn) ở trên, khung upload ở dưới.
+             Bấm vào khung = mở hộp chọn file (input phủ toàn khung).
+             CHỈ hiện khi chưa có danh sách cell; có danh sách thì ẩn (xem #clSessionCard). -->
         <div class="cl-inline-up" id="clInlineUp" hidden>
           <div class="cl-net-field">
             <label for="clNetSelect" data-i18n="calllogs.netLabel">Mạng</label>
@@ -1770,10 +2015,10 @@
               </span>
               <select id="clNetSelect" onchange="setClNetChoice(this.value)"></select>
             </div>
-            <!-- Nút ? mở hướng dẫn (thay nút "Hướng dẫn" cũ). -->
+            <!-- Nút ? mở hướng dẫn (thay nút "Hướng dẫn" cũ ở topbar). -->
             <button type="button" class="cl-pick-help" id="clPickHelpBtn"
                     onclick="openClPickHelp(event)"
-                    data-i18n-title="calllogs.helpBtn" title="Hư:ng dẫn &amp; giải thích" aria-label="Hư:ng dẫn">
+                    data-i18n-title="calllogs.helpBtn" title="Hướng dẫn &amp; định dạng file" aria-label="Hướng dẫn">
               <i class="fas fa-circle-question"></i>
             </button>
           </div>
@@ -1793,21 +2038,27 @@
         </div>
 
         <!-- Card PHIÊN ĐANG LÀM VIỆC: chỉ hiện khi đã có danh sách cell (đã nạp file).
-             Thay chỗ khối nạp file; nút Đóng → quay lại giao diện chọn mạng + upload.
-             Toàn b" kết quả phiên vẫn nằm x L9ch sử tra cứu. -->
+             Thay chỗ khối nạp file; nút Đóng quay lại giao diện chọn mạng + upload.
+             Tổng kết nhanh (#clListSummary) nằm NGAY TRONG card này — không còn là
+             dòng riêng trong khối danh sách bên dưới.
+             Toàn bộ kết quả phiên vẫn nằm ở Lịch sử tra cứu. -->
         <div class="cl-session-card" id="clSessionCard" hidden>
           <div class="cls-main">
-            <div class="cls-badge"><i class="fas fa-table-list"></i></div>
-            <div class="cls-body" id="clSessionCardDetail"></div>
+            <div class="cls-body">
+              <div id="clSessionCardDetail"></div>
+              <!-- Tổng kết nhanh của phiên đang xem: số bản ghi · số cell
+                   · có kết quả · không ra · chưa tra (tên file đã ở .cls-detail). -->
+              <div id="clListSummary" class="cl-list-summary" style="display:none"></div>
+            </div>
           </div>
           <div class="cls-actions">
             <button type="button" class="btn btn-sm cls-btn" onclick="openClTableOverlay()"
-                    data-i18n-title="calllogs.openTable" title="Mx bảng cell cần tra">
+                    data-i18n-title="calllogs.openTable" title="Mở bảng cell cần tra">
               <i class="fas fa-up-right-and-down-left-from-center"></i>
             </button>
             <button type="button" class="btn btn-sm cls-btn cls-close" id="clSessionCloseBtn"
                     onclick="closeClSession()"
-                    data-i18n-title="calllogs.closeSession" title="Đóng danh sách">
+                    data-i18n-title="calllogs.closeSession" title="Đóng danh sách, quay lại nạp file (phiên vẫn lưu ở Lịch sử tra cứu)">
               <i class="fas fa-xmark"></i> <span data-i18n="calllogs.close">Đóng</span>
             </button>
           </div>
@@ -1815,7 +2066,7 @@
 
         <!-- Danh sách cuộc gọi/cell của phiên đang mở: tìm kiếm + bộ lọc + xem lại
              hành trình. Phiên tra theo list (mọi phiên, kể cả đã đóng) nằm ở tab
-             "L9ch sử tra cứu". -->
+             "Lịch sử tra cứu". -->
         <div class="cl-records-block" id="clRecordsBlock" hidden>
           <div class="cl-search-row">
             <div class="cl-search-box">
@@ -1827,7 +2078,7 @@
             </div>
             <button type="button" class="btn btn-sm cl-filter-toggle" id="clFilterToggle"
                     onclick="toggleCallLogFilters()" aria-expanded="false" aria-controls="callLogFilterPanel"
-                    data-i18n-title="calllogs.filters" title="B" lọc">
+                    data-i18n-title="calllogs.filters" title="Bộ lọc">
               <i class="fas fa-filter"></i>
               <span class="cl-badge" id="clFilterBadge"></span>
               <i class="fas fa-chevron-down cl-caret" id="clFilterCaret"></i>
@@ -1835,49 +2086,90 @@
           </div>
 
           <div id="callLogFilterPanel" class="cl-filter-panel hidden">
+            <!-- Một hàng chip DUY NHẤT: loại hành động (4) + nút lịch (1).
+                 Nút lịch dùng đúng khuôn .cl-chip giống các icon khác: icon-only,
+                 tooltip qua title, chấm lịch con `.cl-chip-dir` góc phải-bên-dưới
+                 khi đang lọc ngày (thay cho chữ nhãn). -->
             <div class="cl-filter-chips" id="clActionChips">
               <button type="button" class="cl-chip active" data-action="all" data-i18n-title="filter.all" title="Tất Cả"><i class="fas fa-list"></i></button>
               <button type="button" class="cl-chip" data-action="CALL_IN" data-i18n-title="filter.callIn" title="Gọi Đến"><i class="fas fa-phone"></i><i class="fas fa-arrow-down cl-chip-dir"></i></button>
               <button type="button" class="cl-chip" data-action="CALL_OUT" data-i18n-title="filter.callOut" title="Gọi Đi"><i class="fas fa-phone"></i><i class="fas fa-arrow-up cl-chip-dir"></i></button>
               <button type="button" class="cl-chip" data-action="SMS_IN" data-i18n-title="filter.smsIn" title="SMS Đến"><i class="fas fa-comment-sms"></i><i class="fas fa-arrow-down cl-chip-dir"></i></button>
               <button type="button" class="cl-chip" data-action="SMS_OUT" data-i18n-title="filter.smsOut" title="SMS Đi"><i class="fas fa-comment-sms"></i><i class="fas fa-arrow-up cl-chip-dir"></i></button>
+              <!-- Nút lịch: mở popup chọn ngày / khoảng ngày. -->
+              <button type="button" class="cl-chip cl-chip-date" id="clDateBtn"
+                      onclick="toggleClDatePicker(event)"
+                      data-i18n-title="calllogs.dateRange" title="Chọn ngày / khoảng ngày"
+                      aria-haspopup="dialog" aria-expanded="false">
+                <i class="fas fa-calendar-days"></i>
+                <i class="fas fa-circle cl-chip-dir cl-date-dot hidden" id="clDateDot"></i>
+              </button>
             </div>
-            <div class="cl-date-range">
-              <div class="cl-date-field" id="clDateFromField" data-i18n-title="calllogs.dateFrom" title="Từ ngày">
-                <input type="date" id="dateFrom" class="cl-date-native" onchange="applyCallLogFilters()">
-                <div class="cl-date-face">
-                  <i class="fas fa-calendar-days cl-date-ico" onclick="openClDatePicker('from', event)" title="Chọn ngày"></i>
-                  <span class="cl-date-label" id="clDateFromLabel">Từ</span>
-                  <i class="fas fa-xmark cl-date-x hidden" id="clDateFromClear" onclick="clearCallLogDate('from')"></i>
-                </div>
-              </div>
-              <i class="fas fa-arrow-right cl-date-sep"></i>
-              <div class="cl-date-field" id="clDateToField" data-i18n-title="calllogs.dateTo" title="Đến ngày">
-                <input type="date" id="dateTo" class="cl-date-native" onchange="applyCallLogFilters()">
-                <div class="cl-date-face">
-                  <i class="fas fa-calendar-days cl-date-ico" onclick="openClDatePicker('to', event)" title="Chọn ngày"></i>
-                  <span class="cl-date-label" id="clDateToLabel">Đến</span>
-                  <i class="fas fa-xmark cl-date-x hidden" id="clDateToClear" onclick="clearCallLogDate('to')"></i>
-                </div>
+            <!-- Lọc theo TRẠNG THÁI CELL của từng dòng bản ghi (độc lập với lọc hành
+                 động ở trên). Cùng nhịp hiển thị với .cl-filter-chips (1 hàng 4 chip
+                 dàn đều). Số trên chip đếm trên toàn bộ danh sách phiên, không phụ
+                 thuộc bộ lọc khác, để user biết tổng quan trước khi bấm. -->
+            <div class="cl-status-chips" id="clRecordStatusChips">
+              <button type="button" class="cl-chip cl-chip-all active" data-status="all"
+                      data-i18n-title="filter.cellStatusAllTip" title="Mọi trạng thái cell">
+                <i class="fas fa-list"></i><span data-i18n="filter.cellStatusAll">Tất cả</span>
+                <b id="clStCountAll">0</b>
+              </button>
+              <button type="button" class="cl-chip cl-chip-found" data-status="found"
+                      data-i18n-title="filter.cellFoundTip" title="Cell đã tra được toạ độ">
+                <i class="fas fa-circle-check"></i><span data-i18n="filter.cellFound">Tra được</span>
+                <b id="clStCountFound">0</b>
+              </button>
+              <button type="button" class="cl-chip cl-chip-unpaid" data-status="unpaid"
+                      data-i18n-title="filter.cellUnpaidTip" title="Cell chưa tra (chưa trả phí / hết điểm)">
+                <i class="fas fa-lock"></i><span data-i18n="filter.cellUnpaid">Chưa tra</span>
+                <b id="clStCountUnpaid">0</b>
+              </button>
+              <button type="button" class="cl-chip cl-chip-miss" data-status="miss"
+                      data-i18n-title="filter.cellMissTip" title="Cell đã tra nhưng không có kết quả">
+                <i class="fas fa-circle-xmark"></i><span data-i18n="filter.cellMiss">Không KQ</span>
+                <b id="clStCountMiss">0</b>
+              </button>
+            </div>
+            <!-- Khoảng ngày: popup lịch dùng chung, neo dưới hàng chip.
+                 Chọn 1 ngày = click 1 lần; chọn khoảng = click ngày đầu rồi ngày cuối.
+                 Không dùng <input type=date> native (mỗi input 1 bảng lịch riêng và
+                 showPicker() bị chặn khi thiếu user-activation). -->
+            <div class="cl-date-range" id="clDateRange">
+              <!-- Khoảng đang lọc + nút bỏ lọc. Ẩn khi chưa lọc ngày. -->
+              <div class="cl-date-active hidden" id="clDateActive">
+                <i class="fas fa-calendar-check"></i>
+                <span class="cl-date-active-txt" id="clDateActiveTxt"></span>
+                <button type="button" class="cl-date-clear" id="clDateClear"
+                        onclick="clearCallLogDate()"
+                        data-i18n-title="calllogs.dateClear" title="Bỏ lọc ngày">
+                  <i class="fas fa-xmark"></i>
+                </button>
               </div>
             </div>
+            <!-- Giữ input ẩn để code cũ đọc/ghi giá trị vẫn chạy (getFilteredLogs). -->
+            <input type="hidden" id="dateFrom">
+            <input type="hidden" id="dateTo">
+            <!-- Popup lịch nằm TRỰC TIẾP trong .cl-filter-panel (position:relative) để
+                 neo đúng dưới hàng chip. Đặt trong #clDateRange sẽ neo sai vì khối đó
+                 nằm dưới hàng chip, làm popup tụt thêm khoảng cách. -->
+            <div class="cl-cal-pop hidden" id="clCalPop" role="dialog" aria-modal="false"
+                 aria-label="Chọn ngày"></div>
             <div class="form-row">
               <button class="btn btn-sm btn-primary compact-section" style="flex:1" onclick="applyCallLogFilters()"><i class="fas fa-map-marker-alt"></i> Hiển Thị Bản Đồ</button>
-              <button class="btn btn-sm btn-success compact-section" id="playBtn" onclick="playCallLogs()" style="display:none;flex:1"><i class="fas fa-route"></i> <span id="playBtnLabel" data-i18n="play.viewHistory">Xem l9ch sử</span></button>
+              <button class="btn btn-sm btn-success compact-section" id="playBtn" onclick="playCallLogs()" style="display:none;flex:1"><i class="fas fa-route"></i> <span id="playBtnLabel" data-i18n="play.viewHistory">Xem lịch sử</span></button>
             </div>
             <div id="playNav" style="display:none;gap:6px;margin-top:6px" class="compact-section">
               <button class="btn btn-sm" id="playPrevBtn" onclick="playStep(-1)"><i class="fas fa-chevron-left"></i></button>
               <button class="btn btn-sm btn-block" id="playToggleBtn" onclick="playToggle()"><i class="fas fa-stop"></i> <span id="playToggleLabel" data-i18n="play.stop">Dừng lại</span></button>
               <button class="btn btn-sm" id="playNextBtn" onclick="playStep(1)"><i class="fas fa-chevron-right"></i></button>
             </div>
-          <!-- Kết quả tra cứu sau khi tra: đã trừ bao nhiêu điểm, còn bao nhiêu cell chưa tra.
-                 Nằm trong panel b" lọc   ch0 hi!n khi user mx b" lọc. -->
+            <!-- Kết quả tra cứu sau khi tra: đã trừ bao nhiêu điểm, còn bao nhiêu cell chưa tra.
+                 Nằm trong panel bộ lọc → chỉ hiện khi user mở bộ lọc. -->
             <div id="clCreditNotice" class="cl-credit-notice" style="display:none"></div>
           </div>
 
-          <!-- Tổng kết nhanh của phiên đang xem (thay dòng phiên cũ đã bỏ): tên file
-               + số bản ghi · số cell · có kết quả · không ra · chưa tra. -->
-          <div id="clListSummary" class="cl-list-summary" style="display:none"></div>
+          <!-- Tổng kết nhanh của phiên đã chuyển vào card #clSessionCard ở trên. -->
 
           <div id="logRecordList" class="log-list" style="font-size:11px;flex:1;min-height:0;overflow-y:auto"></div>
           <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
@@ -1886,16 +2178,15 @@
             <button class="btn btn-sm" id="logNextBtn" onclick="logPage(1)"><i class="fas fa-chevron-right"></i></button>
           </div>
         </div>
-        </div><!-- /#clRecordsBlock -->
       </div>
 
-      <!-- Popup nạp Excel: chọn file → tải → xác nhận tra cứu (dùng chung với luồng mở lại từ
+      <!-- Popup nạp Excel: chọn file → tải → xác nhận tra cứu (dùng chung với luồng mở lại từ Lịch sử). -->
       <div class="modal-overlay" id="clUploadModal">
         <div class="modal-box cl-up">
           <button class="modal-close" onclick="closeClUploadModal()" aria-label="Đóng">&times;</button>
-          <h2><i class="fas fa-file-import"></i> <span data-i18n="calllogs.uploadTitle">Nạp danh sách cu"c gọi</span></h2>
+          <h2><i class="fas fa-file-import"></i> <span data-i18n="calllogs.uploadTitle">Nạp danh sách cuộc gọi</span></h2>
 
-          <!-- Bư:c 1: chọn file -->
+          <!-- Bước 1: chọn file -->
           <div id="clUpStepPick" class="cl-up-step">
             <div class="cl-up-net">
               <label>Chọn Mạng</label>
@@ -1939,7 +2230,7 @@
         </div>
       </div>
 
-      <!-- Popup full-window (dư:i navbar): BẢNG CELL duy nhất   chọn lẻ/chọn hết  
+      <!-- Popup full-window (dưới navbar): BẢNG CELL duy nhất → chọn lẻ/chọn hết →
            Tra cứu (trừ điểm lần lượt tới hết) → marker. File nạp ngay ở tab
            (#clSheetDrop) nên popup chỉ mở khi đã có bảng. -->
       <div class="cl-fullsheet" id="clTableOverlay">
@@ -1952,7 +2243,7 @@
           </button>
         </div>
         <div class="cl-sheet-body">
-          <!-- Nạp file nằm NGAY trong tab "Tra cứu danh sách"   overlay ch0 còn bảng cell (ẩn khi chưa có dữ li!u). -->
+          <!-- Nạp file nằm NGAY trong tab Xem rút list → overlay chỉ còn bảng cell (ẩn khi chưa có dữ liệu). -->
           <div class="cl-sheet-step" id="clSheetStepTable" hidden style="display:flex;flex-direction:column;flex:1;min-height:0">
             <div class="cl-sheet-meta" id="clSheetMeta"></div>
             <div class="cl-status-chips" id="clStatusChips"></div>
@@ -1974,8 +2265,8 @@
           <span class="cl-sheet-count" id="clSheetCount"></span>
           <div class="cl-sheet-spacer"></div>
           <button class="btn btn-lg" id="clMapResultsBtn" onclick="clPlotResultsOnMap()" disabled
-                title="Xem toạ độ đã tra trên bản đồ">
-                <i class="fas fa-map-location-dot"></i> <span id="clMapResultsTxt" data-i18n="calllogs.mapResults">Xem trên bản đồ</span>
+                  title="Xem toạ độ đã tra trên bản đồ">
+            <i class="fas fa-map-location-dot"></i> <span id="clMapResultsTxt" data-i18n="calllogs.mapResults">Xem trên bản đồ</span>
           </button>
           <button class="btn btn-lg btn-primary cl-resolve-cta" id="clResolveSelectedBtn" onclick="resolveClSelectedClick()">
             <i class="fas fa-satellite-dish"></i> <span data-i18n="calllogs.resolveBtn">Tra cứu</span>
@@ -2001,18 +2292,18 @@
       </div>
 
 
-      <!-- Popup hư:ng dẫn tính nĒng tab "Tra cứu danh sách". -->
+      <!-- Popup hướng dẫn tính năng tab Xem rút list. -->
       <div class="modal-overlay" id="clGuideModal">
         <div class="modal-box cl-guide">
           <button class="modal-close" onclick="closeClGuideModal()" aria-label="Đóng">&times;</button>
-          <h2><i class="fas fa-circle-question"></i> <span data-i18n="calllogs.guideTitle">Hư:ng dẫn Tra cứu danh sách</span></h2>
+          <h2><i class="fas fa-circle-question"></i> <span data-i18n="calllogs.guideTitle">Hướng dẫn Xem rút list</span></h2>
           <ol class="cl-guide-list">
-            <li data-i18n="calllogs.guide1">Chọn mạng ở tab "Tra cứu danh sách", rồi bấm vào khung nạp file (hoặc kéo-thả .xlsx/.xls/.csv vào khung).</li>
-            <li data-i18n="calllogs.guide2">Nạp xong là mở ngay Bảng cell cần tra: chọn cell cần tra rồi bấm Tra cứu.</li>
-            <li data-i18n="calllogs.guide4">Nếu số dư không đủ tra hết, hệ thống tra tới khi hết điểm rồi dừng và hiện kết quả đã tra được.</li>
-            <li data-i18n="calllogs.guide5">Mở lại phiên cũ từ Lịch sử tra cứu sẽ hiển thị ngay kết quả đã tra.</li>
-            <li data-i18n="calllogs.guide6">Dùng ô tìm kiếm và nút bộ lọc (loại cuộc gọi / khoảng ngày) để lọc danh sách.</li>
-            <li data-i18n="calllogs.guide7">Bấm Xoá phiên ở dòng phiên đang xem để xoá toàn bộ bản ghi của phiên.</li>
+            <li data-i18n="calllogs.guide1">Chọn mạng ở tab Xem rút list, rồi bấm vào khung nạp file (hoặc kéo-thả .xlsx/.xls/.csv vào khung).</li>
+            <li data-i18n="calllogs.guide2">Nạp xong là mở ngay Bảng cell cần tra: chọn cell cần tra rồi bấm Tra cứu. Chỉ khi xác nhận, điểm mới bị trừ.</li>
+            <li data-i18n="calllogs.guide4">Nếu số dư không đủ tra hết, hệ thống tra tới khi hết điểm rồi dừng và hiện kết quả đã tra được; bấm Nạp điểm để tra tiếp.</li>
+            <li data-i18n="calllogs.guide5">Mở lại phiên cũ từ Lịch sử tra cứu sẽ hiển thị ngay kết quả đã tra trước đó, không trừ thêm điểm.</li>
+            <li data-i18n="calllogs.guide6">Dùng ô tìm kiếm và nút bộ lọc (loại cuộc gọi / khoảng ngày) để lọc danh sách; bấm một dòng để zoom tới cell trên bản đồ.</li>
+            <li data-i18n="calllogs.guide7">Bấm Xoá phiên ở dòng phiên đang xem để xoá toàn bộ bản ghi của lần tải.</li>
           </ol>
           <div class="cl-up-actions">
             <button class="btn btn-sm btn-primary" onclick="closeClGuideModal()">
@@ -2073,7 +2364,7 @@
                      onkeydown="if(event.key==='Enter'){event.preventDefault();guestLookupFromForm();}">
             </div>
             <div class="form-group">
-              <label data-i18n="cells.radio">Công ngh! mạng</label>
+              <label data-i18n="cells.radio">Công nghệ mạng</label>
               <select id="guestRadio" onkeydown="if(event.key==='Enter'){event.preventDefault();guestLookupFromForm();}">
                 <option value="" data-i18n="cells.radioAuto">Tự động (đề xuất)</option>
                 <option value="LTE">4G / LTE</option>
@@ -2134,9 +2425,9 @@
             <input type="number" id="cellSector" min="0" max="255" placeholder="0-255">
           </div>
           <div class="form-group">
-            <label data-i18n="cells.radio">Công ngh! mạng</label>
+            <label data-i18n="cells.radio">Công nghệ mạng</label>
             <select id="cellRadio">
-                <option value="" data-i18n="cells.radioAuto">Tự động (đề xuất)</option>
+              <option value="" data-i18n="cells.radioAuto">Tự động (đề xuất)</option>
               <option value="LTE">4G / LTE</option>
               <option value="GSM">2G / GSM</option>
               <option value="UMTS">3G / UMTS</option>
@@ -2169,34 +2460,16 @@
       <!-- Tab 3: Lookup History -->
       <!-- Nơi DUY NHẤT chứa danh sách phiên tra theo list (mỗi phiên 1 card đầy đủ:
            tên file, mạng, số dòng, thời gian, tiến độ đã tra, số cell có toạ độ,
-           cảnh báo còn cell chưa tra + nút mx bảng cell / xoá phiên).
+           cảnh báo còn cell chưa tra + nút mở bảng cell / xoá phiên).
            Hai mục đều THU GỌN/MỞ được bằng cách bấm tiêu đề; cuối mỗi tiêu đề có
            icon lịch → mở popup lịch để lọc theo ngày (lọc riêng từng danh sách). -->
       <div class="tab-content" id="tab-lookuphistory">
         <div class="hist-pane" id="histPaneSingle">
 
-          <!-- ===== Mục 1: TRA CỨU DANH SÁCH (EXCEL) ===== -->
-          <div class="hist-section-hd" id="histBatchHd" role="button" tabindex="0"
-               aria-expanded="true" aria-controls="histBatchList"
-               onclick="toggleHistSection('batch')"
-               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleHistSection('batch');}">
-            <i class="fas fa-chevron-right hs-chev"></i>
-            <i class="fas fa-file-excel"></i>
-            <span data-i18n="hist.batchSection">Tra cứu danh sách (Excel)</span>
-            <span class="hist-count" id="histCount"></span>
-            <span class="hs-filter-chip hidden" id="histBatchDateChip"></span>
-            <button type="button" class="hs-cal" id="histBatchCalBtn"
-                    onclick="event.stopPropagation(); openHistDatePopup('batch', this)"
-                    data-i18n-title="hist.filterDate" title="Lọc theo ngày">
-              <i class="fas fa-calendar-days"></i>
-            </button>
-          </div>
-          <div class="hist-list hist-batch-list" id="histBatchList"></div>
-
-          <!-- ===== Mục 2: TRA CỨU ĐƠN LẺ (thu gọn mặc định) ===== -->
-          <div class="hist-sub" id="histSingleSub">
+          <!-- ===== Mục 1: TRA CỨU ĐƠN LẺ (mở sẵn, chiếm hết chiều cao panel) ===== -->
+          <div class="hist-sub is-expanded" id="histSingleSub">
             <div class="hist-section-hd" id="histSingleHd" role="button" tabindex="0"
-                 aria-expanded="false" aria-controls="histSingleBody"
+                 aria-expanded="true" aria-controls="histSingleBody"
                  onclick="toggleHistSection('single')"
                  onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleHistSection('single');}">
               <i class="fas fa-chevron-right hs-chev"></i>
@@ -2210,7 +2483,7 @@
                 <i class="fas fa-calendar-days"></i>
               </button>
             </div>
-            <div class="hist-sub-body" id="histSingleBody" hidden>
+            <div class="hist-sub-body" id="histSingleBody">
               <div class="hist-list" id="lookupHistoryList">
                 <span data-i18n="hist.loading">Đang tải...</span>
               </div>
@@ -2222,21 +2495,43 @@
             </div>
           </div>
 
+          <!-- ===== Mục 2: TRA CỨU DANH SÁCH — đóng mặc định; mở thì mục trên tự đóng ===== -->
+          <div class="hist-sub is-collapsed" id="histBatchSub">
+            <div class="hist-section-hd" id="histBatchHd" role="button" tabindex="0"
+                 aria-expanded="false" aria-controls="histBatchList"
+                 onclick="toggleHistSection('batch')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleHistSection('batch');}">
+              <i class="fas fa-chevron-right hs-chev"></i>
+              <i class="fas fa-file-excel"></i>
+              <span data-i18n="hist.batchSection">Tra cứu danh sách (Excel)</span>
+              <span class="hist-count" id="histCount"></span>
+              <span class="hs-filter-chip hidden" id="histBatchDateChip"></span>
+              <button type="button" class="hs-cal" id="histBatchCalBtn"
+                      onclick="event.stopPropagation(); openHistDatePopup('batch', this)"
+                      data-i18n-title="hist.filterDate" title="Lọc theo ngày">
+                <i class="fas fa-calendar-days"></i>
+              </button>
+            </div>
+            <div class="hist-sub-body" id="histBatchBody" hidden>
+              <div class="hist-list hist-batch-list" id="histBatchList"></div>
+            </div>
+          </div>
+
         </div>
       </div>
 
-      <!-- Popup l9ch lọc theo ngày (dùng chung cho 2 mục; dựng bằng JS) -->
+      <!-- Popup lịch lọc theo ngày (dùng chung cho 2 mục; dựng bằng JS) -->
       <div class="hs-cal-pop" id="histDatePopup" hidden></div>
 
     </div>
-        <!-- Chân left bar: chỉ còn số lượt thử (chỉ hiện với khách). -->
+    <!-- Chân left bar: chỉ còn số lượt thử (chỉ hiện với khách). -->
     <div class="panel-foot" id="guestPanelFoot">
       <span class="panel-foot-row">
         <span class="panel-foot-trial guest-only" id="cellPanelTrial" hidden></span>
       </span>
     </div>
-        <!-- Tay kéo đổi rộng panel (mép phải). Bấm giữ và kéo ngang. -->
-        <div class="sidebar-resizer" id="sidebarResizer" title="Kéo để thay đổi độ rộng" data-i18n-title="sidebar.resize">
+    <!-- Tay kéo đổi rộng panel (mép phải). Bấm giữ và kéo ngang. -->
+    <div class="sidebar-resizer" id="sidebarResizer" title="Kéo để thay đổi độ rộng" data-i18n-title="sidebar.resize" aria-label="Kéo để thay đổi độ rộng">
       <i class="fas fa-grip-vertical"></i>
     </div>
   </div>
@@ -2251,17 +2546,17 @@
   <div class="legend-panel" id="legendPanel">
     <div class="legend-item"><span class="legend-dot" style="background:#3d7ce0;border-radius:0;width:16px;height:4px"></span> <span data-i18n="legend.towerRange">Trạm (có bán kính)</span></div>
     <div class="legend-item"><span class="legend-dot" style="background:#3d7ce0;width:10px;height:10px"></span> <span data-i18n="legend.towerNoRange">Trạm (ko bán kính)</span></div>
-      <div class="legend-hint" data-i18n="legend.towerHint">Màu trạm = công nghệ mạng (RAT). Bấm vào trạm để xem chi tiết.</div>
+    <div class="legend-hint" data-i18n="legend.towerHint">Màu trạm = công nghệ mạng (RAT). Bấm vào trạm để xem chi tiết.</div>
     <div class="legend-item"><span class="legend-dot" style="background:blue"></span> <span data-i18n="legend.callIn">Gọi Đến</span></div>
     <div class="legend-item"><span class="legend-dot" style="background:red"></span> <span data-i18n="legend.callOut">Gọi Đi</span></div>
     <div class="legend-item"><span class="legend-dot" style="background:green"></span> <span data-i18n="legend.smsIn">Tin Nhắn Đến</span></div>
     <div class="legend-item"><span class="legend-dot" style="background:orange"></span> <span data-i18n="legend.smsOut">Tin Nhắn Đi</span></div>
     <div class="legend-item"><span class="legend-dot" style="background:#6666ff;width:14px;height:3px;border-radius:2px"></span> <span data-i18n="legend.annotations">Chú Thích Bản Đồ</span></div>
 
-    <!-- Sub-section: công ngh! mạng (RAT) -->
+    <!-- Sub-section: công nghệ mạng (RAT) -->
     <div class="legend-sub" id="legendRadioSub">
       <button type="button" class="legend-sub-toggle" onclick="toggleLegendRadio()">
-        <i class="fas fa-chevron-right"></i> <span data-i18n="legend.radio">Công ngh! mạng</span>
+        <i class="fas fa-chevron-right"></i> <span data-i18n="legend.radio">Công nghệ mạng</span>
       </button>
       <div class="legend-sub-body" id="legendRadioBody">
         <div class="legend-item"><span class="legend-dot" style="background:#e8a33d"></span> 2G — GSM</div>
@@ -2284,18 +2579,18 @@
   <div class="modal-overlay" id="changePwdModal">
     <div class="modal-box">
       <button class="modal-close" onclick="closeModal('changePwdModal')">&times;</button>
-      <h2><i class="fas fa-key"></i> Đ"i mật khẩu</h2>
+      <h2><i class="fas fa-key"></i> Đổi mật khẩu</h2>
       <div class="form-group">
-        <label>Mật khẩu hi!n tại</label>
-        <input type="password" id="pwdCurrent" placeholder="Nhập mật khẩu hi!n tại">
+        <label>Mật khẩu hiện tại</label>
+        <input type="password" id="pwdCurrent" placeholder="Nhập mật khẩu hiện tại">
       </div>
       <div class="form-group">
-        <label>Mật khẩu m:i</label>
-        <input type="password" id="pwdNew" placeholder="Nhập mật khẩu m:i">
+        <label>Mật khẩu mới</label>
+        <input type="password" id="pwdNew" placeholder="Nhập mật khẩu mới">
       </div>
       <div class="form-group">
         <label>Xác nhận mật khẩu</label>
-        <input type="password" id="pwdConfirm" placeholder="Xác nhận mật khẩu m:i">
+        <input type="password" id="pwdConfirm" placeholder="Xác nhận mật khẩu mới">
       </div>
       <div class="btn-group">
         <button class="btn btn-primary btn-block" onclick="changePassword()"><i class="fas fa-save"></i> Lưu</button>
@@ -2308,30 +2603,65 @@
   <div class="modal-overlay" id="myDataModal">
     <div class="modal-box">
       <button class="modal-close" onclick="closeModal('myDataModal')">&times;</button>
-      <h2><i class="fas fa-database"></i> Dữ li!u của tôi</h2>
+      <h2><i class="fas fa-database"></i> Dữ liệu của tôi</h2>
       <div style="display:flex;gap:8px;margin-bottom:10px">
         <button class="btn btn-sm btn-primary" onclick="loadMyUploads()"><i class="fas fa-list"></i> Log đã tải</button>
         <button class="btn btn-sm btn-success" onclick="loadMyCells()"><i class="fas fa-table"></i> Cell đã tải</button>
       </div>
       <div id="myDataContent" style="max-height:320px;overflow-y:auto;font-size:12px;color:var(--text-muted)">
-          Nhấn nút trên để xem dữ liệu
+        Nhấn nút trên để xem dữ liệu
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Popup xác nhận XOÁ dùng chung (thay window.confirm của hệ điều hành) =====
+       Dựng bằng JS: openConfirmDialog({...}) trả Promise<boolean>. Không dùng
+       <dialog>/confirm() để giao diện đồng nhất với các popup còn lại. -->
+  <div class="modal-overlay cf-overlay" id="confirmModal">
+    <div class="modal-box cf-box" role="alertdialog" aria-modal="true"
+         aria-labelledby="cfTitle" aria-describedby="cfMsg">
+      <div class="cf-hd">
+        <span class="cf-ico" id="cfIcon"><i class="fas fa-trash-can"></i></span>
+        <h2 id="cfTitle">Xác nhận xoá</h2>
+        <button type="button" class="cf-x" onclick="closeConfirmDialog(false)"
+                aria-label="Đóng" title="Đóng"><i class="fas fa-xmark"></i></button>
+      </div>
+      <div class="cf-body">
+        <p class="cf-msg" id="cfMsg"></p>
+        <div class="cf-warn cf-danger" id="cfWarnDanger" hidden>
+          <i class="fas fa-triangle-exclamation"></i>
+          <ul id="cfWarnDangerList"></ul>
+        </div>
+        <div class="cf-warn cf-info" id="cfWarnInfo" hidden>
+          <i class="fas fa-circle-info"></i>
+          <ul id="cfWarnInfoList"></ul>
+        </div>
+        <div class="cf-detail" id="cfDetail" hidden></div>
+      </div>
+      <div class="cf-ft">
+        <button type="button" class="btn btn-sm" id="cfCancelBtn" onclick="closeConfirmDialog(false)">
+          <i class="fas fa-xmark"></i> <span id="cfCancelTxt">Huỷ</span>
+        </button>
+        <button type="button" class="btn btn-sm btn-danger" id="cfOkBtn" onclick="closeConfirmDialog(true)">
+          <i class="fas fa-trash-can"></i> <span id="cfOkTxt">Xoá</span>
+        </button>
       </div>
     </div>
   </div>
 
   <script src="/app.js"></script>
   <script>
-    // Mx popup theo hash: #login / #register / #verify / #reset&email=..&code=..
-    // Cũng xử lý redirect sau khi kích hoạt thành công (#verified=1   xoá hash).
+    // Mở popup theo hash: #login / #register / #verify / #reset&email=..&code=..
+    // Cũng xử lý redirect sau khi kích hoạt thành công (#verified=1 → xoá hash).
     (function () {
       function handle() {
         if (window.AuthPopup) {
           if (!AuthPopup.autoOpen() && location.hash === '#verified=1') {
-    // Đã kích hoạt qua link email; popup đăng nhập để vào hệ thống.
+            // Đã kích hoạt qua link email; popup đăng nhập để vào hệ thống.
             AuthPopup.open('login');
           }
         }
-    // Đã đăng nhập thì ẩn overlay mời đăng ký (guest gate).
+        // Đã đăng nhập thì ẩn overlay mời đăng ký (guest gate).
         if (window.Auth && Auth.isLoggedIn()) {
           var g = document.getElementById('guestGate');
           if (g) g.style.display = 'none';
@@ -2344,4 +2674,3 @@
   </script>
 </body>
 </html>
-

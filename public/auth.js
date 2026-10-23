@@ -1,6 +1,8 @@
 // Shared authentication module for Cell.id.vn
 const Auth = {
   TOKEN_KEY: 'cell_tracker_token',
+  // Đánh dấu đã gặp 403 SITE_CLOSED → requireAuth không đè điều hướng bằng goLogin().
+  _siteClosed: false,
 
   getToken() {
     return localStorage.getItem(this.TOKEN_KEY);
@@ -85,6 +87,21 @@ const Auth = {
     this.clearUser();
   },
 
+  /**
+   * Website đang bảo trì? Server trả 403 kèm header `X-Site-Closed: 1`.
+   * Chuyển ngay về trang thông báo (trừ khi đang ở đó) để hành vi giống trang
+   * chủ; trả true để caller dừng xử lý (không xoá phiên oan).
+   */
+  redirectIfSiteClosed(res) {
+    if (!res || res.status !== 403) return false;
+    if (!res.headers || res.headers.get('X-Site-Closed') !== '1') return false;
+    this._siteClosed = true;
+    if (!/\/maintenance\.html$/.test(window.location.pathname)) {
+      window.location.replace('/maintenance.html');
+    }
+    return true;
+  },
+
   /** Người dùng bấm "Đăng xuất": xoá session rồi về trang chủ. */
   logout() {
     this.clearSession();
@@ -138,6 +155,8 @@ const Auth = {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) {
+        // Website đóng: giữ phiên (không xoá token) và chuyển trang bảo trì.
+        if (this.redirectIfSiteClosed(res)) return null;
         this.clearSession();
         return null;
       }
@@ -163,6 +182,9 @@ const Auth = {
     const token = this.getToken();
     if (token) opts.headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(url, opts);
+    if (this.redirectIfSiteClosed(res)) {
+      throw new Error('Website đang bảo trì');
+    }
     if (res.status === 401) {
       // Hết phiên giữa chừng: xoá session nhưng KHÔNG tự điều hướng (tránh
       // reload/nhảy trang khi người dùng đang thao tác). UI gọi __onSessionExpired.
@@ -201,6 +223,8 @@ Auth.requireAuth = async function() {
   try {
     const user = await this.checkSession();
     if (!user) {
+      // checkSession đã chuyển sang /maintenance.html (403 SITE_CLOSED) → thôi.
+      if (this._siteClosed) return false;
       goLogin();
       return false;
     }
@@ -231,7 +255,9 @@ Auth.initNavbar = function() {
   const mapTxt = isEn ? 'Map' : 'Bản đồ';
   const toolsTxt = isEn ? 'Tools' : 'Công cụ';
   const portTxt = isEn ? 'Port Check' : 'Tra cứu chuyển mạng';
-  const ipTxt = isEn ? 'IP Tracker' : 'IP Tracker';
+  const ipTxt = isEn ? 'IP Trap' : 'Bẫy địa chỉ IP';
+  // Tra cứu địa chỉ IP (đa nguồn) — KHÁC "Bẫy địa chỉ IP" (theo dõi lượt click).
+  const ipLookupTxt = isEn ? 'IP Lookup' : 'Tra cứu IP';
   const enbEciTxt = isEn ? 'eNB / ECI Converter' : 'Đổi eNB ↔ ECI';
   const adminTxt = isEn ? 'Admin' : 'Admin';
   const logoutTxt = isEn ? 'Logout' : 'Đăng xuất';
@@ -241,7 +267,7 @@ Auth.initNavbar = function() {
   const registerTxt = isEn ? 'Register' : 'Đăng ký';
   const versionTxt = isEn ? 'Version history' : 'Lịch sử phiên bản';
   const guestHintTxt = isEn ? '1 free lookup' : '1 lượt tra cứu miễn phí';
-  const ipTrackerGuestTxt = isEn ? 'IP Tracker (login required)' : 'IP Tracker (cần đăng nhập)';
+  const ipTrackerGuestTxt = isEn ? 'IP Trap (login required)' : 'Bẫy địa chỉ IP (cần đăng nhập)';
 
   // Apply common style dynamically to head if not present
   if (!document.getElementById('common-navbar-style')) {
@@ -263,6 +289,17 @@ Auth.initNavbar = function() {
       }
       .header-left, .topbar-left, .navbar-left { display: flex !important; align-items: center !important; gap: 12px !important; }
       .header-left h1, .header-left h2, .topbar-left h1, .navbar-left h2 { font-size: 16px !important; margin: 0 !important; color: var(--text-primary, #1a1a2e) !important; font-weight: bold !important; display: flex !important; align-items: center !important; gap: 8px !important; }
+      /* Logo chính của ứng dụng (logo.png) — nền trong suốt, đặt trực tiếp trên
+         nền navbar. Bản màu cho nền sáng, bản trắng cho nền tối để chữ vẫn rõ. */
+      .brand-logo-link { display: flex !important; align-items: center !important; text-decoration: none !important; flex: 0 0 auto !important; }
+      .brand-logo {
+        display: block !important;
+        flex: 0 0 auto !important;
+        width: 82px !important;
+        aspect-ratio: 477 / 183 !important;
+        background: url('/img/logo.png') no-repeat center / contain !important;
+      }
+      [data-theme="dark"] .brand-logo { background-image: url('/img/logo-white.png') !important; }
       .header-right, .topbar-right, .navbar-right { display: flex !important; align-items: center !important; gap: 8px !important; }
       .header-btn, .btn-nav, .btn-header-common {
         padding: 5px 10px !important;
@@ -446,7 +483,7 @@ Auth.initNavbar = function() {
   // Generate uniform navbar inner HTML
   header.innerHTML = `
     <div class="header-left">
-      <h1><a href="/index.html" style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 8px;"><i class="fas fa-signal"></i> <span>${appTitle}</span></a></h1>
+      <h1><a class="brand-logo-link" href="/index.html" title="${appTitle}" aria-label="${appTitle}"><span class="brand-logo" aria-hidden="true"></span></a></h1>
       ${isAdmin ? `<span class="nav-badge" style="background: rgba(255,100,100,0.15); color: #ff5555; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; border: 1px solid rgba(255,100,100,0.3); text-transform: uppercase;">Admin</span>` : ''}
     </div>
     <div class="header-right">
@@ -462,6 +499,7 @@ Auth.initNavbar = function() {
           <a class="tools-dropdown-item-common" href="/tools/port-check.html" style="${path.includes('/port-check.html') ? 'background: var(--bg-hover, rgba(0,0,0,0.06)); font-weight: bold;' : ''}"><i class="fas fa-search"></i> ${portTxt}</a>
           ${loggedIn ? `<a class="tools-dropdown-item-common" href="/tools/ip-tracker.html" style="${path.includes('/ip-tracker.html') ? 'background: var(--bg-hover, rgba(0,0,0,0.06)); font-weight: bold;' : ''}"><i class="fas fa-crosshairs"></i> ${ipTxt}</a>` : `<span class="tools-dropdown-item-common" style="opacity:.55; cursor:not-allowed;" title="${loginTxt}"><i class="fas fa-lock"></i> ${ipTrackerGuestTxt}</span>`}
           <a class="tools-dropdown-item-common" href="/tools/ebn-eci.html" style="${path.includes('/ebn-eci.html') ? 'background: var(--bg-hover, rgba(0,0,0,0.06)); font-weight: bold;' : ''}"><i class="fas fa-exchange-alt"></i> ${enbEciTxt}</a>
+          <a class="tools-dropdown-item-common" href="/tools/ip-lookup.html" style="${path.includes('/ip-lookup.html') ? 'background: var(--bg-hover, rgba(0,0,0,0.06)); font-weight: bold;' : ''}"><i class="fas fa-globe"></i> ${ipLookupTxt}</a>
           <div class="user-dropdown-divider-common"></div>
           ${isAdmin ? `<a class="tools-dropdown-item-common" href="/version.html" style="${path.includes('/version.html') ? 'background: var(--bg-hover, rgba(0,0,0,0.06)); font-weight: bold;' : ''}"><i class="fas fa-code-branch"></i> ${versionTxt}</a>` : ''}
         </div>

@@ -63,7 +63,8 @@ function patchDbRedirect(realDbPath, tmpDb) {
 }
 
 const tmpDb = path.join(os.tmpdir(), `credit-test-${process.pid}-${Date.now()}.sqlite`);
-const realDbPath = path.join(path.dirname(__dirname), 'database.sqlite');
+const realDbPath = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(path.dirname(__dirname), 'database.sqlite');
+// database.js ưu tiên DB_PATH — đặt biến này khi chạy test để cả hai phía trỏ cùng một file tạm.
 const unpatch = patchDbRedirect(realDbPath, tmpDb);
 
 let db, credits;
@@ -318,7 +319,7 @@ async function main() {
 
   ok('register cấp signup bonus', /\/api\/register'[\s\S]{0,3000}grantSignupBonus/.test(srvSrc));
   ok('POST /api/users cấp điểm khởi tạo', /app\.post\('\/api\/users'[\s\S]{0,900}applyUserInitialCredit\(userId, req\)/.test(srvSrc));
-  ok('POST /api/admin/users cấp điểm khởi tạo', /app\.post\('\/api\/admin\/users'[\s\S]{0,1400}applyUserInitialCredit\(userId, req\)/.test(srvSrc));
+  ok('POST /api/admin/users cấp điểm khởi tạo', /app\.post\('\/api\/admin\/users'[\s\S]{0,2600}applyUserInitialCredit\(userId, req\)/.test(srvSrc));
   ok('helper applyUserInitialCredit tồn tại', /async function applyUserInitialCredit\(userId, req\)/.test(srvSrc));
   ok('/api/me trả credit_balance', /credit_balance FROM users WHERE id = \?/.test(srvSrc));
 
@@ -629,7 +630,7 @@ async function main() {
   // "không lưu được" (bật xong reload lại về TẮT). Phải có header JSON.
   {
     const saveSettingsSrc = adminSrc.slice(adminSrc.indexOf('function saveSettings'),
-      adminSrc.indexOf('function saveSettings') + 3500);
+      adminSrc.indexOf('function saveSettings') + 5200);
     ok('saveSettings gửi Content-Type application/json',
       /fetch\('\/api\/settings'[\s\S]{0,400}headers:\s*\{\s*'Content-Type':\s*'application\/json'\s*\}/.test(
         saveSettingsSrc));
@@ -761,16 +762,16 @@ async function main() {
   // đọc đúng; chỉ cần đúng 1 pane active và mọi field cũ còn nguyên.
   console.log('\n== Cấu hình: tab nhóm ==');
   ok('admin.html có container tab Cấu hình (#settingsTabs)', /id="settingsTabs"/.test(adminHtml));
-  ok('admin.html có 5 tab-btn khớp data-settingstab',
+  ok('admin.html có 7 tab-btn khớp data-settingstab',
     (() => {
       const t = [...adminHtml.matchAll(/data-settingstab="([a-z]+)"/g)].map(m => m[1]);
-      return t.length === 5 && t.join(',') === 'general,credit,payos,topup,smtp';
+      return t.length === 7 && t.join(',') === 'general,site,credit,payos,topup,ga,smtp';
     })());
-  ok('admin.html có 5 tab-pane#settingstab-* khớp tab-btn',
+  ok('admin.html có 7 tab-pane#settingstab-* khớp tab-btn',
     (() => {
       const subs = [...adminHtml.matchAll(/data-settingstab="([a-z]+)"/g)].map(m => m[1]);
       return subs.every(s => adminHtml.includes(`id="settingstab-${s}"`))
-        && (adminHtml.match(/id="settingstab-[a-z]+"/g) || []).length === 5;
+        && (adminHtml.match(/id="settingstab-[a-z]+"/g) || []).length === 7;
     })());
   ok('chỉ 1 tab-pane Cấu hình mang active trong HTML gốc (tab general)',
     /class="tab-pane active" id="settingstab-general"/.test(adminHtml) &&

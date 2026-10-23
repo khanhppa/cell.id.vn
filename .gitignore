@@ -6,6 +6,22 @@ uploads/
 database.sqlite
 database.sqlite.corrupt
 
+# Secrets / cấu hình theo máy (xem .env.example)
+.env
+.env.*
+!.env.example
+
+# Artifact build/deploy (deploy.ps1 tạo zip ở đây)
+dist/
+backups/
+release-artifacts/
+*.tar.gz
+coverage/
+
+# File nháp/probe khi debug (không bao giờ commit — có thể chứa token)
+.probe*
+*.tmp
+
 # Logs
 *.log
 server.err
@@ -22,3 +38,10 @@ server.err
 
 # Editor
 .vscode/
+
+# Chứng chỉ TLS tự ký cho LAN (sinh khi bật HTTPS_PORT) — không commit khoá riêng
+.certs/
+
+# Công cụ tải tại chỗ (cloudflared…) + log tunnel
+.tools/
+

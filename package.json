@@ -3,6 +3,9 @@
   "version": "2.9.0",
   "description": "Cell.id.vn — Cell ID Call Log and SMS Location Tracker",
   "main": "server.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
@@ -12,8 +15,8 @@
     "adm-zip": "^0.6.0",
     "axios": "^1.7.2",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^13.0.2",
     "csv-parser": "^3.0.0",
+    "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.3",
     "leaflet-draw": "^1.0.4",

@@ -52,6 +52,14 @@ const I18N = {
     'legend.radio': 'Network technology',
     'legend.radioUnknown': 'Unknown',
     'filter.all': 'All',
+    'filter.cellStatusAll': 'All',
+    'filter.cellFound': 'Resolved',
+    'filter.cellUnpaid': 'Unresolved',
+    'filter.cellMiss': 'No match',
+    'filter.cellStatusAllTip': 'Any cell status',
+    'filter.cellFoundTip': 'Cell resolved to coordinates',
+    'filter.cellUnpaidTip': 'Cell not looked up yet (unpaid / no credits)',
+    'filter.cellMissTip': 'Cell looked up but no source has it',
     'filter.callIn': 'Call In',
     'filter.callOut': 'Call Out',
     'filter.smsIn': 'SMS In',
@@ -77,6 +85,8 @@ const I18N = {
     'hist.mode': 'Mode',
     'hist.cell': 'Cell',
     'hist.result': 'Result',
+    'hist.copyCoords': 'Copy coordinates',
+    'hist.openGoogleMaps': 'Open in Google Maps',
     'hist.source': 'Source',
     'hist.notFound': 'Not found',
     'hist.found': 'Found',
@@ -101,6 +111,16 @@ const I18N = {
     'hist.singleEmpty': 'No cell lookups yet.',
     'hist.singleHint': 'Look up a cell in the Cells tab to see it here.',
     'hist.deleteEntry': 'Delete this entry',
+    'hist.retry': 'Look up again',
+    'hist.retryOk': 'Looked up again — coordinates found.',
+    'hist.retryMiss': 'Looked up again — no source has this cell.',
+    'hist.retryNoFunds': 'Not enough credits to look up again ({c} pt per cell · balance {b} pt).',
+    'hist.retryFail': 'Look-up-again failed — try again.',
+    'hist.retryBarBusy': 'Looking up again…',
+    'hist.retryBarDone': 'Found coordinates',
+    'hist.retryBarMiss': 'Still no source has this cell',
+    'hist.retryBarNoFunds': 'Not enough credits',
+    'hist.retryBarFail': 'Look-up-again failed',
     'hist.filterDate': 'Filter by date',
     'hist.clearDate': 'Clear date filter',
     'hist.calToday': 'Today',
@@ -118,6 +138,30 @@ const I18N = {
     'hist.clSessionView': 'Open cell table',
     'hist.clSessionDelete': 'Delete session',
     'hist.clSessionConfirmDelete': 'Delete this list lookup session and all its records? This cannot be undone.',
+    // Popup xác nhận xoá (dùng chung)
+    'confirm.title': 'Confirm deletion',
+    'confirm.ok': 'Delete',
+    'confirm.okDelete': 'Delete permanently',
+    'confirm.cancel': 'Cancel',
+    'confirm.delSessionTitle': 'Delete this session',
+    'confirm.delEntryTitle': 'Delete this lookup',
+    'confirm.delEntryMsg': 'This lookup record will be removed from your history.',
+    'confirm.fileLabel': 'File:',
+    'confirm.netLabel': 'Network:',
+    'confirm.cellsLabel': 'Cells:',
+    'confirm.lookedLabel': 'Cells looked up:',
+    'confirm.rowsLabel': 'Records:',
+    'confirm.timeLabel': 'Time:',
+    'confirm.cellLabel': 'Cell:',
+    'confirm.coordsLabel': 'Coordinates:',
+    'confirm.rangeLabel': 'Radius:',
+    'confirm.warnPermanent': 'This action cannot be undone.',
+    'confirm.warnAllRecords': 'All records of this session (coordinates, cell list) will be deleted.',
+    'confirm.warnServerToo': 'Data is also deleted from the server, not just this browser.',
+    'confirm.warnPaidPoints': 'Points already charged for looked-up cells are NOT refunded.',
+    'confirm.noteCantUndo': 'Think twice — deleted data cannot be recovered.',
+    'confirm.noteHistoryGone': 'The session will also disappear from lookup history.',
+    'confirm.noteEntryOnly': 'Only this record is deleted; your account and points are unchanged.',
     'hist.batchSection': 'List lookups (Excel)',
     'hist.batchEmptyHistory': 'No list lookups yet. Look up a call-log Excel file to record one here.',
     'hist.prevPage': 'Previous page',
@@ -142,6 +186,22 @@ const I18N = {
     'calllogs.detailMiss': 'No result from any source',
     'calllogs.detailUnpaid': 'Lookup not paid yet — open the cell table to resolve',
     'calllogs.cellOnly': 'Cell in this session',
+    'calllogs.lookupCell': 'Look up this cell',
+    'calllogs.lookupCellNoRow': 'Cell not found in this session',
+    'calllogs.lookupCellNoResult': 'The server returned no result — try again later.',
+    'calllogs.lookupCellNoFunds': 'Not enough credits ({c} pt per cell · balance {b} pt) — top up and try again.',
+    'calllogs.lookupCellOk': 'Cell resolved — charged {c} pt.',
+    'calllogs.lookupCellOkFree': 'Cell resolved — no charge (reused from a previous paid lookup).',
+    'calllogs.lookupCellMiss': 'Looked up: no source has this cell — charged {c} pt.',
+    'calllogs.lookupCellMissFree': 'Looked up: no source has this cell — no charge.',
+    'calllogs.lookupCellPending': 'Still resolving online — try again in a moment.',
+    'calllogs.lookupCellFail': 'Lookup failed. Your credits were not charged twice — try again.',
+    'calllogs.lookupBarBusy': 'Looking up this cell…',
+    'calllogs.lookupBarDone': 'Resolved — coordinates found',
+    'calllogs.lookupBarMiss': 'No source has this cell',
+    'calllogs.lookupBarNoFunds': 'Not enough credits to look up',
+    'calllogs.lookupBarPending': 'Still resolving — try again shortly',
+    'calllogs.lookupBarFail': 'Lookup failed — try again',
     'calllogs.pendingLeft': '{n} cell(s) in this session are not looked up yet (≈ {c} pt) — press Resolve in the cell table to continue.',
     'calllogs.mapResults': 'Show {n} located on map',
     'calllogs.mapNone': 'No coordinates yet',
@@ -149,6 +209,18 @@ const I18N = {
     'calllogs.filters': 'Filters',
     'calllogs.dateFrom': 'From date',
     'calllogs.dateTo': 'To date',
+    'calllogs.dateRange': 'Pick a day or a date range',
+    'calllogs.dateClear': 'Clear date filter',
+    'calllogs.allDates': 'All dates',
+    'cal.hintPick': 'Pick one day, or two days for a range',
+    'cal.hintFrom': 'From {d} — pick the end day',
+    'cal.hintRange': '{a} → {b}',
+    'cal.today': 'Today',
+    'cal.apply': 'Apply',
+    'cal.prevMonth': 'Previous month',
+    'cal.nextMonth': 'Next month',
+    'cal.prevYear': 'Previous year',
+    'cal.nextYear': 'Next year',
     'calllogs.pickDate': 'Pick a date',
     'calllogs.tools': 'Load Excel',
     'calllogs.loadExcel': 'Load Excel',
@@ -304,6 +376,14 @@ const I18N = {
     'legend.radioUnknown': 'Không xác định',
     'filter.all': 'Tất Cả',
     'filter.callIn': 'Gọi Đến',
+    'filter.cellStatusAll': 'Tất cả',
+    'filter.cellFound': 'Tra được',
+    'filter.cellUnpaid': 'Chưa tra',
+    'filter.cellMiss': 'Không KQ',
+    'filter.cellStatusAllTip': 'Mọi trạng thái cell',
+    'filter.cellFoundTip': 'Cell đã tra được toạ độ',
+    'filter.cellUnpaidTip': 'Cell chưa tra (chưa trả phí / hết điểm)',
+    'filter.cellMissTip': 'Cell đã tra nhưng không có kết quả',
     'filter.callOut': 'Gọi Đi',
     'filter.smsIn': 'SMS Đến',
     'filter.smsOut': 'SMS Đi',
@@ -328,6 +408,8 @@ const I18N = {
     'hist.mode': 'Chế độ',
     'hist.cell': 'Cell',
     'hist.result': 'Kết quả',
+    'hist.copyCoords': 'Copy toạ độ',
+    'hist.openGoogleMaps': 'Mở trên Google Maps',
     'hist.source': 'Nguồn',
     'hist.notFound': 'Không tìm thấy',
     'hist.found': 'Tìm thấy',
@@ -352,6 +434,16 @@ const I18N = {
     'hist.singleEmpty': 'Chưa có lượt tra cứu đơn lẻ nào.',
     'hist.singleHint': 'Tra 1 cell ở tab Tra cứu — kết quả sẽ hiện ở đây.',
     'hist.deleteEntry': 'Xoá lượt tra này',
+    'hist.retry': 'Tra lại',
+    'hist.retryOk': 'Đã tra lại — tìm thấy toạ độ.',
+    'hist.retryMiss': 'Đã tra lại — vẫn không nguồn nào có cell này.',
+    'hist.retryNoFunds': 'Không đủ điểm tra lại ({c} điểm/cell · số dư {b} điểm).',
+    'hist.retryFail': 'Tra lại lỗi — thử lại.',
+    'hist.retryBarBusy': 'Đang tra lại…',
+    'hist.retryBarDone': 'Đã tìm thấy toạ độ',
+    'hist.retryBarMiss': 'Vẫn không nguồn nào có cell này',
+    'hist.retryBarNoFunds': 'Không đủ điểm',
+    'hist.retryBarFail': 'Tra lại lỗi',
     'hist.filterDate': 'Lọc theo ngày',
     'hist.clearDate': 'Bỏ lọc ngày',
     'hist.calToday': 'Hôm nay',
@@ -370,6 +462,30 @@ const I18N = {
     'hist.clSessionView': 'Mở bảng cell',
     'hist.clSessionDelete': 'Xoá phiên',
     'hist.clSessionConfirmDelete': 'Xoá phiên tra theo list này và toàn bộ bản ghi của nó? Không thể hoàn tác.',
+    // Popup xác nhận xoá (dùng chung)
+    'confirm.title': 'Xác nhận xoá',
+    'confirm.ok': 'Xoá',
+    'confirm.okDelete': 'Xoá vĩnh viễn',
+    'confirm.cancel': 'Huỷ',
+    'confirm.delSessionTitle': 'Xoá phiên này?',
+    'confirm.delEntryTitle': 'Xoá lượt tra này?',
+    'confirm.delEntryMsg': 'Bản ghi tra cứu này sẽ bị xoá khỏi lịch sử tra cứu.',
+    'confirm.fileLabel': 'File:',
+    'confirm.netLabel': 'Mạng:',
+    'confirm.cellsLabel': 'Số cell:',
+    'confirm.lookedLabel': 'Cell đã tra:',
+    'confirm.rowsLabel': 'Số bản ghi:',
+    'confirm.timeLabel': 'Thời gian:',
+    'confirm.cellLabel': 'Cell:',
+    'confirm.coordsLabel': 'Toạ độ:',
+    'confirm.rangeLabel': 'Bán kính:',
+    'confirm.warnPermanent': 'Thao tác này không thể hoàn tác.',
+    'confirm.warnAllRecords': 'Toàn bộ bản ghi của phiên (toạ độ, danh sách cell) sẽ bị xoá.',
+    'confirm.warnServerToo': 'Dữ liệu bị xoá cả trên server, không chỉ trong trình duyệt này.',
+    'confirm.warnPaidPoints': 'Điểm đã trừ cho các cell đã tra sẽ KHÔNG được hoàn lại.',
+    'confirm.noteCantUndo': 'Kiểm tra lại trước khi xoá — dữ liệu đã xoá không khôi phục được.',
+    'confirm.noteHistoryGone': 'Phiên cũng sẽ biến mất khỏi Lịch sử tra cứu.',
+    'confirm.noteEntryOnly': 'Chỉ bản ghi này bị xoá; tài khoản và điểm không thay đổi.',
     'hist.batchSection': 'Tra cứu danh sách (Excel)',
     'hist.batchEmptyHistory': 'Chưa có lần tra cứu danh sách nào. Tra cứu file Excel cuộc gọi — lần tra sẽ hiện ở đây.',
     'hist.prevPage': 'Trang trước',
@@ -394,6 +510,22 @@ const I18N = {
     'calllogs.detailMiss': 'Không tìm thấy trên mọi nguồn',
     'calllogs.detailUnpaid': 'Chưa tra (chưa trả phí) — mở bảng cell để tra',
     'calllogs.cellOnly': 'Cell trong phiên',
+    'calllogs.lookupCell': 'Tra cứu cell này',
+    'calllogs.lookupCellNoRow': 'Không tìm thấy cell này trong phiên',
+    'calllogs.lookupCellNoResult': 'Máy chủ không trả kết quả — thử lại sau.',
+    'calllogs.lookupCellNoFunds': 'Không đủ điểm ({c} điểm/cell · số dư {b} điểm) — nạp điểm rồi tra lại.',
+    'calllogs.lookupCellOk': 'Đã tra được cell — trừ {c} điểm.',
+    'calllogs.lookupCellOkFree': 'Đã tra được cell — không trừ điểm (dùng lại kết quả đã trả phí).',
+    'calllogs.lookupCellMiss': 'Đã tra nhưng không nguồn nào có cell này — trừ {c} điểm.',
+    'calllogs.lookupCellMissFree': 'Đã tra nhưng không nguồn nào có cell này — không trừ điểm.',
+    'calllogs.lookupCellPending': 'Còn đang tra online — thử lại sau giây lát.',
+    'calllogs.lookupCellFail': 'Tra cứu lỗi — điểm chưa bị trừ trùng, thử lại.',
+    'calllogs.lookupBarBusy': 'Đang tra cell này…',
+    'calllogs.lookupBarDone': 'Đã tra được — có toạ độ',
+    'calllogs.lookupBarMiss': 'Không nguồn nào có cell này',
+    'calllogs.lookupBarNoFunds': 'Không đủ điểm để tra',
+    'calllogs.lookupBarPending': 'Vẫn đang tra — thử lại sau ít phút',
+    'calllogs.lookupBarFail': 'Tra cứu lỗi — thử lại',
     'calllogs.pendingLeft': 'Còn {n} cell chưa tra trong phiên này (≈ {c} điểm) — bấm “Tra cứu” ở bảng cell để tra tiếp.',
     'calllogs.mapResults': 'Xem {n} toạ độ trên bản đồ',
     'calllogs.mapNone': 'Chưa có toạ độ',
@@ -401,6 +533,18 @@ const I18N = {
     'calllogs.filters': 'Bộ lọc',
     'calllogs.dateFrom': 'Từ ngày',
     'calllogs.dateTo': 'Đến ngày',
+    'calllogs.dateRange': 'Chọn ngày / khoảng ngày',
+    'calllogs.dateClear': 'Bỏ lọc ngày',
+    'calllogs.allDates': 'Mọi ngày',
+    'cal.hintPick': 'Chọn 1 ngày, hoặc 2 ngày để lấy khoảng',
+    'cal.hintFrom': 'Từ {d} — chọn ngày cuối',
+    'cal.hintRange': '{a} → {b}',
+    'cal.today': 'Hôm nay',
+    'cal.apply': 'Áp dụng',
+    'cal.prevMonth': 'Tháng trước',
+    'cal.nextMonth': 'Tháng sau',
+    'cal.prevYear': 'Năm trước',
+    'cal.nextYear': 'Năm sau',
     'calllogs.pickDate': 'Chọn ngày',
     'calllogs.tools': 'Nạp Excel',
     'calllogs.loadExcel': 'Load Excel',
@@ -565,8 +709,29 @@ function cellPopupTitle(mcc, mnc, lac, cellid) {
     full: kind === 'long' ? t('cells.eci') : t('cells.cellIdShort')
   };
 }
+// SQLite trả 'YYYY-MM-DD HH:MM:SS' theo giờ UTC nhưng KHÔNG kèm hậu tố Z. Nếu đưa
+// thẳng vào `new Date()` thì JS hiểu là giờ ĐỊA PHƯƠNG → mọi mốc thời gian lệch
+// đúng bằng offset múi giờ (VN: chậm 7 giờ). Hàm này chuẩn hoá về Date đúng:
+//   - Chuỗi có 'Z' / offset (±hh:mm) → để `new Date()` tự xử lý.
+//   - Chuỗi 'YYYY-MM-DD[ T]HH:MM[:SS[.mmm]]' không có zone → coi là UTC.
+//   - Số / Date → như cũ.
+function parseServerTime(ts) {
+  if (ts == null || ts === '') return new Date(NaN);
+  if (ts instanceof Date) return ts;
+  if (typeof ts === 'number') return new Date(ts);
+  const s = String(ts).trim();
+  // Đã có thông tin múi giờ → tin tưởng chuỗi.
+  if (/[zZ]$/.test(s) || /[+-]\d{2}:?\d{2}$/.test(s)) return new Date(s);
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?$/.exec(s);
+  if (!m) return new Date(s);
+  const [, y, mo, d, hh, mi, ss, ms] = m;
+  return new Date(Date.UTC(
+    Number(y), Number(mo) - 1, Number(d),
+    Number(hh || 0), Number(mi || 0), Number(ss || 0), Number((ms || '0').padEnd(3, '0'))
+  ));
+}
 function fmtDateTime(ts) {
-  const d = new Date(ts);
+  const d = parseServerTime(ts);
   if (isNaN(d.getTime())) return String(ts || '');
   const p = (n) => String(n).padStart(2, '0');
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
@@ -586,6 +751,31 @@ function copyCoords(lat, lon) {
       document.execCommand('copy'); document.body.removeChild(ta); done();
     } catch (e) { fail(); }
   }
+}
+
+// Mở toạ độ trên Google Maps (tab mới). Dùng chung cho mọi popup có toạ độ cell.
+// Toạ độ gửi dạng "lat,lon" (không dấu cách) — Maps hiểu đây là điểm, không phải tìm chữ.
+function openInGoogleMaps(lat, lon) {
+  const la = parseFloat(lat), lo = parseFloat(lon);
+  if (!isFinite(la) || !isFinite(lo)) return;
+  const url = `https://www.google.com/maps/search/?api=1&query=${la},${lo}`;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+// Icon copy + icon mở Google Maps, đứng cạnh nhau sau toạ độ (dùng chung mọi popup).
+// Gắn class `cell-coord-acts` để CSS căn hàng cho đẹp. Bấm không được làm đóng popup
+// của bản đồ/đóng card → luôn gọi event.stopPropagation() ngay trong onclick.
+function coordActionIcons(lat, lon) {
+  const la = Number(lat), lo = Number(lon);
+  if (!isFinite(la) || !isFinite(lo)) return '';
+  return `<span class="cell-coord-acts">`
+    + `<i class="fas fa-copy" role="button" tabindex="0" aria-label="${histEsc(t('hist.copyCoords'))}"`
+    + ` title="${histEsc(t('hist.copyCoords'))}"`
+    + ` onclick="event.stopPropagation(); copyCoords(${la},${lo})"></i>`
+    + `<i class="fas fa-map-location-dot" role="button" tabindex="0" aria-label="${histEsc(t('hist.openGoogleMaps'))}"`
+    + ` title="${histEsc(t('hist.openGoogleMaps'))}"`
+    + ` onclick="event.stopPropagation(); openInGoogleMaps(${la},${lo})"></i>`
+    + `</span>`;
 }
 
 function applyI18n() {
@@ -706,7 +896,6 @@ async function guestLookup(mcc, mnc, lac, cellid, sector, radio) {
         `<i class="fas fa-check-circle"></i>` +
         `<span class="hist-cell">${d.mcc || mcc}-${d.mnc || mnc}-${d.lac || lac}-${d.cellid || cellid}</span>` +
         (rs.key ? `<span class="hist-radio-badge" style="background:${rs.color}" title="${histEsc(t('hist.radio'))}">${histEsc(rs.full || rs.label)}</span>` : '') +
-        `<span class="hist-source local">CSDL nội bộ (dùng thử)</span>` +
       `</div>` +
       `<div style="font-size:11px">${formatCellId(d.cellid || cellid, sector)}</div>` +
       `<div class="hist-coords" style="margin-top:4px"><i class="fas fa-map-pin"></i>${dLat}, ${dLon}</div>` +
@@ -764,6 +953,9 @@ initAuth();
 document.addEventListener('click', (e) => {
   const chip = e.target.closest && e.target.closest('#clActionChips .cl-chip');
   if (chip) { setClActionFilter(chip.dataset.action, chip); return; }
+  // Chip lọc TRẠNG THÁI CELL (Đã tra được / Chưa tra được / Không có kết quả).
+  const stChip = e.target.closest && e.target.closest('#clRecordStatusChips .cl-chip');
+  if (stChip) { setClCellStatusFilter(stChip.dataset.status); return; }
 });
 
 // ============================================
@@ -785,6 +977,130 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
     }
   });
 });
+// Popup xác nhận xoá có xử lý nền mờ riêng (trả kết quả false) → không gắn listener
+// chung ở trên, tránh đóng mà không resolve Promise (hộp thoại "treo" chờ mãi).
+
+// ============================================
+// Popup xác nhận XOÁ dùng chung (thay confirm() của hệ điều hành)
+// ============================================
+// Mọi thao tác xoá (bản ghi tra đơn lẻ, phiên tra theo danh sách, dữ liệu rút list...)
+// đều đi qua đây: hộp thoại có tiêu đề, mô tả, danh sách CẢNH BÁO nguy hiểm, ghi chú
+// thêm, chi tiết đối tượng sẽ xoá, nút Huỷ/Xoá. Trả Promise<boolean>.
+//
+// openConfirmDialog({
+//   title, message, detail: [ 'Dòng chi tiết', ... ],
+//   warnings: [ 'Mất là không lấy lại được', ... ],
+//   notes: [ 'Phiên vẫn còn trong Lịch sử...', ... ],
+//   okText, cancelText, danger (mặc định true)
+// }) → Promise<boolean>
+let cfDialog = { open: false, resolve: null, lastFocus: null, keyHandler: null, escHandler: null };
+
+function cfSetList(id, wrapId, items) {
+  const wrap = document.getElementById(wrapId);
+  const list = document.getElementById(id);
+  if (!wrap || !list) return;
+  const arr = (items || []).filter(Boolean);
+  list.innerHTML = '';
+  arr.forEach(function (s) {
+    const li = document.createElement('li');
+    li.textContent = s;
+    list.appendChild(li);
+  });
+  wrap.hidden = arr.length === 0;
+}
+
+function openConfirmDialog(opts) {
+  const o = opts || {};
+  const modal = document.getElementById('confirmModal');
+  if (!modal) {
+    // Không có markup → vẫn phải trả lời được, dùng confirm() làm chốt chặn cuối.
+    return Promise.resolve(window.confirm([o.title, o.message].filter(Boolean).join('\n')));
+  }
+  // Đang mở hộp khác → đóng hộp cũ (trả false) trước khi mở hộp mới.
+  if (cfDialog.open) closeConfirmDialog(false);
+
+  const setText = function (id, txt) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = txt || '';
+  };
+  setText('cfTitle', o.title || t('confirm.title'));
+  setText('cfMsg', o.message || '');
+  setText('cfOkTxt', o.okText || t('confirm.ok'));
+  setText('cfCancelTxt', o.cancelText || t('confirm.cancel'));
+
+  const danger = o.danger !== false;
+  const okBtn = document.getElementById('cfOkBtn');
+  if (okBtn) {
+    okBtn.className = 'btn btn-sm ' + (danger ? 'btn-danger' : 'btn-primary');
+    okBtn.querySelector('i').className = 'fas ' + (danger ? 'fa-trash-can' : 'fa-check');
+  }
+  const ico = document.getElementById('cfIcon');
+  if (ico) {
+    ico.innerHTML = '<i class="fas ' + (danger ? 'fa-trash-can' : 'fa-circle-question') + '"></i>';
+    ico.style.background = danger ? '' : 'rgba(61,124,224,0.16)';
+    ico.style.color = danger ? '' : 'var(--accent, #3d7ce0)';
+  }
+
+  cfSetList('cfWarnDangerList', 'cfWarnDanger', o.warnings);
+  cfSetList('cfWarnInfoList', 'cfWarnInfo', o.notes);
+
+  const detail = document.getElementById('cfDetail');
+  if (detail) {
+    const rows = (o.detail || []).filter(Boolean);
+    detail.innerHTML = '';
+    rows.forEach(function (row) {
+      const div = document.createElement('div');
+      // row: string hoặc { k: 'Tên file', v: '...' }
+      if (row && typeof row === 'object') {
+        const b = document.createElement('b');
+        b.textContent = row.k || '';
+        div.appendChild(b);
+        div.appendChild(document.createTextNode(' ' + (row.v == null ? '' : String(row.v))));
+      } else {
+        div.textContent = String(row);
+      }
+      detail.appendChild(div);
+    });
+    detail.hidden = rows.length === 0;
+  }
+
+  cfDialog.lastFocus = document.activeElement;
+  cfDialog.open = true;
+  modal.classList.add('show');
+  // Bấm nền mờ = Huỷ (không xoá).
+  modal.onclick = function (e) { if (e.target === modal) closeConfirmDialog(false); };
+  // Enter = đồng ý dừng ở nút Xoá (không tự xoá khi vừa mở), Esc = Huỷ.
+  cfDialog.escHandler = function (e) {
+    if (!cfDialog.open) return;
+    if (e.key === 'Escape') { e.preventDefault(); closeConfirmDialog(false); }
+  };
+  document.addEventListener('keydown', cfDialog.escHandler, true);
+  setTimeout(function () {
+    const btn = document.getElementById('cfCancelBtn');
+    if (btn) btn.focus();
+  }, 0);
+
+  return new Promise(function (resolve) { cfDialog.resolve = resolve; });
+}
+
+function closeConfirmDialog(result) {
+  const modal = document.getElementById('confirmModal');
+  if (modal) {
+    modal.classList.remove('show');
+    modal.onclick = null;
+  }
+  if (cfDialog.escHandler) {
+    document.removeEventListener('keydown', cfDialog.escHandler, true);
+    cfDialog.escHandler = null;
+  }
+  const resolve = cfDialog.resolve;
+  const lastFocus = cfDialog.lastFocus;
+  cfDialog = { open: false, resolve: null, lastFocus: null, keyHandler: null, escHandler: null };
+  if (lastFocus && typeof lastFocus.focus === 'function') {
+    try { lastFocus.focus(); } catch (e) { /* phần tử đã bị gỡ */ }
+  }
+  if (typeof resolve === 'function') resolve(!!result);
+}
 
 // ============================================
 // Change password
@@ -837,7 +1153,7 @@ async function loadMyUploads() {
     }
     let html = '<table class="my-data-table"><thead><tr><th>#</th><th>Số</th><th>Loại</th><th>Thời gian</th><th>CellID</th></tr></thead><tbody>';
     data.forEach((r, i) => {
-      const ts = new Date(r.timestamp).toLocaleString('vi-VN');
+      const ts = parseServerTime(r.timestamp).toLocaleString('vi-VN');
       html += `<tr><td>${i+1}</td><td>${r.phone_number}</td><td>${r.action_type}</td><td>${ts}</td><td>${r.mcc}-${r.mnc}-${r.lac}-${r.cellid}</td></tr>`;
     });
     html += `</tbody></table><div style="margin-top:6px;color:var(--text-muted);font-size:11px">Tổng: ${data.length} bản ghi</div>`;
@@ -1417,6 +1733,10 @@ function switchTab(tabId) {
     // Tab Lịch sử: mục danh sách phiên (luôn nạp) + mục đơn lẻ (chỉ nạp khi mở).
     syncHistSectionUi();
     loadHistBatches(1);
+    // "Tra cứu đơn lẻ" mặc định ĐANG MỞ → phải nạp luôn, nếu không khung giữa trống
+    // cho tới khi user đóng rồi mở lại mục (lúc đó toggleHistSection mới nạp).
+    // Mục đang đóng thì để trống theo đúng thiết kế "chỉ nạp khi mở".
+    if (histSectionOpen.single) loadLookupHistory(histState.page || 1);
   }
   // Tab "Tra cứu danh sách" không có danh sách phiên nữa → mở tab chỉ vẽ lại danh sách
   // bản ghi (trạng thái cell có thể đổi sau khi tra ở bảng cell).
@@ -1436,8 +1756,10 @@ let histBatchCache = {};
 let histState = { page: 1, totalPages: 1, rows: [], total: 0, selected: new Set() };
 // Trạng thái UI 2 mục của tab Lịch sử: mở/đóng (nhớ trong phiên) + ngày đang lọc
 // (''= không lọc). Mỗi mục lọc ngày ĐỘC LẬP vì 2 nguồn dữ liệu khác nhau.
-let histSingle = { loaded: false, open: false };
-let histSectionOpen = { batch: true, single: false };
+let histSingle = { open: true };
+// Tab Lịch sử là ACCORDION: mặc định mở "Tra cứu đơn lẻ" ở trên, "Tra cứu danh sách"
+// ở dưới ĐÓNG; mở mục này thì mục kia tự đóng.
+let histSectionOpen = { single: true, batch: false };
 let histDateFilter = { batch: '', single: '' };
 // Popup lịch: mục đang mở ('batch' | 'single' | '') + tháng đang xem (Date).
 let histCalState = { target: '', month: null };
@@ -1518,13 +1840,10 @@ function histJsSafe(s) {
   return String(s === undefined || s === null ? '' : s).replace(/[^A-Za-z0-9_-]/g, '');
 }
 
-// Nguồn dữ liệu → CHỈ hiện icon (tooltip giữ tên nguồn) để tránh lặp chữ.
+// Nguồn dữ liệu đã BỎ khỏi toàn bộ giao diện (yêu cầu: không hiện nguồn kết quả tra
+// cứu ở bất kỳ đâu). Giữ hàm để các chỗ gọi cũ không vỡ — luôn trả chuỗi rỗng.
 function histSrcIcon(source, showSource) {
-  if (!showSource || !source) return '';
-  const online = source !== 'local';
-  const label = online ? t('hist.srcOnline') : t('hist.srcLocal');
-  const icon = online ? 'fa-cloud' : 'fa-database';
-  return `<i class="hist-src-i ${online ? 'online' : 'local'} fas ${icon}" title="${histEsc(label)}"></i>`;
+  return '';
 }
 
 // ============================================
@@ -1617,7 +1936,14 @@ function zoomForRadius(lat, lon, radiusM) {
   }
 }
 
-function highlightCellOnMap(lat, lon, range, radio, label) {
+// Tô sáng 1 cell trên bản đồ (bấm 1 dòng ở Lịch sử tra đơn lẻ / kết quả tra thử của khách).
+//
+// `info` (tuỳ chọn) là dữ liệu để dựng popup CHI TIẾT giống hệt tra theo danh sách:
+//   { mcc, mnc, lac, cellid, cellLine, radio, range, sourceLabel, srcType, showSource,
+//     description, extra }
+// Trước đây chỉ bind 1 nhãn chữ ("452-1-9000-123456") nên bấm vào cell ở bản đồ không
+// xem được nguồn / công nghệ / bán kính / toạ độ / địa chỉ như tra theo danh sách.
+function highlightCellOnMap(lat, lon, range, radio, label, info) {
   lat = parseFloat(lat); lon = parseFloat(lon);
   if (!isFinite(lat) || !isFinite(lon)) { showToast(t('hist.notFound'), 'error'); return; }
   clearHighlight();
@@ -1635,10 +1961,22 @@ function highlightCellOnMap(lat, lon, range, radio, label) {
   ]);
   cellOverlay.addLayer(highlightLayer);
   centerOnVisible(lat, lon, zoomForRadius(lat, lon, radius));
-  if (label) {
-    highlightLayer.addLayer(L.marker([lat, lon], { icon: makeCellDivIcon(rs) })
-      .bindPopup(histEsc(label)).openPopup());
+  if (!label && !info) return;
+  // Popup đầy đủ (dùng chung builder với tra theo danh sách) — rơi về nhãn chữ nếu
+  // không có đủ thông tin cell.
+  let popupHtml;
+  if (info && (info.mcc != null || info.cellid != null)) {
+    popupHtml = buildCellPopupHtml(Object.assign({ lat: lat, lon: lon, range: radius }, info));
+  } else {
+    popupHtml = histEsc(label || '');
   }
+  const pin = L.marker([lat, lon], { icon: makeCellDivIcon(rs) }).bindPopup(popupHtml);
+  // Cho bấm cả vào đường tròn bán kính (vùng bấm rộng hơn pin).
+  highlightLayer.eachLayer(function (layer) {
+    if (layer instanceof L.Circle && typeof layer.bindPopup === 'function') layer.bindPopup(popupHtml);
+  });
+  highlightLayer.addLayer(pin);
+  pin.openPopup();
 }
 
 // Chi tiết 1 cell lịch sử (popup giống hệt tra đơn lẻ)
@@ -1674,32 +2012,58 @@ async function histLoadBatch(batchId) {
 // đầu, không tốn request nếu user không xem.
 const HIST_DOW = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
-// Mở/đóng 1 mục của tab Lịch sử.
-//   target 'batch'  → ẩn/hiện #histBatchList (danh sách phiên đã nạp sẵn)
+// Mở/đóng 1 mục của tab Lịch sử — kiểu ACCORDION: mở mục này thì đóng mục kia, danh sách
+// đang mở chiếm toàn bộ chiều cao panel.
 //   target 'single' → ẩn/hiện #histSingleBody + nạp dữ liệu ở lần mở đầu
+//   target 'batch'  → ẩn/hiện #histBatchList (danh sách phiên đã nạp sẵn)
 function toggleHistSection(target) {
   const open = !histSectionOpen[target];
   histSectionOpen[target] = open;
-  const hd = document.getElementById(target === 'batch' ? 'histBatchHd' : 'histSingleHd');
-  const body = document.getElementById(target === 'batch' ? 'histBatchList' : 'histSingleBody');
-  if (hd) hd.setAttribute('aria-expanded', open ? 'true' : 'false');
-  if (body) body.hidden = !open;
-  if (target === 'single') histSingle.open = open;
-  if (open && target === 'single' && !histSingle.loaded) loadLookupHistory(histState.page || 1);
+  // Mở mục nào thì đóng mục còn lại (2 mục không bao giờ mở cùng lúc).
+  if (open) {
+    const other = target === 'batch' ? 'single' : 'batch';
+    histSectionOpen[other] = false;
+  }
+  renderHistSections();
+  // Mở mục nào cũng nạp lại dữ liệu của mục đó — danh sách phiên có thể vừa thay đổi do
+  // vừa tra xong một phiên mới. Trước đây chỉ mục "đơn lẻ" được nạp, nên mở mục "Tra cứu
+  // danh sách" ra mà danh sách vẫn là bản cũ (hoặc rỗng nếu lần đầu tab chưa nạp).
+  // Không dùng cờ `loaded`: mục có thể đóng/mở nhiều lần trong cùng phiên.
+  if (open && target === 'single') loadLookupHistory(histState.page || 1);
+  if (open && target === 'batch') loadHistBatches(1);
+}
+
+// Vẽ trạng thái mở/đóng của 2 mục. Chỉ 1 mục mở tại một thời điểm:
+//   .hist-section-hd[aria-expanded]  → mũi tên xoay
+//   <body>[hidden]                   → ẩn/hiện
+//   .is-collapsed                    → mục đang đóng chỉ còn dòng tiêu đề
+//   .is-expanded                     → mục đang mở giãn hết chiều cao panel
+function renderHistSections() {
+  // [khoá state, id của BODY cần bật/tắt `hidden`, id của wrapper .hist-sub]
+  // Lưu ý: body của mục danh sách là #histBatchBody, KHÔNG phải #histBatchList
+  // (đó là <div class="hist-list"> nằm BÊN TRONG body). Trước đây truyền nhầm
+  // 'histBatchList' nên `hidden` bị gỡ trên danh sách, còn #histBatchBody vẫn giữ
+  // `hidden` từ HTML → mở mục danh sách ra khung trống, không thấy phiên nào.
+  [['batch', 'histBatchBody', 'histBatchSub'], ['single', 'histSingleBody', 'histSingleSub']]
+    .forEach(([key, bodyId, wrapId]) => {
+      const open = !!histSectionOpen[key];
+      const hd = document.getElementById(key === 'batch' ? 'histBatchHd' : 'histSingleHd');
+      const body = document.getElementById(bodyId);
+      const wrap = document.getElementById(wrapId);
+      if (hd) hd.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (body) body.hidden = !open;
+      if (wrap) {
+        wrap.classList.toggle('is-expanded', open);
+        wrap.classList.toggle('is-collapsed', !open);
+      }
+    });
+  syncHistDateChips();
 }
 
 // Đồng bộ lại trạng thái mở/đóng + chip ngày khi vào tab (tránh HTML và state lệch
 // nhau sau khi đóng/mở nhiều lần).
 function syncHistSectionUi() {
-  [['batch', 'histBatchHd', 'histBatchList'], ['single', 'histSingleHd', 'histSingleBody']]
-    .forEach(([key, hdId, bodyId]) => {
-      const open = !!histSectionOpen[key];
-      const hd = document.getElementById(hdId);
-      const body = document.getElementById(bodyId);
-      if (hd) hd.setAttribute('aria-expanded', open ? 'true' : 'false');
-      if (body) body.hidden = !open;
-    });
-  syncHistDateChips();
+  renderHistSections();
 }
 
 // Ngày ISO YYYY-MM-DD hợp lệ (dùng cả client-side trước khi gọi API).
@@ -1745,7 +2109,6 @@ function applyHistDate(target, iso) {
   syncHistDateChips();
   closeHistDatePopup();
   if (target === 'single') {
-    if (!histSingle.loaded) { histSingle.loaded = true; }
     loadLookupHistory(1);
   } else {
     loadHistBatches(1);
@@ -1764,20 +2127,36 @@ function openHistDatePopup(target, anchorEl) {
   histCalState.month = new Date(base.getFullYear(), base.getMonth(), 1);
   renderHistDatePopup();
   pop.hidden = false;
-  // Neo dưới nút, canh phải; kẹp trong viewport để không tràn mép.
-  const r = anchorEl && anchorEl.getBoundingClientRect ? anchorEl.getBoundingClientRect() : null;
-  if (r) {
-    const w = 232, pad = 8;
-    let left = r.right - w;
-    left = Math.max(pad, Math.min(left, window.innerWidth - w - pad));
-    let top = r.bottom + 6;
-    const h = pop.offsetHeight || 260;
-    if (top + h > window.innerHeight - pad) top = Math.max(pad, r.top - h - 6);
-    pop.style.left = left + 'px';
-    pop.style.top = top + 'px';
-  }
+  // Neo SÁT nút lịch: mép trên popup cách đáy nút 2px, mép phải popup thẳng mép phải nút
+  // (popup mở sang trái để luôn dính nút) — nhờ popup được gắn vào <body> nên toạ độ
+  // `fixed` đúng bằng toạ độ viewport. Kẹp trong viewport để không tràn mép.
+  placeHistDatePopup(anchorEl);
   document.addEventListener('mousedown', histDatePopupOutside, true);
   document.addEventListener('keydown', histDatePopupEsc, true);
+}
+
+// Đặt popup lịch sát nút vừa bấm. Gọi lại được khi panel đổi bề rộng / cuộn / resize.
+//
+// LƯU Ý: popup nằm trong #sidebar và sidebar là `position: fixed` → nếu để nguyên trong
+// sidebar, con `position: fixed` sẽ lấy SIDEBAR làm containing block (toạ độ lệch đúng
+// bằng offset của sidebar: 48px theo trục dọc). Vì vậy popup được chuyển sang <body>
+// ngay khi mở: lúc đó `left/top` là toạ độ viewport thật.
+function placeHistDatePopup(anchorEl) {
+  const pop = document.getElementById('histDatePopup');
+  if (!pop || pop.hidden) return;
+  if (pop.parentElement !== document.body) document.body.appendChild(pop);
+  if (!anchorEl || !anchorEl.getBoundingClientRect) return;
+  const r = anchorEl.getBoundingClientRect();
+  const pad = 6, gap = 2;
+  const w = pop.offsetWidth || 232;
+  const h = pop.offsetHeight || 260;
+  // Canh phải popup trùng mép phải nút → nằm sát ngay dưới icon lịch.
+  let left = Math.round(r.right - w);
+  left = Math.max(pad, Math.min(left, window.innerWidth - w - pad));
+  let top = Math.round(r.bottom + gap);
+  if (top + h > window.innerHeight - pad) top = Math.max(pad, Math.round(r.top - h - gap));
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
 }
 
 function closeHistDatePopup() {
@@ -1875,7 +2254,6 @@ async function loadLookupHistory(page) {
     histState.rows = data.data || [];
     histState.total = data.total || 0;
     histState.totalPages = data.totalPages || 1;
-    histSingle.loaded = true;
     renderLookupHistory();
   } catch (e) {
     list.innerHTML = `<span style="color:var(--bg-btn-danger)">${histEsc(e.message)}</span>`;
@@ -1923,6 +2301,16 @@ function renderLookupHistory() {
       ${r.range ? `<span><i class="fas fa-circle-notch"></i>${parseFloat(r.range)}m</span>` : ''}
     </div>`;
 
+    // Cell KHÔNG tra được (không có toạ độ) → cho tra lại NGAY trên thẻ, cạnh nút xoá.
+    // Trước đây phải bấm vào thân thẻ (mở bản đồ / tra lại ngầm, không rõ ràng).
+    const canRetry = !(r.lat && r.lng);
+    const retryBtn = canRetry
+      ? `<button class="hist-retry" title="${histEsc(t('hist.retry'))}"`
+        + ` data-i18n-title="hist.retry" aria-label="${histEsc(t('hist.retry'))}"`
+        + ` onclick="event.stopPropagation(); histRetryCell(${r.id})">`
+        + `<i class="fas fa-rotate-right"></i></button>`
+      : '';
+
     return `<div class="hist-card hist-card--single${radioCls}"${radioStyleAttr} data-id="${r.id}" data-key="${rowKey}" data-radio="${histEsc(rs.key || '')}">
       <div class="hist-card-main" onclick="histOpenOnMap(${r.id})" title="${histEsc(t('hist.openOnMap'))}">
         <div class="hist-card-top">
@@ -1932,7 +2320,10 @@ function renderLookupHistory() {
         </div>
         ${meta}
       </div>
-      <button class="hist-del" title="${histEsc(t('hist.deleteEntry'))}" onclick="event.stopPropagation(); deleteLookupEntry(${r.id})"><i class="fas fa-trash"></i></button>
+      <div class="hist-card-acts">
+        ${retryBtn}
+        <button class="hist-del" title="${histEsc(t('hist.deleteEntry'))}" onclick="event.stopPropagation(); deleteLookupEntry(${r.id})"><i class="fas fa-trash"></i></button>
+      </div>
     </div>`;
   }).join('');
   updateHistPager();
@@ -1944,8 +2335,17 @@ async function histOpenOnMap(id) {
   const r = histState.rows.find(x => x.id === id);
   if (!r) return;
   if (r.lat && r.lng) {
+    const showSource = (typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin());
+    const srcType = r.source === 'local' ? 'local' : 'online';
     highlightCellOnMap(r.lat, r.lng, r.range, r.radio,
-      `${r.mcc}-${r.mnc}-${r.lac}-${r.cellid}`);
+      `${r.mcc}-${r.mnc}-${r.lac}-${r.cellid}`, {
+        mcc: r.mcc, mnc: r.mnc, lac: r.lac, cellid: r.cellid,
+        cellLine: formatCellId(r.cellid, r.sector),
+        radio: r.radio,
+        sourceLabel: SOURCE_LABELS[r.source] || (r.source || ''),
+        srcType: srcType, showSource: showSource,
+        description: r.cell_address || ''
+      });
   } else {
     // Không có toạ độ trong lịch sử → tra lại như tra mới.
     await lookupCell(r.mcc, r.mnc, r.lac, r.cellid);
@@ -1968,8 +2368,120 @@ function histPage(delta) {
   loadLookupHistory(next);
 }
 
+// Tra LẠI 1 cell đã thất bại từ thẻ lịch sử tra đơn lẻ (nút "Tra lại" cạnh nút xoá).
+// Khác `lookupCell`: KHÔNG ghi vào form tra cứu / khu kết quả bên tab khác, không nhảy
+// bản đồ. Kết quả cập nhật NGAY trên thẻ (thanh trạng thái + đổi nội dung thẻ) và tải
+// lại danh sách để có bản ghi mới nhất từ server.
+const histRetryBusy = new Set();
+// Loại thanh trạng thái của lần "Tra lại" gần nhất (đọc lại sau khi danh sách vẽ lại).
+let histRetryBarKind = '';
+
+async function histRetryCell(id) {
+  const r = (histState.rows || []).find(x => String(x.id) === String(id));
+  if (!r) return;
+  if (histRetryBusy.has(String(id))) return;
+  const card = document.querySelector(`#lookupHistoryList .hist-card[data-id="${cssEscapeAttr(id)}"]`);
+  const btn = card && card.querySelector('.hist-retry');
+
+  histRetryBusy.add(String(id));
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+  histShowRetryBar(card, 'busy');
+
+  try {
+    const res = await apiRequest('GET',
+      `/api/cells/resolve?mcc=${encodeURIComponent(r.mcc)}&mnc=${encodeURIComponent(r.mnc)}`
+      + `&lac=${encodeURIComponent(r.lac)}&cellid=${encodeURIComponent(r.cellid)}`
+      + (r.sector != null && r.sector !== '' ? `&sector=${encodeURIComponent(r.sector)}` : '')
+      + (r.radio ? `&radio=${encodeURIComponent(r.radio)}` : ''));
+    const d = (res && res.data) || {};
+    if (d.lat != null && d.lon != null) {
+      // Tra ra → cập nhật thẻ tại chỗ (không chờ tải lại) rồi đồng bộ server.
+      r.lat = d.lat; r.lng = d.lon;
+      if (d.range != null) r.range = d.range;
+      if (d.radio) r.radio = d.radio;
+      if (res.source) r.source = res.source;
+      histShowRetryBar(card, 'done');
+      showToast(t('hist.retryOk'), 'success');
+    } else {
+      histShowRetryBar(card, 'miss');
+      showToast(t('hist.retryMiss'), 'error');
+    }
+  } catch (e) {
+    // 402 = hết điểm → báo rõ số dư, KHÔNG coi là "không ra kết quả".
+    if (e && e.code === 402) {
+      histShowRetryBar(card, 'nofunds');
+      showToast(fmtTpl('hist.retryNoFunds', {
+        c: e.required != null ? e.required : '?', b: e.balance != null ? e.balance : '?'
+      }), 'error');
+    } else if (e && e.code === 404) {
+      histShowRetryBar(card, 'miss');
+      showToast(t('hist.retryMiss'), 'error');
+    } else {
+      histShowRetryBar(card, 'fail');
+      showToast(t('hist.retryFail'), 'error');
+    }
+  } finally {
+    histRetryBusy.delete(String(id));
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-rotate-right"></i>'; }
+    // Tải lại danh sách → thẻ vẽ lại theo dữ liệu mới (có toạ độ thì nút Tra lại tự mất).
+    // Thanh trạng thái đặt lại vào thẻ mới để user kịp đọc, rồi tự ẩn.
+    const kind = histRetryBarKind;
+    histRetryBarKind = '';
+    await loadLookupHistory(histState.page);
+    if (kind) {
+      const c2 = document.querySelector(`#lookupHistoryList .hist-card[data-id="${cssEscapeAttr(id)}"]`);
+      histShowRetryBar(c2, kind);
+      setTimeout(() => histClearRetryBar(id), 3200);
+    }
+  }
+}
+
+// Loại thanh trạng thái của lần "Tra lại" gần nhất (đọc lại sau khi danh sách vẽ lại).
+// Thanh trạng thái trên thẻ lịch sử: busy | done | miss | nofunds | fail.
+function histShowRetryBar(card, kind) {
+  if (!card) return;
+  histRetryBarKind = kind;
+  let bar = card.querySelector('.hist-retry-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    card.appendChild(bar);
+  }
+  const map = {
+    busy:    { cls: 'busy',    ico: 'fa-spinner fa-spin',      txt: t('hist.retryBarBusy') },
+    done:    { cls: 'done',    ico: 'fa-circle-check',         txt: t('hist.retryBarDone') },
+    miss:    { cls: 'miss',    ico: 'fa-circle-xmark',         txt: t('hist.retryBarMiss') },
+    nofunds: { cls: 'nofunds', ico: 'fa-triangle-exclamation', txt: t('hist.retryBarNoFunds') },
+    fail:    { cls: 'fail',    ico: 'fa-circle-exclamation',   txt: t('hist.retryBarFail') }
+  }[kind] || { cls: 'fail', ico: 'fa-circle-exclamation', txt: '' };
+  bar.className = `hist-retry-bar ${clsSafe(map.cls)}`;
+  bar.innerHTML = `<i class="fas ${map.ico}"></i><span>${histEsc(map.txt)}</span>`;
+}
+
+function histClearRetryBar(id) {
+  const card = document.querySelector(`#lookupHistoryList .hist-card[data-id="${cssEscapeAttr(id)}"]`);
+  const bar = card && card.querySelector('.hist-retry-bar');
+  if (bar) bar.remove();
+}
+
 // Xoá 1 lượt tra đơn lẻ (chỉ bản ghi của chính user).
 async function deleteLookupEntry(id) {
+  const row = (histState.rows || []).find(function (r) { return String(r.id) === String(id); }) || {};
+  const detail = [];
+  const cellTxt = row.cell_key || [row.mcc, row.mnc, row.lac, row.cellid].filter(v => v != null && v !== '').join('-');
+  if (cellTxt) detail.push({ k: t('confirm.cellLabel'), v: cellTxt });
+  if (row.lat != null && row.lng != null) detail.push({ k: t('confirm.coordsLabel'), v: parseFloat(row.lat) + ', ' + parseFloat(row.lng) });
+  if (row.range) detail.push({ k: t('confirm.rangeLabel'), v: parseFloat(row.range) + 'm' });
+  if (row.created_at) detail.push({ k: t('confirm.timeLabel'), v: fmtDateTime(row.created_at) || row.created_at });
+
+  const ok = await openConfirmDialog({
+    title: t('confirm.delEntryTitle'),
+    message: t('confirm.delEntryMsg'),
+    detail: detail,
+    warnings: [t('confirm.warnPermanent')],
+    notes: [t('confirm.noteEntryOnly')],
+    okText: t('confirm.okDelete')
+  });
+  if (!ok) return;
   try {
     await apiRequest('DELETE', `/api/lookup-history/${id}`);
     showToast(t('hist.deleted'), 'success');
@@ -2250,6 +2762,40 @@ const actionLabel = { CALL_IN: 'Gọi đến', CALL_OUT: 'Gọi đi', SMS_IN: 'S
 // Nhãn nguồn dữ liệu — dùng chung cho tra đơn lẻ + popup marker rút list.
 const SOURCE_LABELS = { local: 'CSDL nội bộ', opencellid: 'OpenCellID (online)', opencellid_web: 'OpenCellID web (online)', t0stbrot: 't0stbrot (online)', combain: 'Combain (online)' };
 
+// Dòng bản ghi đang hiển thị ở tab "Tra cứu danh sách" (khoá → record) — để bấm 1 dòng
+// là mở popup CHI TIẾT trên bản đồ, không phải nhồi tham số vào onclick.
+let clRecordRows = {};
+
+// Bấm 1 dòng bản ghi → tô sáng cell trên bản đồ kèm popup chi tiết giống tra theo
+// danh sách: MCC-MNC-LAC-CellID, eNB/sector/ECI, công nghệ, nguồn, bán kính, toạ độ,
+// địa chỉ cell + các lần gọi/SMS của cell đó trong phiên.
+function openClRecordOnMap(key) {
+  const l = clRecordRows[key];
+  if (!l || l.lat == null || l.lon == null) return;
+  const showSource = (typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin());
+  const srcType = l.source === 'local' ? 'local' : 'online';
+  const label = `${l.mcc || ''}-${l.mnc || ''}-${l.lac || ''}-${l.cellid || ''}`;
+  // Các bản ghi khác cùng cell trong phiên → dòng thời gian ngắn như popup marker.
+  const same = (myLogsCache || []).filter(x => x.mcc === l.mcc && x.mnc === l.mnc
+    && x.lac === l.lac && String(x.cellid) === String(l.cellid));
+  const lineItems = same.slice(0, 8).map(g => {
+    const ts = fmtDateTime(g.timestamp);
+    return `${ts} [${actionLabel[g.action_type] || g.action_type || ''}] ${g.partner_number || g.contact_number || ''}`;
+  }).join('<br>');
+  const extra = same.length
+    ? `<br>${histEsc(t('upload.records'))}: ${same.length}<br><small>${lineItems}</small>`
+    : '';
+  highlightCellOnMap(l.lat, l.lon, l.cell_range || l.range, l.radio, label, {
+    mcc: l.mcc, mnc: l.mnc, lac: l.lac, cellid: l.cellid,
+    cellLine: formatCellId(l.cellid, l.enb_id, l.sector),
+    radio: l.radio,
+    sourceLabel: SOURCE_LABELS[l.source] || (l.source || ''),
+    srcType: srcType, showSource: showSource,
+    description: l.cell_address || '',
+    extra: extra
+  });
+}
+
 function getCellColor(type) {
   return colorMap[type] || '#888';
 }
@@ -2270,9 +2816,8 @@ function buildCellPopupHtml(opts) {
   return `<b>${histEsc(cp.text)}</b><br>` +
     `${histEsc(opts.cellLine || '')}` +
     radioPopupLine(opts.radio) + '<br>' +
-    (opts.showSource && opts.sourceLabel ? `${t('hist.source')}: <span class="hist-source ${opts.srcType}">${histEsc(opts.sourceLabel)}</span><br>` : '') +
     `${t('hist.range')}: ${histEsc(range)}m<br>` +
-    `${t('hist.result')}: ${lat}, ${lon} <i class="fas fa-copy" style="cursor:pointer" title="Copy tọa độ" onclick="copyCoords(${lat},${lon})"></i>` +
+    `${t('hist.result')}: ${lat}, ${lon} ${coordActionIcons(lat, lon)}` +
     (opts.description ? `<br>${histEsc(opts.description)}` : '') +
     (opts.extra || '');
 }
@@ -2441,12 +2986,11 @@ async function lookupCell(mccArg, mncArg, lacArg, cellidArg) {
         `<i class="fas fa-check-circle"></i>` +
         `<span class="hist-cell">${dCell}</span>` +
         (rs.key ? `<span class="hist-radio-badge" style="background:${rs.color}" title="${histEsc(t('hist.radio'))}">${histEsc(rs.full || rs.label)}</span>` : '') +
-        (showSource ? `<span class="hist-source ${srcType}">${sourceLabel}</span>` : '') +
       `</div>` +
       `<div style="font-size:11px">${formatCellId(d.cellid || cellid, sector)}</div>` +
       `<div class="hist-coords" style="margin-top:4px">` +
         `<i class="fas fa-map-pin"></i>${dLat}, ${dLon} ` +
-        `<i class="fas fa-copy" style="cursor:pointer;opacity:0.7" title="Copy tọa độ" onclick="copyCoords(${dLat},${dLon})"></i>` +
+        coordActionIcons(dLat, dLon) +
       `</div>` +
       `<div style="font-size:11px;margin-top:3px">Bán kính: <b>${d.range}m</b></div>` +
       (warnUncertain ? `<div style="font-size:11px;margin-top:4px;color:#c98a1e"><i class="fas fa-triangle-exclamation"></i> ${t('cells.radioWarn')}</div>` : '') +
@@ -2517,18 +3061,40 @@ async function searchCells() {
   try {
     const resp = await apiRequest('GET', `/api/cells/search?q=${encodeURIComponent(raw)}`);
     const cells = resp.data || [];
+    // Giữ dữ liệu cell để bấm dòng nào thì dựng popup CHI TIẾT cho cell đó (giống tra
+    // theo danh sách), không chỉ hiện mỗi nhãn MCC-MNC-LAC-CellID.
+    cellSearchRows = {};
     list.innerHTML = cells.length === 0 ? '<span style="color:var(--text-faint)">No results</span>' :
       cells.slice(0, 20).map(c => {
         const label = `${c.mcc}-${c.mnc}-${c.lac}-${c.cellid}`;
         const hasCoord = c.lat && c.lon;
+        cellSearchRows[label] = c;
         const click = hasCoord
-          ? `onclick="highlightCellOnMap(${parseFloat(c.lat)}, ${parseFloat(c.lon)}, ${parseFloat(c.range) || 500}, '${histJsSafe(c.radio || '')}', '${histJsSafe(label)}')"`
+          ? `onclick="openCellSearchResult('${histJsSafe(label)}')"`
           : '';
         return `<div ${click} style="padding:3px 0;${hasCoord ? 'cursor:pointer;' : 'opacity:0.6;'}color:var(--text-secondary);border-bottom:1px solid var(--border-color);font-size:11px">${label} <span style="color:var(--text-faint)">${c.lat}, ${c.lon}</span></div>`;
       }).join('');
   } catch (e) {
     list.innerHTML = 'Error';
   }
+}
+
+// Bấm 1 dòng ở kết quả tìm kiếm cell → tô sáng trên bản đồ KÈM popup chi tiết
+// (nguồn, công nghệ, bán kính, toạ độ, địa chỉ) giống tra theo danh sách.
+let cellSearchRows = {};
+function openCellSearchResult(key) {
+  const c = cellSearchRows[key];
+  if (!c) return;
+  const showSource = (typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin());
+  const srcType = c.source === 'local' ? 'local' : 'online';
+  highlightCellOnMap(c.lat, c.lon, c.range || c.cell_range, c.radio, key, {
+    mcc: c.mcc, mnc: c.mnc, lac: c.lac, cellid: c.cellid,
+    cellLine: formatCellId(c.cellid, c.sector),
+    radio: c.radio,
+    sourceLabel: SOURCE_LABELS[c.source] || (c.source || ''),
+    srcType: srcType, showSource: showSource,
+    description: c.cell_address || ''
+  });
 }
 
 // ============================================
@@ -2773,28 +3339,21 @@ function clCellsSummary() {
   return s;
 }
 
-// Chi tiết phiên đang mở để hiện trên card (tên file · mạng · số cell · số dòng).
-// `clNetLabelFor` viết dạng const-arrow ngay trên hàm này để TÊN ĐÃ có giá trị trước khi
-// người dùng bấm tra (không phụ thuộc vị trí const CL_NET_OPTIONS bên dưới).
+// Chi tiết phiên đang mở để hiện trên card: CHỈ tên file.
+// Dòng `.cls-meta` (mạng · số cell · số dòng) đã bỏ theo yêu cầu — số liệu tổng hợp
+// đã có ở #clListSummary ngay dưới, hiện thêm ở đây là lặp.
 function clSessionDetailHtml() {
   if (!clAnalyze) return '';
-  const n = (clAnalyze.rows || []).length;
-  const net = clNetLabelFor(clAnalyze.network) || t('calllogs.netAuto');
   return `<div class="cls-detail">`
     + `<i class="fas fa-file-excel"></i>`
     + `<span class="cls-file" title="${histEsc(clAnalyze.fileName || '')}">${histEsc(clAnalyze.fileName || '—')}</span>`
-    + `</div>`
-    + `<div class="cls-meta">`
-    + `<span title="Mạng"><i class="fas fa-sim-card"></i><b>${histEsc(net)}</b></span>`
-    + `<span><i class="fas fa-layer-group"></i><b>${histEsc(fmtTpl('hist.sessionCells', { n }))}</b></span>`
-    + (clAnalyze.totalRows
-      ? `<span><i class="fas fa-list"></i><b>${histEsc(fmtTpl('hist.sessionRows', { n: clAnalyze.totalRows }))}</b></span>`
-      : '')
     + `</div>`;
 }
 
 // Hiện/ẩn khối NẠP FILE (chọn mạng + khung upload). Chỉ hiện ở bước đầu — khi chưa có
 // danh sách cell của phiên làm việc. Có danh sách → thay bằng card phiên + bảng cell.
+// Tổng kết (#clListSummary) nằm TRONG card nên phải cập nhật cùng lúc, không thì
+// card hiện mà dòng tổng kết vẫn ẩn (display:none ban đầu trong HTML).
 function syncClLoadUi() {
   const has = !!(clAnalyze && Array.isArray(clAnalyze.rows) && clAnalyze.rows.length);
   const up = document.getElementById('clInlineUp');
@@ -2802,9 +3361,14 @@ function syncClLoadUi() {
   const search = document.getElementById('clRecordsBlock');
   if (up) up.hidden = has;
   if (card) card.hidden = !has;
-  if (search && has) search.hidden = false;
+  // #clRecordsBlock chứa bộ lọc + khoảng ngày → phải LUÔN hiện. Trước đây chỉ gỡ
+  // `hidden` khi đã có danh sách cell, nên lúc chưa nạp file cả khối bị display:none
+  // và bấm vào ô ngày không có gì xảy ra (phần tử 0×0, không nhận click).
+  if (search) search.hidden = false;
   const detail = document.getElementById('clSessionCardDetail');
   if (card && has && detail) detail.innerHTML = clSessionDetailHtml();
+  // Card vừa hiện → nạp lại số liệu tổng kết. Không có dữ liệu thì hàm này tự ẩn.
+  if (has) updateCallSessionUi(myLogsCache);
 }
 
 // Đóng phiên làm việc: bảng cell + danh sách bản ghi về trống, quay lại giao diện nạp
@@ -2940,28 +3504,65 @@ function showHelpPopup(opts) {
         + `<ul>${o.items.map(k => `<li>${histEsc(t(k))}</li>`).join('')}</ul>`
       : '');
   const btn = btnId ? document.getElementById(btnId) : null;
-  const anchor = (btn && btn.parentElement) || document.body;
-  anchor.appendChild(pop);
-  // Mặc định neo ngay dưới nút ?; nếu tràn viewport thì ghim theo góc trên phải.
+  // Khung tham chiếu để tính bề rộng: PANEL chứa nút (sidebar), không phải viewport —
+  // popup rộng đúng bằng panel và canh giữa panel, kể cả khi user kéo giãn/thu hẹp panel.
+  const panel = (btn && (btn.closest('.sidebar') || btn.closest('.cl-net-field')
+    || btn.closest('.form-group') || btn.closest('.tab-content') || btn.parentElement))
+    || document.body;
+  // Gắn vào <body>, KHÔNG gắn vào sidebar: sidebar là `position: fixed` nên nó trở thành
+  // containing block của con `position: fixed` → toạ độ lệch đúng bằng offset sidebar.
+  // Đo panel bằng getBoundingClientRect (toạ độ viewport) nên gắn vào body là khớp.
+  document.body.appendChild(pop);
+
+  const pad = 8;          // lề tối thiểu trong panel
+  const gap = 6;          // khoảng cách tới nút
   const place = () => {
+    if (!pop.isConnected) return;
+    const pr = panel.getBoundingClientRect();
     const b = btn ? btn.getBoundingClientRect() : null;
-    if (b) {
-      pop.style.position = 'fixed';
-      pop.style.top = Math.round(b.bottom + 6) + 'px';
-      pop.style.right = Math.max(8, Math.round(window.innerWidth - b.right - 6)) + 'px';
-      pop.style.left = 'auto';
-      const r = pop.getBoundingClientRect();
-      if (r.left < 8) { pop.style.right = 'auto'; pop.style.left = '8px'; }
-      if (r.bottom > window.innerHeight - 8 && b.top > 220) {
-        pop.style.top = Math.max(8, Math.round(b.top - r.height - 6)) + 'px';
+    const vh = window.innerHeight;
+    // Bề rộng = bề rộng panel trừ lề 2 bên (không vượt quá viewport khi panel rộng hơn
+    // màn hình — panel có thể rộng hơn viewport sau khi kéo).
+    const availW = Math.max(180, Math.round(pr.width - pad * 2));
+    pop.style.position = 'fixed';
+    pop.style.width = availW + 'px';
+    pop.style.maxWidth = availW + 'px';
+    // Canh giữa theo panel.
+    let left = Math.round(pr.left + (pr.width - availW) / 2);
+    // Kẹp trong viewport nếu panel tràn mép.
+    const maxLeft = Math.max(pad, window.innerWidth - availW - pad);
+    left = Math.max(pad, Math.min(left, maxLeft));
+    pop.style.left = left + 'px';
+    pop.style.right = 'auto';
+
+    // Mốc dưới của nút ? — popup bám sát ngay dưới nó.
+    const topBelow = b ? Math.round(b.bottom + gap) : Math.round(pr.top + 40);
+    // Chiều cao nội dung thật (đo khi max-height đang bị bỏ giới hạn).
+    pop.style.maxHeight = 'none';
+    const ph = pop.offsetHeight;
+    // Chỗ còn lại phía dưới nút và phía trên nút.
+    const roomBelow = Math.max(120, vh - pad - topBelow);
+    const roomAbove = b ? Math.max(0, Math.round(b.top - gap - pad)) : 0;
+    // Nội dung dài hơn chỗ trống → KHÔNG nhảy lên đầu panel (dễ tưởng popup treo ở trên):
+    // giữ popup ngay dưới nút và cho nó tự cuộn. Chỉ lật lên trên khi phía trên rộng hơn
+    // hẳn phía dưới VÀ đủ chứa nội dung.
+    let top = topBelow;
+    let maxH = roomBelow;
+    if (ph > roomBelow) {
+      if (roomAbove > roomBelow && roomAbove >= ph) {
+        top = Math.round(b.top - gap - ph);
+        maxH = roomAbove;
+      } else {
+        maxH = roomBelow;   // ngay dưới nút, cuộn bên trong
       }
-    } else {
-      pop.style.position = 'fixed';
-      pop.style.top = '56px';
-      pop.style.right = '12px';
     }
+    pop.style.maxHeight = Math.max(140, Math.round(maxH)) + 'px';
+    pop.style.top = Math.max(pad, top) + 'px';
   };
   requestAnimationFrame(place);
+  // Panel đổi bề rộng (kéo giãn / thu gọn) hoặc cửa sổ đổi kích thước → đặt lại.
+  const onResize = () => { if (pop.isConnected) place(); else window.removeEventListener('resize', onResize); };
+  window.addEventListener('resize', onResize);
   // Bấm ra ngoài thì đóng (không đóng khi bấm chính nút ? — nút đó tự toggle).
   setTimeout(() => {
     const away = (e) => {
@@ -3143,7 +3744,7 @@ function sortClTable(key) {
 function clRowStatusFor(cell) {
   const res = clAnalyze ? clAnalyze.results[cell.key] : null;
   if (res && res.state === 'found') {
-    return { rank: 3, cls: 'found', text: t('calllogs.statusFound') + (res.sourceLabel ? ` · ${res.sourceLabel}` : '') };
+    return { rank: 3, cls: 'found', text: t('calllogs.statusFound') };
   }
   if (res && res.state === 'unpaid') return { rank: 4, cls: 'unpaid', text: t('calllogs.statusUnpaid') };
   if (res && res.state === 'miss') {
@@ -3217,6 +3818,12 @@ let logPageIndex = 1;
 const LOG_PAGE_SIZE = 20;
 // Lọc loại hành động (chip icon) — thay cho <select id="actionFilter"> cũ.
 let clActionFilter = 'all';
+// Lọc theo TRẠNG THÁI CELL của dòng bản ghi (độc lập với lọc hành động/ngày):
+//   all    = mọi dòng
+//   found  = cell đã tra được (có toạ độ)
+//   unpaid = cell CHƯA tra được (chưa trả phí / hết điểm / đang tra)
+//   miss   = cell đã tra nhưng KHÔNG có kết quả
+let clCellStatusFilter = 'all';
 
 
 function renderClTable() {
@@ -3341,11 +3948,6 @@ function clTableRowHtml(cell, index) {
   const addr = (cell.addresses && cell.addresses[0])
     ? `<span class="cl-tbl-addr" title="${histEsc(cell.addresses.join(' · '))}">${histEsc(cell.addresses[0])}</span>`
     : `<span class="cl-tbl-addr cl-tbl-unknown">${histEsc(t('calllogs.unknown'))}</span>`;
-  // Nguồn kết quả (CSDL nội bộ / online) — tách khỏi chuỗi trạng thái để cột gọn.
-  const srcBadge = (res && res.state === 'found' && res.source)
-    ? `<span class="cl-src-badge ${res.source === 'local' ? 'local' : 'online'}" title="${histEsc(res.sourceLabel || res.source)}">` +
-      `<i class="fas ${res.source === 'local' ? 'fa-database' : 'fa-cloud'}"></i></span>`
-    : '';
   return `<tr class="cl-row st-${st.cls}${selected ? ' cl-row-sel' : ''}" data-key="${histEsc(cell.key)}">` +
     `<td class="cl-tbl-num"><input type="checkbox" class="cl-tbl-check" ${selected ? 'checked' : ''} ` +
       `onchange="clToggleRow('${histEsc(cell.key)}', this.checked)"> <span class="cl-tbl-idx">${index}</span></td>` +
@@ -3356,7 +3958,7 @@ function clTableRowHtml(cell, index) {
     `<td>${time}</td>` +
     `<td>${addr}</td>` +
     `<td class="cl-tbl-loc">${clRowLocHtml(cell)}</td>` +
-    `<td class="cl-tbl-status">${clRowStatusCellHtml(st, srcBadge, st.cls === 'busy' ? '0.0' : null)}</td>` +
+    `<td class="cl-tbl-status">${clRowStatusCellHtml(st, st.cls === 'busy' ? '0.0' : null)}</td>` +
     `</tr>`;
 }
 
@@ -3365,8 +3967,7 @@ function clTableRowHtml(cell, index) {
 function clRowLocHtml(cell) {
   const res = clAnalyze ? clAnalyze.results[cell.key] : null;
   if (res && res.lat != null && res.lon != null) {
-    return `${histEsc(res.lat)}, ${histEsc(res.lon)}` +
-      `<i class="fas fa-copy cl-loc-copy" title="Copy tọa độ" onclick="copyCoords(${Number(res.lat)},${Number(res.lon)})"></i>`;
+    return `${histEsc(res.lat)}, ${histEsc(res.lon)}` + coordActionIcons(res.lat, res.lon);
   }
   if (cell.localLat != null && cell.localLon != null) {
     return `<span class="cl-tbl-unknown">${histEsc(t('calllogs.statusLocal'))}</span>`;
@@ -3495,7 +4096,7 @@ function updateClMapResultsBtn(summary) {
 // Ô trạng thái trong bảng cell: CHỈ icon (gọn), chữ trạng thái chuyển vào tooltip
 // `title` — hover là thấy, không chiếm chỗ trên dòng. Badge nguồn (admin) và thanh
 // "đang tra" vẫn giữ vì chúng là thông tin phụ không thay được bằng tooltip.
-function clRowStatusCellHtml(st, srcBadge, secs) {
+function clRowStatusCellHtml(st, secs) {
   const tip = secs != null ? `${st.text} · ${secs}s` : st.text;
   const busy = st.cls === 'busy'
     ? `<span class="cl-row-busy" title="${histEsc(t('calllogs.statusBusy'))}">`
@@ -3505,7 +4106,7 @@ function clRowStatusCellHtml(st, srcBadge, secs) {
   return `<span class="cl-tbl-status-wrap">`
     + `<span class="cl-row-status cl-row-status-ico ${st.cls}" data-cls="${st.cls}"`
     + ` title="${histEsc(tip)}" aria-label="${histEsc(st.text)}" role="img">`
-    + `${clStatusIconHtml(st.cls)}${srcBadge}</span>`
+    + `${clStatusIconHtml(st.cls)}</span>`
     + busy
     + `</span>`;
 }
@@ -3521,15 +4122,11 @@ function updateClTableRow(key) {
   if (locTd) locTd.innerHTML = clRowLocHtml(cell);
   const stTd = tr.querySelector('.cl-tbl-status');
   const res = clAnalyze.results[cell.key];
-  const srcBadge = (res && res.state === 'found' && res.source)
-    ? `<span class="cl-src-badge ${res.source === 'local' ? 'local' : 'online'}" title="${histEsc(res.sourceLabel || res.source)}">` +
-      `<i class="fas ${res.source === 'local' ? 'fa-database' : 'fa-cloud'}"></i></span>`
-    : '';
   if (stTd) {
     // Vẽ lại cả ô (không chỉ đổi chữ) để thanh "đang tra" xuất biến/mất đi đúng lúc.
     const secs = st.cls === 'busy' && clResolveStartedAt
       ? ((Date.now() - clResolveStartedAt) / 1000).toFixed(1) : null;
-    stTd.innerHTML = clRowStatusCellHtml(st, srcBadge, secs);
+    stTd.innerHTML = clRowStatusCellHtml(st, secs);
   } else {
     const stEl = tr.querySelector('.cl-row-status');
     if (stEl) {
@@ -3537,7 +4134,7 @@ function updateClTableRow(key) {
       stEl.setAttribute('data-cls', st.cls);
       stEl.setAttribute('title', st.text);
       stEl.setAttribute('aria-label', st.text);
-      stEl.innerHTML = clStatusIconHtml(st.cls) + srcBadge;
+      stEl.innerHTML = clStatusIconHtml(st.cls);
     }
   }
 }
@@ -4024,6 +4621,176 @@ function markCellsMiss(keys, findCell) {
   }
 }
 
+// ============================================
+// Tra cứu MỘT cell từ danh sách bản ghi
+// --------------------------------------------
+// Icon cuối dòng (chỉ hiện với cell chưa tra / chưa đủ điểm trả phí) → tra đúng 1 cell:
+//   1. Đẩy dòng sang trạng thái "đang tra" + hiện thanh trạng thái ngay trong dòng.
+//   2. POST /api/cells/resolve-batch với 1 cell, CÙNG uploadId của phiên → server tái
+//      dùng kết quả đã trả phí, không trừ điểm 2 lần.
+//   3. Ra toạ độ  → ghi vào clAnalyze.results + mọi dòng bản ghi cùng cell ⇒ dòng tự
+//      nhảy sang nhóm "đã tra được" (chip đếm lại, bộ lọc trạng thái thấy ngay).
+//      Không ra   → 'miss' + toast báo.
+//      Hết điểm   → giữ 'unpaid' + toast báo thiếu điểm (không đánh dấu miss, vì chưa
+//                   thực sự tra được lần nào).
+const clOneCellBusy = new Set();
+
+async function clLookupOneCell(ev, btn) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  const key = btn && (btn.dataset.cellKey || '');
+  if (!key || !clAnalyze) return;
+  if (clOneCellBusy.has(key)) return;
+
+  const cell = clAnalyze.rows.find(c => c.key === key) || clAnalyze.rows.find(c => canonicalClientKey(c) === key);
+  if (!cell) { showToast(t('calllogs.lookupCellNoRow'), 'error'); return; }
+
+  clOneCellBusy.add(key);
+  btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+  // (1) "Đang tra" NGAY: state busy + thanh trạng thái trong dòng.
+  const prevState = clAnalyze.results[cell.key];
+  clAnalyze.results[cell.key] = { state: 'busy' };
+  renderCallLogs();
+  clShowLookupBar(key, 'busy');
+
+  const credit = { charged: 0, balance: null, insufficient: false };
+  const uploadId = clAnalyze.uploadId || clBatchUploadId(clAnalyze.fileName, clAnalyze.rows);
+  clAnalyze.uploadId = uploadId;
+  if (!clAnalyze.batchId) clAnalyze.batchId = uploadId;
+
+  try {
+    const resp = await apiRequest('POST', '/api/cells/resolve-batch', {
+      cells: [{ mcc: cell.mcc, mnc: cell.mnc, lac: cell.lac, cellid: cell.cellid, sector: cell.sector }],
+      uploadId: uploadId,
+      fileName: clAnalyze.fileName,
+      roundIdx: Number(clAnalyze.roundsDone) || 0
+    });
+    if (resp && resp.credit) {
+      credit.charged = Number(resp.credit.charged) || 0;
+      credit.balance = resp.credit.balance != null ? resp.credit.balance : null;
+      credit.insufficient = !!resp.credit.insufficient;
+    }
+    if (resp && resp.batchId) clAnalyze.batchId = resp.batchId;
+    const res = (resp && Array.isArray(resp.results)) ? resp.results[0] : null;
+
+    if (!res) {
+      // Server không trả gì cho cell này → giữ nguyên trạng thái cũ.
+      if (prevState) clAnalyze.results[cell.key] = prevState; else delete clAnalyze.results[cell.key];
+      clShowLookupBar(key, 'fail');
+      showToast(t('calllogs.lookupCellNoResult'), 'error');
+    } else if (res.unpaid || credit.insufficient) {
+      // Hết điểm: KHÔNG đánh dấu miss — nạp điểm rồi tra lại được.
+      clAnalyze.results[cell.key] = { state: 'unpaid' };
+      clShowLookupBar(key, 'nofunds');
+      showToast(fmtTpl('calllogs.lookupCellNoFunds', {
+        c: clCreditCost(), b: credit.balance == null ? '?' : credit.balance
+      }), 'error');
+    } else if (res.lat && res.lon) {
+      // Tra ra → ghi vào cả kết quả phiên lẫn mọi dòng bản ghi cùng cell.
+      clAnalyze.results[cell.key] = {
+        state: 'found', lat: res.lat, lon: res.lon, range: res.range, radio: res.radio,
+        sourceLabel: SOURCE_LABELS[res.source] || (res.source || ''), source: res.source
+      };
+      cell.lat = res.lat; cell.lng = res.lon; cell.range = res.range;
+      if (!cell.radio && res.radio) cell.radio = res.radio;
+      cell.state = 'found';
+      for (const row of myLogsCache) {
+        if (!row.cellid || canonicalClientKey(row) !== cell.key) continue;
+        row.lat = res.lat; row.lon = res.lon; row.cell_range = res.range;
+        row.source = res.source; row._charged = true;
+        row._resolvedOnline = (res.source || '') !== 'local';
+        if (!row.radio && res.radio) row.radio = res.radio;
+      }
+      clShowLookupBar(key, 'done');
+      showToast(credit.charged > 0
+        ? fmtTpl('calllogs.lookupCellOk', { c: credit.charged })
+        : t('calllogs.lookupCellOkFree'), 'success');
+    } else if (res.pending) {
+      // Server còn việc (nguồn online đang chạy) → giữ "đang tra", user bấm lại sau.
+      clAnalyze.results[cell.key] = { state: 'busy' };
+      clShowLookupBar(key, 'pending');
+      showToast(t('calllogs.lookupCellPending'), '');
+    } else {
+      // Đã tra nhưng không nguồn nào có cell.
+      clAnalyze.results[cell.key] = { state: 'miss', reason: '' };
+      cell.state = 'miss';
+      clShowLookupBar(key, 'miss');
+      showToast(credit.charged > 0
+        ? fmtTpl('calllogs.lookupCellMiss', { c: credit.charged })
+        : t('calllogs.lookupCellMissFree'), 'error');
+    }
+    // Ghi phiên → mở lại từ Lịch sử vẫn thấy kết quả / trạng thái mới.
+    if (clAnalyze.batchId) {
+      ensureCallLogSession(clAnalyze.batchId, {
+        fileName: clAnalyze.fileName, network: clAnalyze.network,
+        rowCount: clAnalyze.totalRows, cellCount: clAnalyze.rows.length,
+        sessionCells: clAnalyze.rows
+      }).catch(() => {});
+    }
+  } catch (err) {
+    if (prevState) clAnalyze.results[cell.key] = prevState; else delete clAnalyze.results[cell.key];
+    clShowLookupBar(key, 'fail');
+    showToast(t('calllogs.lookupCellFail'), 'error');
+  } finally {
+    clOneCellBusy.delete(key);
+    // Vẽ lại danh sách → dòng ở trạng thái CUỐI; thanh trạng thái đặt lại vào dòng mới
+    // để user kịp đọc kết quả, rồi tự ẩn.
+    const finalKind = clCellBarKindFor(cell.key);
+    renderCallLogs();
+    renderClTableSummary();
+    if (finalKind) clShowLookupBar(cell.key, finalKind.kind);
+    setTimeout(() => clHideLookupBar(cell.key), finalKind ? 3000 : 0);
+  }
+}
+
+// Loại thanh trạng thái (nếu còn cần hiện) theo state CUỐI của cell.
+function clCellBarKindFor(key) {
+  const r = clAnalyze && clAnalyze.results ? clAnalyze.results[key] : null;
+  const st = r && r.state ? r.state : 'none';
+  if (st === 'found') return { kind: 'done' };
+  if (st === 'miss') return { kind: 'miss' };
+  if (st === 'unpaid') return { kind: 'nofunds' };
+  if (st === 'busy') return { kind: 'pending' };
+  return null;
+}
+
+// Thanh trạng thái trong dòng bản ghi của 1 cell.
+// `kind`: busy | done | miss | nofunds | pending | fail.
+function clShowLookupBar(key, kind) {
+  const card = document.querySelector(`#logRecordList .log-card[data-key="${cssEscapeAttr(key)}"]`);
+  if (!card) return;
+  let bar = card.querySelector('.log-lookup-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    const detail = card.querySelector('.log-detail');
+    if (detail) card.insertBefore(bar, detail); else card.appendChild(bar);
+  }
+  const map = {
+    busy:    { cls: 'busy',    ico: 'fa-spinner fa-spin',      txt: t('calllogs.lookupBarBusy') },
+    done:    { cls: 'done',    ico: 'fa-circle-check',         txt: t('calllogs.lookupBarDone') },
+    miss:    { cls: 'miss',    ico: 'fa-circle-xmark',         txt: t('calllogs.lookupBarMiss') },
+    nofunds: { cls: 'nofunds', ico: 'fa-triangle-exclamation', txt: t('calllogs.lookupBarNoFunds') },
+    pending: { cls: 'busy',    ico: 'fa-hourglass-half',       txt: t('calllogs.lookupBarPending') },
+    fail:    { cls: 'fail',    ico: 'fa-circle-exclamation',   txt: t('calllogs.lookupBarFail') }
+  }[kind] || { cls: 'fail', ico: 'fa-circle-exclamation', txt: '' };
+  bar.className = `log-lookup-bar ${clsSafe(map.cls)}`;
+  bar.innerHTML = `<i class="fas ${map.ico}"></i><span>${histEsc(map.txt)}</span>`;
+}
+
+// Ẩn thanh trạng thái của 1 dòng.
+function clHideLookupBar(key) {
+  const card = document.querySelector(`#logRecordList .log-card[data-key="${cssEscapeAttr(key)}"]`);
+  const bar = card && card.querySelector('.log-lookup-bar');
+  if (bar) bar.remove();
+}
+
+// Escape giá trị cho selector thuộc tính `[data-key="…"]` (cell ID chứa dấu `-`).
+function cssEscapeAttr(v) { return String(v == null ? '' : v).replace(/["\\]/g, '\\$&'); }
+function clsSafe(v) { return String(v || '').replace(/[^a-z0-9_-]/gi, ''); }
+
+
 
 // Kéo-thả file vào khung nạp file trong tab "Tra cứu danh sách" → nạp qua luồng phân tích.
 // Lắng nghe ở document (không gắn 1 lần vào khung lúc DOMContentLoaded) để khung
@@ -4344,7 +5111,19 @@ async function loadCallLogs(opts) {
 // User chủ động xoá phiên đang giữ → list trống, mời tải Excel hoặc mở từ Lịch sử.
 // Xoá CẢ phiên local (sessionStorage) lẫn toàn bộ bản ghi rút list của user trên server.
 async function resetCallSession() {
-  if (!confirm(t('calllogs.confirmReset'))) return;
+  const ok = await openConfirmDialog({
+    title: t('confirm.delSessionTitle'),
+    message: t('calllogs.confirmReset'),
+    detail: currentUploadFileName ? [{ k: t('confirm.fileLabel'), v: currentUploadFileName }] : [],
+    warnings: [
+      t('confirm.warnPermanent'),
+      t('confirm.warnAllRecords'),
+      t('confirm.warnServerToo')
+    ],
+    notes: [t('confirm.noteHistoryGone')],
+    okText: t('confirm.okDelete')
+  });
+  if (!ok) return;
   clearCallSession();
   myLogsCache = [];
   currentOpenBatchId = '';
@@ -4388,6 +5167,9 @@ async function openCallLogsFromHistory(rows, fileName, batchId) {
   logPageIndex = 1;
   clActionFilter = 'all';
   document.querySelectorAll('#clActionChips .cl-chip').forEach(c => c.classList.toggle('active', c.dataset.action === 'all'));
+  // Phiên mới → bỏ lọc trạng thái cell (giữ lại sẽ khiến danh sách trống khó hiểu).
+  clCellStatusFilter = 'all';
+  document.querySelectorAll('#clRecordStatusChips .cl-chip').forEach(c => c.classList.toggle('active', c.dataset.status === 'all'));
   const df = document.getElementById('dateFrom'); if (df) df.value = '';
   const dt = document.getElementById('dateTo'); if (dt) dt.value = '';
   syncClDateButtons();
@@ -4887,47 +5669,276 @@ function applyCallLogFilters() {
   renderCallLogs();
 }
 
-// Xoá ngày ở 1 đầu khoảng rồi áp lại lọc.
-function clearCallLogDate(which) {
-  const input = document.getElementById(which === 'from' ? 'dateFrom' : 'dateTo');
-  if (input) input.value = '';
+// Xoá cả khoảng ngày rồi áp lại lọc.
+function clearCallLogDate() {
+  const df = document.getElementById('dateFrom');
+  const dt = document.getElementById('dateTo');
+  if (df) df.value = '';
+  if (dt) dt.value = '';
+  clCal.from = '';
+  clCal.pending = '';
+  applyCallLogFilters();
+  if (clCalOpen) renderClCalendar();
+}
+
+// ============================================
+// Bảng lịch chọn NGÀY / KHOẢNG NGÀY (1 bảng duy nhất)
+// --------------------------------------------
+// Trước đây là 2 <input type="date"> native: mỗi input mở 1 bảng lịch riêng, và
+// showPicker() bị chặn (NotAllowedError) khi thiếu user-activation nên nhấn vào
+// không mở được gì. Nay: 1 nút lịch mở 1 popup lịch tự vẽ.
+//   - click 1 ngày rồi bấm "Áp dụng" (hoặc click lần 2 vào CHÍNH ngày đó)
+//     → lọc đúng 1 ngày.
+//   - click ngày đầu rồi ngày cuối → khoảng [from..to].
+// Giá trị cuối vẫn ghi vào #dateFrom/#dateTo (input hidden) để getFilteredLogs
+// và mọi code cũ đọc nguyên trạng.
+const clCal = { view: '', from: '', pending: '', open: false };
+let clCalOpen = false;
+// Đang dựng lại innerHTML của popup: sự kiện click đang lan lên document sẽ có
+// target đã bị gỡ khỏi DOM → handler "bấm ra ngoài" phải bỏ qua.
+let clCalRendering = false;
+
+function clYmd(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function clTodayYmd() { return clYmd(new Date()); }
+function clParseYmd(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+// 'YYYY-MM-DD' → 'dd/mm/yyyy' cho nhãn nút.
+function clFmtYmd(s) {
+  const d = clParseYmd(s);
+  if (!d) return '';
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+function toggleClDatePicker(ev) {
+  if (ev) ev.stopPropagation();
+  if (clCalOpen) { closeClDatePicker(); return; }
+  const df = document.getElementById('dateFrom');
+  const dt = document.getElementById('dateTo');
+  clCal.from = (df && df.value) || '';
+  clCal.pending = '';
+  const base = clCal.from || (dt && dt.value) || clTodayYmd();
+  clCal.view = base.slice(0, 7) + '-01';
+  const pop = document.getElementById('clCalPop');
+  const btn = document.getElementById('clDateBtn');
+  if (pop) pop.classList.remove('hidden');
+  if (btn) { btn.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); }
+  clCalOpen = true;
+  renderClCalendar();
+  positionClCalendar();
+}
+
+// Canh popup NGAY DƯỚI hàng chip (neo vào .cl-filter-panel nên phải tự tính top):
+// lấy đáy của #clActionChips so với panel rồi cộng 6px. Canh cả left theo panel.
+// Gọi sau khi popup đã hiện (cần layout) và mỗi lần render lại (chiều cao đổi).
+function positionClCalendar() {
+  const pop = document.getElementById('clCalPop');
+  const panel = document.getElementById('callLogFilterPanel');
+  const row = document.getElementById('clActionChips');
+  if (!pop || !panel || !row) return;
+  const pr = panel.getBoundingClientRect();
+  const rr = row.getBoundingClientRect();
+  const top = Math.round(rr.bottom - pr.top + 6);
+  pop.style.top = top + 'px';
+  pop.style.left = '0px';
+  // Không cho popup tràn ngang ra ngoài khung chứa.
+  pop.style.maxWidth = Math.max(200, Math.round(pr.width)) + 'px';
+}
+
+function closeClDatePicker() {
+  const pop = document.getElementById('clCalPop');
+  const btn = document.getElementById('clDateBtn');
+  if (pop) pop.classList.add('hidden');
+  if (btn) { btn.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); }
+  clCalOpen = false;
+}
+
+// Đóng khi bấm ra ngoài / nhấn Esc.
+// Lưu ý: renderClCalendar() dựng lại innerHTML của popup, nên phần tử vừa bị click
+// có thể đã bị gỡ khỏi DOM lúc sự kiện nổi lên document → `range.contains(target)`
+// trả false và popup tự đóng ngay sau lần chọn ĐẦU TIÊN (lần chọn thứ hai rơi vào
+// khoảng trống). Vì vậy: (a) dùng composedPath() để biết click có đi qua popup/filter
+// panel hay không, (b) đếm số lần render để bỏ qua sự kiện đang lan từ chính popup.
+document.addEventListener('click', (e) => {
+  if (!clCalOpen) return;
+  const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+  const inRange = path.some(n => n && n.id === 'clDateRange') ||
+    (() => { const r = document.getElementById('clDateRange'); return !!(r && e.target && r.contains(e.target)); })();
+  // Click phát sinh trong chính đợt này (target đã bị re-render gỡ khỏi DOM) vẫn
+  // được coi là click bên trong nếu quá trình render vừa xảy ra.
+  if (inRange || clCalRendering) return;
+  closeClDatePicker();
+});
+document.addEventListener('keydown', (e) => {
+  if (clCalOpen && e.key === 'Escape') closeClDatePicker();
+});
+// Xoay máy / đổi bề rộng → hàng chip đổi vị trí, popup phải bám lại.
+window.addEventListener('resize', () => { if (clCalOpen) positionClCalendar(); });
+
+// Vẽ lưới lịch của tháng đang xem. Ô ngoài tháng vẫn hiện (mờ) để bấm được.
+function renderClCalendar() {
+  const pop = document.getElementById('clCalPop');
+  if (!pop) return;
+  const view = clParseYmd(clCal.view) || new Date();
+  const y = view.getFullYear(), m = view.getMonth();
+  const first = new Date(y, m, 1);
+  // Thứ 2 = cột đầu (ISO). getDay(): CN=0 → đổi về 0..6 với T2=0.
+  const shift = (first.getDay() + 6) % 7;
+  const gridStart = new Date(y, m, 1 - shift);
+  const today = clTodayYmd();
+  const a = clCal.from || '';
+  const b = clCal.pending || '';
+  const lo = a && b ? (a <= b ? a : b) : (a || b);
+  const hi = a && b ? (a <= b ? b : a) : '';
+
+  const dows = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+  let cells = '';
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
+    const ymd = clYmd(d);
+    const other = d.getMonth() !== m;
+    const cls = ['cl-cal-day'];
+    if (other) cls.push('other');
+    if (ymd === today) cls.push('today');
+    if (hi && ymd > lo && ymd < hi) cls.push('in-range');
+    if (ymd === lo) cls.push('range-start');
+    if (ymd === hi && hi !== lo) cls.push('range-end');
+    if (ymd === lo && hi && lo === hi) cls.push('range-end');
+    cells += `<button type="button" class="${cls.join(' ')}" data-ymd="${ymd}"` +
+      ` onclick="clCalPick('${ymd}')">${d.getDate()}</button>`;
+  }
+
+  const title = `${String(m + 1).padStart(2, '0')}/${y}`;
+  const T = (k, fb) => (typeof t === 'function' ? t(k) : fb);
+  clCalRendering = true;
+  try {
+  pop.innerHTML =
+    `<div class="cl-cal-head">` +
+      `<button type="button" class="cl-cal-nav" onclick="clCalNav(-12)" title="${histEsc(T('cal.prevYear', 'Năm trước'))}"><i class="fas fa-angles-left"></i></button>` +
+      `<button type="button" class="cl-cal-nav" onclick="clCalNav(-1)" title="${histEsc(T('cal.prevMonth', 'Tháng trước'))}"><i class="fas fa-chevron-left"></i></button>` +
+      `<span class="cl-cal-title">${title}</span>` +
+      `<button type="button" class="cl-cal-nav" onclick="clCalNav(1)" title="${histEsc(T('cal.nextMonth', 'Tháng sau'))}"><i class="fas fa-chevron-right"></i></button>` +
+      `<button type="button" class="cl-cal-nav" onclick="clCalNav(12)" title="${histEsc(T('cal.nextYear', 'Năm sau'))}"><i class="fas fa-angles-right"></i></button>` +
+    `</div>` +
+    `<div class="cl-cal-grid">` +
+      dows.map(d => `<span class="cl-cal-dow">${d}</span>`).join('') +
+      cells +
+    `</div>` +
+    `<div class="cl-cal-foot">` +
+      `<span class="cl-cal-hint" id="clCalHint"></span>` +
+      `<button type="button" class="cl-cal-act" onclick="clCalToday()">${histEsc(T('cal.today', 'Hôm nay'))}</button>` +
+      `<button type="button" class="cl-cal-act primary" onclick="clCalApply()">${histEsc(T('cal.apply', 'Áp dụng'))}</button>` +
+    `</div>`;
+  } finally {
+    // Hạ cờ ở macrotask kế tiếp: sự kiện click đang lan lên document PHẢI xảy ra
+    // trong lúc cờ còn bật, nếu hạ ngay trong finally (đồng bộ) thì vô dụng.
+    setTimeout(() => { clCalRendering = false; }, 0);
+  }
+  syncClCalHint();
+  // Chiều cao popup đổi (hàng tuần / chân) → canh lại cho bám đáy hàng chip.
+  positionClCalendar();
+}
+
+function syncClCalHint() {
+  const hint = document.getElementById('clCalHint');
+  if (!hint) return;
+  const T = (k, fb) => (typeof t === 'function' ? t(k) : fb);
+  const a = clCal.from || '', b = clCal.pending || '';
+  if (a && b) hint.textContent = fmtTpl('cal.hintRange', { a: clFmtYmd(a), b: clFmtYmd(b) });
+  else if (a) hint.textContent = fmtTpl('cal.hintFrom', { d: clFmtYmd(a) });
+  else hint.textContent = T('cal.hintPick', 'Chọn 1 ngày, hoặc 2 ngày để lấy khoảng');
+}
+
+function clCalNav(deltaMonths) {
+  const v = clParseYmd(clCal.view) || new Date();
+  v.setMonth(v.getMonth() + deltaMonths);
+  clCal.view = clYmd(v).slice(0, 7) + '-01';
+  renderClCalendar();
+}
+
+function clCalToday() {
+  const t = clTodayYmd();
+  clCal.view = t.slice(0, 7) + '-01';
+  clCal.from = t;
+  clCal.pending = '';
+  renderClCalendar();
+}
+
+// Bấm 1 ngày trong lịch:
+//   chưa có ngày đầu  → đặt ngày đầu, chờ ngày cuối.
+//   đã có ngày đầu    → đặt ngày cuối (nếu trước ngày đầu thì đảo lại).
+//                       Bấm LẦN 2 vào chính ngày đầu → chốt đúng 1 ngày đó.
+function clCalPick(ymd) {
+  if (!clCal.from) {
+    clCal.from = ymd;
+    clCal.pending = '';
+    renderClCalendar();
+    return;
+  }
+  if (ymd === clCal.from && !clCal.pending) {
+    // Chốt 1 ngày duy nhất.
+    clCalApply();
+    return;
+  }
+  clCal.pending = ymd;
+  renderClCalendar();
+}
+
+// Ghi khoảng đã chọn vào #dateFrom/#dateTo rồi lọc lại.
+function clCalApply() {
+  let from = clCal.from || '';
+  let to = clCal.pending || '';
+  if (from && to && to < from) { const t = from; from = to; to = t; }
+  const df = document.getElementById('dateFrom');
+  const dt = document.getElementById('dateTo');
+  if (df) df.value = from;
+  if (dt) dt.value = to;
+  clCal.from = from;
+  clCal.pending = to;
+  closeClDatePicker();
   applyCallLogFilters();
 }
 
-// Bấm icon fas fa-calendar-days → mở bảng chọn ngày của trình duyệt.
-// Icon nằm trong `.cl-date-face` (pointer-events:none) nên phải tự bật lên; input
-// native phủ toàn ô nhưng trong suốt → dùng showPicker() để chắc chắn mở đúng ô.
-function openClDatePicker(which, ev) {
-  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
-  const input = document.getElementById(which === 'from' ? 'dateFrom' : 'dateTo');
-  if (!input) return;
-  if (typeof input.showPicker === 'function') {
-    try { input.showPicker(); return; } catch (e) { /* trình duyệt cũ / bị chặn */ }
-  }
-  input.focus();
-  input.click();
-}
-
-// Đồng bộ nhãn + trạng thái ô from/to theo giá trị input (dd/mm hoặc "Từ"/"Đến").
+// Đồng bộ nút lịch (chip icon-only) + dòng "khoảng đang lọc" theo #dateFrom/#dateTo.
+//   chưa lọc → chip không active, không chấm; dòng khoảng ẩn.
+//   1 ngày   → chấm đỏ + dòng '18/10/2026'
+//   khoảng   → chấm đỏ + dòng '15/10 → 18/10/2026'
 function syncClDateButtons() {
-  const fmt = (v) => {
-    if (!v) return '';
-    const p = v.split('-');
-    return p.length === 3 ? p[2] + '/' + p[1] : v;
-  };
-  [['dateFrom', 'clDateFromField', 'clDateFromLabel', 'clDateFromClear', 'Từ'],
-   ['dateTo', 'clDateToField', 'clDateToLabel', 'clDateToClear', 'Đến']].forEach(([id, fieldId, lblId, clrId, fallback]) => {
-    const input = document.getElementById(id);
-    const field = document.getElementById(fieldId);
-    const lbl = document.getElementById(lblId);
-    const clr = document.getElementById(clrId);
-    if (!input || !field || !lbl) return;
-    const val = input.value || '';
-    const labelKey = id === 'dateFrom' ? 'calllogs.dateFrom' : 'calllogs.dateTo';
-    lbl.textContent = val ? fmt(val) : (typeof t === 'function' ? t(labelKey) : fallback);
-    field.classList.toggle('active', !!val);
-    if (clr) clr.classList.toggle('hidden', !val);
-  });
+  const btn = document.getElementById('clDateBtn');
+  if (!btn) return;
+  const df = document.getElementById('dateFrom');
+  const dt = document.getElementById('dateTo');
+  const from = (df && df.value) || '';
+  const to = (dt && dt.value) || '';
+  const has = !!(from || to);
+  const T = (k, fb) => (typeof t === 'function' ? t(k) : fb);
+  let label = '';
+  if (from && to && from !== to) {
+    const a = clFmtYmd(from), b = clFmtYmd(to);
+    // Cùng năm thì thu gọn năm ở mốc đầu: '15/10 → 18/10/2026'.
+    label = (from.slice(0, 4) === to.slice(0, 4)) ? (a.slice(0, 5) + ' → ' + b) : (a + ' → ' + b);
+  } else if (has) label = clFmtYmd(from || to);
+
+  // Chấm đỏ báo "đang lọc ngày" — cùng chỗ & kích thước với mũi tên .cl-chip-dir.
+  const dot = document.getElementById('clDateDot');
+  if (dot) dot.classList.toggle('hidden', !has);
+  btn.classList.toggle('active', has);
+  btn.setAttribute('title', has ? (label + ' — ' + T('calllogs.dateRange', 'Chọn ngày / khoảng ngày'))
+    : T('calllogs.dateRange', 'Chọn ngày / khoảng ngày'));
+
+  // Dòng hiện khoảng đang lọc + nút xoá (ẩn khi chưa lọc).
+  const row = document.getElementById('clDateActive');
+  const rowTxt = document.getElementById('clDateActiveTxt');
+  if (row) row.classList.toggle('hidden', !has);
+  if (rowTxt) rowTxt.textContent = has ? label : '';
+
+  // giữ popup đồng bộ nếu đang mở
+  if (clCalOpen) { clCal.from = from; clCal.pending = to; renderClCalendar(); }
 }
 
 // Mở/đóng khối bộ lọc phụ ở tab "Tra cứu danh sách".
@@ -4960,6 +5971,7 @@ function updateClFilterBadge() {
   if (!badge) return;
   let n = 0;
   if (clActionFilter && clActionFilter !== 'all') n++;
+  if (clCellStatusFilter && clCellStatusFilter !== 'all') n++;
   const df = document.getElementById('dateFrom');
   const dt = document.getElementById('dateTo');
   if (df && df.value) n++;
@@ -5029,7 +6041,57 @@ function getFilteredLogs() {
       return hay.includes(q);
     });
   }
+  // Lọc theo trạng thái cell — áp SAU cùng để số dòng khớp chip người dùng vừa bấm.
+  if (clCellStatusFilter !== 'all') {
+    const cellsByKey = clCellsByKey();
+    rows = rows.filter(l => clRecordStatusClass(l, cellsByKey) === clCellStatusFilter);
+  }
   return rows;
+}
+
+// Lớp trạng thái của 1 dòng để so với bộ lọc: 'found' | 'miss' | 'unpaid'.
+// `busy`/`pending` đều thuộc nhóm "chưa tra được" (chưa có kết quả cuối cùng).
+function clRecordStatusClass(row, cellsByKey) {
+  const st = clRecordState(row, cellsByKey || clCellsByKey());
+  if (st.cls === 'found') return 'found';
+  if (st.cls === 'miss') return 'miss';
+  return 'unpaid';
+}
+
+// Đếm số dòng theo từng trạng thái + cập nhật số trên chip. Đếm trên danh sách
+// phiên (chưa áp bộ lọc hành động/ngày/tìm kiếm) để chip luôn cho biết tổng quan
+// của cả phiên — bấm nhiều bộ lọc liên tiếp vẫn thấy số ổn định.
+function syncClStatusChips() {
+  const box = document.getElementById('clRecordStatusChips');
+  if (!box) return;
+  const rows = typeof clRecordsWithSessionCells === 'function' ? clRecordsWithSessionCells() : [];
+  const cellsByKey = clCellsByKey();
+  let found = 0, miss = 0, unpaid = 0;
+  for (const l of rows) {
+    const c = clRecordStatusClass(l, cellsByKey);
+    if (c === 'found') found++;
+    else if (c === 'miss') miss++;
+    else unpaid++;
+  }
+  const set = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = String(n); };
+  set('clStCountAll', rows.length);
+  set('clStCountFound', found);
+  set('clStCountUnpaid', unpaid);
+  set('clStCountMiss', miss);
+  // Đồng bộ highlight theo state (sau khi vẽ lại / khôi phục phiên).
+  box.querySelectorAll('.cl-chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.status === clCellStatusFilter));
+}
+
+// Bấm chip trạng thái cell → đổi state + render lại danh sách.
+function setClCellStatusFilter(k) {
+  clCellStatusFilter = k || 'all';
+  const box = document.getElementById('clRecordStatusChips');
+  if (box) box.querySelectorAll('.cl-chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.status === clCellStatusFilter));
+  logPageIndex = 1;
+  updateClFilterBadge();
+  renderCallLogs();
 }
 
 // Bản ghi của phiên + các CELL CHƯA CÓ BẢN GHI của phiên (chưa tra / tra không ra).
@@ -5117,8 +6179,11 @@ function updateCallSessionUi(filtered) {
 
   const name = currentUploadFileName || (clAnalyze && clAnalyze.fileName) || '';
   bar.style.display = 'flex';
+  // Tên file KHÔNG lặp ở đây: card đã hiện ở .cls-detail (dòng trên), và tổng kết này
+  // nằm ngay trong card. Vẫn dựng .cls-name khi dùng NGOÀI card (giữ tương thích).
+  const inCard = !!bar.closest('#clSessionCard');
   bar.innerHTML =
-    (name ? `<span class="cls-name" title="${histEsc(name)}"><i class="fas fa-file-excel"></i> ${histEsc(name)}</span>` : '') +
+    (name && !inCard ? `<span class="cls-name" title="${histEsc(name)}"><i class="fas fa-file-excel"></i> ${histEsc(name)}</span>` : '') +
     `<b>${list.length}</b> ${histEsc(t('upload.records'))} · ` +
     `<span class="cls-ok"><i class="fas fa-circle-check"></i> <b>${f}</b>/${c}</span> ${histEsc(t('hist.foundCells'))} · ` +
     `<span class="cls-miss">${x} ${histEsc(t('calllogs.statusMiss'))}</span>` +
@@ -5164,6 +6229,7 @@ function renderCallLogs() {
   syncClLoadUi();
   syncClDateButtons();
   syncLogSearchClear();
+  syncClStatusChips();
   updateClResolveNowBtn();
   const list = document.getElementById('logRecordList');
   const filtered = getFilteredLogs();
@@ -5195,39 +6261,53 @@ function renderCallLogs() {
   document.getElementById('logNextBtn').disabled = logPageIndex >= totalPages;
   document.getElementById('logPageInfo').textContent = `${filtered.length} ${t('upload.records')} — trang ${logPageIndex}/${totalPages}`;
 
-  const showSource = (typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin());
   const cellsByKey = clCellsByKey();
+  clRecordRows = {};
   list.innerHTML = page.map(l => {
     const st = clRecordState(l, cellsByKey);
     const cellLabel = `${l.mcc || ''}-${l.mnc || ''}-${l.lac || ''}-${l.cellid || ''}`;
     // Click dòng CÓ toạ độ → zoom + vòng nhấp nháy trên bản đồ. Chỉ dòng đã tra ra
     // (đã trả phí / mở từ Lịch sử) mới có toạ độ → không lộ cell chưa tra.
+    const rowKey = `${cellLabel}|${(page.indexOf(l))}`;
+    if (st.cls === 'found' && l.lat != null && l.lon != null) clRecordRows[rowKey] = l;
     const rowClick = (st.cls === 'found' && l.lat != null && l.lon != null)
-      ? `onclick="highlightCellOnMap(${parseFloat(l.lat)}, ${parseFloat(l.lon)}, ${parseFloat(l.cell_range) || 500}, '${histJsSafe(l.radio || '')}', '${histJsSafe(cellLabel)}')"`
+      ? `onclick="openClRecordOnMap('${histJsSafe(rowKey)}')"`
       : '';
-    const srcType = l.source === 'local' ? 'local' : 'online';
-    const srcTxt = l.source ? (SOURCE_LABELS[l.source] || l.source) : '';
-    // Badge nguồn chỉ hiện cho admin (giống popup marker) — tránh lộ chi tiết nguồn.
-    const srcBadge = (showSource && srcTxt && st.cls === 'found')
-      ? `<span class="cl-src-badge ${srcType}" title="${histEsc(srcTxt)}"><i class="fas fa-${srcType === 'local' ? 'database' : 'cloud'}"></i></span>` : '';
+    // Nguồn kết quả đã bỏ khỏi giao diện (không còn badge nguồn ở dòng bản ghi).
     const dur = l.duration ? ` · ${histEsc(l.duration)}s` : '';
     const partner = l.contact_number ? ` · ${histEsc(t('calllogs.partner'))}: ${histEsc(l.contact_number)}` : '';
+    // Dòng KHÔNG có bản ghi cuộc gọi (cell-only) → chỗ SĐT hiện chính cell ID dạng
+    // log-card-cell (MCC-MNC-LAC-CELLID), không phải nhãn "Cell trong phiên".
     const phone = l.phone_number
       ? `<span class="log-card-phone">${histEsc(l.phone_number)}</span>`
-      : `<span class="log-card-phone none">${histEsc(t('calllogs.cellOnly'))}</span>`;
-    return `<div class="log-card st-${st.cls}" ${rowClick}>
+      : (l.cellid
+        ? `<span class="log-card-cell log-card-cell-lead" title="${histEsc(cellLabel)}">${histEsc(cellLabel)}</span>`
+        : `<span class="log-card-phone none">${histEsc(t('calllogs.cellOnly'))}</span>`);
+    // Icon tra cứu ở CUỐI dòng — chỉ cho cell CHƯA tra được (unpaid / pending / busy)
+    // và chưa đang tra. Bấm → tra 1 cell (trừ điểm), hiện thanh trạng thái, xong thì
+    // cập nhật lại dòng (đưa vào nhóm "đã tra được" hoặc báo không ra kết quả).
+    const cellKey = l.cellid ? canonicalClientKey(l) : '';
+    const canLookup = !!cellKey && (st.cls === 'unpaid' || st.cls === 'pending');
+    const lookupBtn = canLookup
+      ? `<button type="button" class="log-card-go" data-cell-key="${histEsc(cellKey)}"`
+        + ` onclick="clLookupOneCell(event, this)"`
+        + ` data-i18n-title="calllogs.lookupCell" title="Tra cứu cell này" aria-label="Tra cứu cell này">`
+        + `<i class="fas fa-magnifying-glass-arrow-right"></i></button>`
+      : '';
+    return `<div class="log-card st-${st.cls}" ${rowClick} data-key="${histEsc(cellKey)}">
       <div class="log-card-hd">
         ${phone}
         ${l.timestamp ? `<span class="log-card-when">${histEsc(l.timestamp)}</span>` : ''}
         ${l.cellid ? clRadioBadgeHtml(l.radio) : ''}
         <span class="log-card-type t-${histEsc(l.action_type || 'none')}">${histEsc(l.action_type || '')}</span>
         <span class="log-card-spacer"></span>
-        ${srcBadge}
         <span class="cl-row-status ${st.cls}">${`<i class="fas ${st.ico}"></i> `}${histEsc(st.text)}</span>
       </div>
       <div class="log-card-sub">
-        <span class="log-card-cell" title="${histEsc(cellLabel)}">${histEsc(l.cellid ? clCellShort(l, l.radio) : '')}</span>
+        ${l.phone_number ? `<span class="log-card-cell" title="${histEsc(cellLabel)}">${histEsc(l.cellid ? cellLabel : '')}</span>` : ''}
         ${dur}${partner}
+        <span class="log-card-spacer"></span>
+        ${lookupBtn}
       </div>
       ${l.cell_address ? `<div class="log-card-addr" title="${histEsc(l.cell_address)}">${histEsc(l.cell_address)}</div>` : ''}
       ${clRecordDetailHtml(l, st)}
@@ -5244,14 +6324,12 @@ function clRecordDetailHtml(l, st) {
     const lat = parseFloat(l.lat);
     const lng = parseFloat(l.lon);
     const range = parseFloat(l.cell_range);
-    const showSource = (typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin());
-    const srcTxt = l.source ? (SOURCE_LABELS[l.source] || l.source) : '';
+    // Nguồn kết quả đã bỏ khỏi giao diện.
     return `<div class="log-detail">
       <span class="ok log-coords"><i class="fas fa-map-pin"></i>${histEsc(lat)}, ${histEsc(lng)}` +
-        `<i class="fas fa-copy log-copy" title="Copy tọa độ" onclick="event.stopPropagation(); copyCoords(${lat},${lng})"></i></span>` +
+        coordActionIcons(lat, lng) + `</span>` +
       (isFinite(range) ? `<span><i class="fas fa-circle-notch"></i>${histEsc(fmtTpl('calllogs.detailRange', { n: range }))}</span>` : '') +
       (l._rowCount ? `<span><i class="fas fa-layer-group"></i>${histEsc(fmtTpl('calllogs.detailLines', { n: l._rowCount }))}</span>` : '') +
-      (showSource && srcTxt ? `<span><i class="fas fa-cloud"></i>${histEsc(srcTxt)}</span>` : '') +
     `</div>`;
   }
   if (st.cls === 'miss') {
@@ -5366,6 +6444,9 @@ async function openCallLogSession(batchId) {
     logPageIndex = 1;
     clActionFilter = 'all';
     document.querySelectorAll('#clActionChips .cl-chip').forEach(c => c.classList.toggle('active', c.dataset.action === 'all'));
+    // Mở phiên từ Lịch sử → cũng bỏ lọc trạng thái cell.
+    clCellStatusFilter = 'all';
+    document.querySelectorAll('#clRecordStatusChips .cl-chip').forEach(c => c.classList.toggle('active', c.dataset.status === 'all'));
     const df = document.getElementById('dateFrom'); if (df) df.value = '';
     const dt = document.getElementById('dateTo'); if (dt) dt.value = '';
     syncClDateButtons();
@@ -5410,7 +6491,34 @@ async function openCallLogSession(batchId) {
 // mở đúng phiên đó ở tab "Tra cứu danh sách" thì dọn danh sách + bảng cell.
 async function deleteCallLogSession(batchId) {
   if (!batchId) return;
-  if (!confirm(t('hist.clSessionConfirmDelete'))) return;
+  // Chi tiết phiên sẽ xoá (lấy từ cache card phiên; thiếu thì chỉ hiện cảnh báo chung).
+  const sess = (histBatch.rows || []).find(function (r) { return String(r.batch_id) === String(batchId); }) || {};
+  const meta = clSessionMeta[batchId] || {};
+  const detail = [];
+  if (sess.file_name) detail.push({ k: t('confirm.fileLabel'), v: sess.file_name });
+  if (meta.network || sess.network) detail.push({ k: t('confirm.netLabel'), v: clNetLabelFor(meta.network || sess.network) });
+  const nCell = Number(sess.total_cells || sess.cell_count || meta.cell_count) || 0;
+  if (nCell) detail.push({ k: t('confirm.cellsLabel'), v: nCell });
+  const nLooked = Number(meta.looked_count || sess.looked_count) || 0;
+  if (nLooked) detail.push({ k: t('confirm.lookedLabel'), v: nLooked });
+  const nRow = Number(meta.row_count || sess.total_rows) || 0;
+  if (nRow) detail.push({ k: t('confirm.rowsLabel'), v: nRow });
+  const when = sess.created_at || sess.uploaded_at || meta.created_at || '';
+  if (when) detail.push({ k: t('confirm.timeLabel'), v: fmtDateTime(when) || when });
+
+  const ok = await openConfirmDialog({
+    title: t('confirm.delSessionTitle'),
+    message: t('hist.clSessionConfirmDelete'),
+    detail: detail,
+    warnings: [
+      t('confirm.warnPermanent'),
+      t('confirm.warnAllRecords'),
+      nLooked ? t('confirm.warnPaidPoints') : ''
+    ],
+    notes: [t('confirm.noteCantUndo')],
+    okText: t('confirm.okDelete')
+  });
+  if (!ok) return;
   try {
     const res = await apiRequest('DELETE', '/api/call-log-sessions/' + encodeURIComponent(batchId));
     // Phiên "tra theo danh sách Excel" KHÔNG có call_logs → `res.deleted` = 0 dù xoá
@@ -5491,7 +6599,7 @@ function playCallLogs() {
     .filter(canViewRecord)
     .map(r => ({ ...r, lat: parseFloat(r.lat), lon: parseFloat(r.lon) }))
     .filter(p => !isNaN(p.lat) && !isNaN(p.lon))
-    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    .sort((a, b) => parseServerTime(a.timestamp) - parseServerTime(b.timestamp));
 
   if (playPoints.length === 0) {
     showToast('Không có bản ghi có tọa độ để play', 'error');
@@ -5566,7 +6674,7 @@ function showPlayPoint(p) {
     fillColor: color,
     fillOpacity: 0.9
   }).addTo(map);
-  playActiveMarker.bindPopup(`<b>${fmtDateTime(p.timestamp)}</b><br>${actionLabel[p.action_type] || p.action_type} — ${p.phone_number}<br>Trạm: ${p.mcc}-${p.mnc}-${p.lac}<br>${formatCellId(p.cellid, p.enb_id, p.sector)}<br>Tọa độ: ${p.lat}, ${p.lon} <i class="fas fa-copy" style="cursor:pointer" title="Copy tọa độ" onclick="copyCoords(${p.lat},${p.lon})"></i>${p.cell_address ? '<br>' + p.cell_address : ''}`);
+  playActiveMarker.bindPopup(`<b>${fmtDateTime(p.timestamp)}</b><br>${actionLabel[p.action_type] || p.action_type} — ${p.phone_number}<br>Trạm: ${p.mcc}-${p.mnc}-${p.lac}<br>${formatCellId(p.cellid, p.enb_id, p.sector)}<br>Tọa độ: ${p.lat}, ${p.lon} ${coordActionIcons(p.lat, p.lon)}${p.cell_address ? '<br>' + p.cell_address : ''}`);
   playActiveMarker.openPopup();
 }
 
@@ -5581,8 +6689,8 @@ function buildTimeline(points) {
   const bar = document.getElementById('timelineBar');
   if (!track || !bar || !points.length) { showTimeline(false); return; }
 
-  const t0 = new Date(points[0].timestamp).getTime();
-  const t1 = new Date(points[points.length - 1].timestamp).getTime();
+  const t0 = parseServerTime(points[0].timestamp).getTime();
+  const t1 = parseServerTime(points[points.length - 1].timestamp).getTime();
   const span = Math.max(t1 - t0, 1);
 
   let pxPerMs, width;
@@ -5598,7 +6706,7 @@ function buildTimeline(points) {
   timelineWidth = width;
 
   const fmtTick = (ts) => {
-    const d = new Date(ts);
+    const d = parseServerTime(ts);
     return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0') +
       ' ' + d.getDate().toString().padStart(2, '0') + '/' + (d.getMonth() + 1).toString().padStart(2, '0');
   };
@@ -5610,7 +6718,7 @@ function buildTimeline(points) {
   html += `<span class="tl-tick" style="left:${width - 2}px;transform:translateX(-100%)">${fmtTick(points[points.length - 1].timestamp)}</span>`;
 
   points.forEach((p, i) => {
-    const ts = new Date(p.timestamp).getTime();
+    const ts = parseServerTime(p.timestamp).getTime();
     const x = Math.round((ts - t0) * pxPerMs);
     const color = getCellColor(p.action_type);
     const icon = timelineIcon[p.action_type] || 'fa-circle';

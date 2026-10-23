@@ -1,8 +1,17 @@
 const path = require('path');
 const fs = require('fs');
 
-const dbDir = path.dirname(__dirname);
-const dbPath = path.join(dbDir, 'database.sqlite');
+// Vị trí file DB.
+//  • DB_PATH (production): trỏ ra thư mục dữ liệu riêng, ngoài mọi release code,
+//    vd /opt/cell-tracker/shared/database.sqlite → deploy bản mới KHÔNG xoá dữ liệu.
+//  • Không đặt: giữ hành vi cũ = thư mục CHA của repo (local là D:\Code\database.sqlite)
+//    để script test và DB dev sẵn có không phải đổi gì.
+const dbPath = process.env.DB_PATH
+  ? path.resolve(process.env.DB_PATH)
+  : path.join(path.dirname(__dirname), 'database.sqlite');
+
+// Thư mục chứa DB phải tồn tại trước khi mở (sqlite3 báo SQLITE_CANTOPEN nếu thiếu).
+try { fs.mkdirSync(path.dirname(dbPath), { recursive: true }); } catch (e) { /* để sqlite báo lỗi nếu thật sự không ghi được */ }
 
 const sqlite3 = require('sqlite3').verbose();
 const db = new sqlite3.Database(dbPath);
@@ -349,6 +358,7 @@ db.serialize(() => {
     og_title TEXT DEFAULT '',
     og_description TEXT DEFAULT '',
     og_image TEXT DEFAULT '',
+    og_image_path TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   )`);
@@ -361,6 +371,14 @@ db.serialize(() => {
     user_agent TEXT,
     headers TEXT,
     query_params TEXT,
+    visitor_id TEXT,
+    referer TEXT,
+    country TEXT,
+    region TEXT,
+    city TEXT,
+    geo_json TEXT,
+    client_json TEXT,
+    event TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (tracker_id) REFERENCES ip_tracker(id) ON DELETE CASCADE
   )`);
@@ -371,6 +389,36 @@ db.serialize(() => {
       console.error('Error adding wan_ip column:', err.message);
     }
   });
+
+  // ==========================================================================
+  // Bẫy địa chỉ IP — bổ sung (idempotent, chạy trên DB cũ vẫn được)
+  //
+  //   ip_tracker.og_image_path : ảnh OG do người dùng TẢI LÊN (để trống thì dùng
+  //                              `og_image` là URL dán tay).
+  //   ip_tracker_logs.visitor_id / referer / country / region / city / geo_json
+  //     : dữ liệu thu được lúc victim mở link. `geo_json` là bản đầy đủ (ASN, ISP,
+  //       toạ độ, proxy/hosting…) do phần tra cứu IP chạy NỀN điền vào sau, nên
+  //       cột phải NULL-able và KHÔNG được đọc là "không có dữ liệu".
+  // ==========================================================================
+  const trackerColumns = [
+    ['ip_tracker', 'og_image_path', 'TEXT'],
+    ['ip_tracker_logs', 'visitor_id', 'TEXT'],
+    ['ip_tracker_logs', 'referer', 'TEXT'],
+    ['ip_tracker_logs', 'country', 'TEXT'],
+    ['ip_tracker_logs', 'region', 'TEXT'],
+    ['ip_tracker_logs', 'city', 'TEXT'],
+    ['ip_tracker_logs', 'geo_json', 'TEXT'],
+    ['ip_tracker_logs', 'client_json', 'TEXT'],
+    ['ip_tracker_logs', 'event', 'TEXT']
+  ];
+  for (const [table, column, type] of trackerColumns) {
+    db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error(`Error adding ${table}.${column} column:`, err.message);
+      }
+    });
+  }
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ip_tracker_logs_visitor ON ip_tracker_logs(visitor_id)`);
 
   // Fix: add status column to existing users
   db.run(`ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'`, (err) => {
@@ -492,12 +540,24 @@ db.serialize(() => {
   db.run(`CREATE INDEX IF NOT EXISTS idx_credit_tx_user ON credit_transactions(user_id, created_at DESC)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_credit_tx_type ON credit_transactions(type, created_at DESC)`);
 
+  // Dashboard admin gom số liệu theo NGÀY trên toàn bảng (không lọc user):
+  // thiếu index created_at thì mỗi lần mở Dashboard là full scan.
+  db.run(`CREATE INDEX IF NOT EXISTS idx_users_created ON users(created_at)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_lookup_history_created ON lookup_history(created_at)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_lookup_batches_created ON lookup_batches(created_at)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_payment_orders_paid ON payment_orders(status, paid_at)`);
+
 
 
   // Seed default settings (only when missing — never overwrite admin changes).
   db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('max_online_resolve', '50')`);
   db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('max_google_per_batch', '10')`);
   db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('lookup_history_retention_days', '90')`);
+
+  // Bật/đóng website (chế độ bảo trì). Mặc định MỞ để deploy không khoá site.
+  // Message rỗng = dùng thông báo mặc định trong site-status.js.
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('site_open', '1')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('site_closed_message', '')`);
 
   // Credit system settings. `credit_enabled` mặc định TẮT (0) để không khoá
   // toàn bộ user hiện có (ai cũng 0 điểm) ngay khi deploy — admin bật sau khi
@@ -568,6 +628,163 @@ db.serialize(() => {
   db.run(`CREATE INDEX IF NOT EXISTS idx_cells_audit_cell ON cells_audit(cell_id, created_at DESC)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_cells_audit_user ON cells_audit(user_id, created_at DESC)`);
 
+  // ==========================================================================
+  // Public API (v1) — cho ứng dụng / website khác gọi tra cứu cell.
+  //
+  // `api_keys` = CỔNG KẾT NỐI, KHÔNG gắn tài khoản. Key chỉ chứng minh "ứng dụng
+  // ngoài được phép gọi máy chủ" và chịu hạn mức riêng. Danh tính người dùng —
+  // và do đó điểm bị trừ — đến từ JWT lấy qua POST /api/v1/login.
+  //   require_user = 1 (mặc định) → key MỘT MÌNH không tra cứu được, request phải
+  //                                 gửi kèm cả key lẫn JWT.
+  //   require_user = 0            → chỉ dùng được endpoint công khai (health...).
+  //
+  // Server KHÔNG lưu key dạng thô — chỉ lưu SHA-256 (`key_hash`) để lộ DB cũng
+  // không dùng lại được key. `key_prefix` giữ 12 ký tự đầu để admin nhận ra key
+  // trong danh sách; KHÔNG đủ để dựng lại key.
+  //
+  // `revoked_at` khác `enabled`: enabled=0 là admin tạm tắt (bật lại được),
+  // revoked_at là thu hồi vĩnh viễn (không bật lại được, phải tạo key mới).
+  //
+  // `user_id` là cột CŨ (key từng gắn 1 chủ sở hữu). Giữ lại cho dữ liệu lịch sử
+  // nhưng KHÔNG còn dùng để xác thực hay trừ điểm — đã cho phép NULL.
+  // ==========================================================================
+  db.run(`CREATE TABLE IF NOT EXISTS api_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    name TEXT NOT NULL,
+    key_prefix TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE,
+    scopes TEXT DEFAULT 'lookup,account',
+    rate_limit_per_min INTEGER DEFAULT 60,
+    rate_limit_per_day INTEGER DEFAULT 5000,
+    enabled INTEGER DEFAULT 1,
+    require_user INTEGER DEFAULT 1,
+    last_used_at DATETIME,
+    expires_at DATETIME,
+    revoked_at DATETIME,
+    created_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)`);
+
+  // Migration cho DB đã tạo bảng từ bản trước (lúc đó api_keys gắn user cố định).
+  // SQLite không bỏ được NOT NULL / FK bằng ALTER, và bảng mới chưa có dữ liệu
+  // thật nên dựng lại bảng là cách sạch nhất.
+  migrateApiKeysToOwnerless();
+
+  // Nhật ký từng request API — phục vụ tab "API" trong admin (đếm lỗi, theo dõi
+  // abuse, xem app nào đang gọi). Ghi bất đồng bộ, KHÔNG chặn response.
+  // KHÔNG bao giờ ghi key thô vào đây, chỉ ghi api_key_id.
+  // `user_id` ở đây KHÁC api_keys: nó là tài khoản đã đăng nhập qua JWT trong
+  // request đó (nguồn bị trừ điểm), không phải "chủ key".
+  db.run(`CREATE TABLE IF NOT EXISTS api_request_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    api_key_id INTEGER,
+    user_id INTEGER,
+    method TEXT,
+    path TEXT,
+    status INTEGER,
+    duration_ms INTEGER,
+    cells INTEGER DEFAULT 0,
+    charged REAL DEFAULT 0,
+    ip TEXT,
+    user_agent TEXT,
+    error TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_api_logs_key ON api_request_logs(api_key_id, created_at DESC)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_api_logs_created ON api_request_logs(created_at DESC)`);
+
+  // ==========================================================================
+  // IP LOOKUP — tra cứu địa chỉ IP qua nhiều nguồn (DB-IP, IPinfo Lite, ipwho.is…).
+  //
+  // `ip_lookup_sources` là danh mục NGUỒN (1 row / 1 loại), admin bật/tắt, sắp
+  // ưu tiên, nhập API key. KHÔNG dùng chung bảng `data_sources` với cell: hai
+  // nghiệp vụ khác nhau, gộp sẽ làm tab "Nguồn dữ liệu Online" (cell) vỡ khi
+  // seed/đổi type.
+  //
+  // `ip_lookup_cache` giữ kết quả ĐÃ CHUẨN HOÁ theo (ip, nguồn) để nguồn free
+  // (ip-api.com 45 req/phút, DB-IP free) không bị đốt quota khi cùng một IP được
+  // tra nhiều lần. Khoá UNIQUE (normalized, source_type) → 1 row / cặp, ghi bằng
+  // UPSERT (`ON CONFLICT DO UPDATE`).
+  //
+  // `ip_lookup_logs` là nhật ký từng lượt tra (user hoặc guest) — KHÔNG lưu dữ
+  // liệu vị trí, chỉ IP bị tra + danh sách nguồn + thời gian, để admin đối soát
+  // và tính hạn mức ngày.
+  //
+  // `ip_guest_trials` đếm lượt tra MIỄN PHÍ của khách theo IP chuẩn hoá (1 lượt
+  // / IP / ngày, giống tinh thần guest_trials của cell nhưng không gắn cookie —
+  // khách thường tra IP của chính mình nên khoá theo IP là đủ và không cần JS
+  // phía client).
+  // ==========================================================================
+  db.run(`CREATE TABLE IF NOT EXISTS ip_lookup_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    base_url TEXT DEFAULT '',
+    api_key TEXT DEFAULT '',
+    plan TEXT DEFAULT 'lite',
+    enabled INTEGER DEFAULT 1,
+    priority INTEGER DEFAULT 100,
+    timeout_ms INTEGER DEFAULT 10000,
+    cache_days INTEGER DEFAULT 7,
+    notes TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS ip_lookup_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip TEXT NOT NULL,
+    normalized TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    data_json TEXT,
+    ok INTEGER DEFAULT 1,
+    error TEXT,
+    fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(normalized, source_type)
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ip_lookup_cache_norm ON ip_lookup_cache(normalized)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ip_lookup_cache_fetched ON ip_lookup_cache(fetched_at)`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS ip_lookup_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    ip TEXT,
+    normalized TEXT,
+    source_types TEXT,
+    status INTEGER,
+    duration_ms INTEGER,
+    cache_hits INTEGER DEFAULT 0,
+    error TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ip_lookup_logs_norm ON ip_lookup_logs(normalized, created_at DESC)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ip_lookup_logs_user ON ip_lookup_logs(user_id, created_at DESC)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ip_lookup_logs_created ON ip_lookup_logs(created_at DESC)`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS ip_guest_trials (
+    normalized_ip TEXT PRIMARY KEY,
+    ip TEXT,
+    count INTEGER DEFAULT 0,
+    first_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // Cấu hình tra cứu IP. Public bật mặc định nhưng CHỈ nguồn không cần key;
+  // hạn mức khách mặc định 1 lượt/IP/ngày. Console (tra server IP) mặc định TẮT
+  // để không ai chạy được máy chủ như một open proxy đốt quota nguồn free.
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('ip_lookup_public_enabled', '1')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('ip_lookup_public_guest_daily', '1')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('ip_lookup_user_daily', '50')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('ip_lookup_console_enabled', '0')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('ip_lookup_console_per_day', '1000')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('ip_lookup_day_cutoff_hour', '2')`);
+  db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('ip_lookup_log_retention_days', '30')`);
+
   // Backfill MCC on existing OpenCellID sources, then seed a default VN sync job.
   db.run(`UPDATE data_sources SET mcc = '452' WHERE type = 'opencellid' AND (mcc IS NULL OR mcc = '')`);
   db.get(`SELECT COUNT(*) AS c FROM sync_jobs`, [], (err, row) => {
@@ -580,4 +797,127 @@ db.serialize(() => {
   });
 });
 
+/**
+ * Chuyển `api_keys` từ mô hình CŨ (mỗi key gắn 1 user cố định) sang mô hình MỚI
+ * (key là cổng kết nối, không gắn tài khoản; thêm cột `require_user`).
+ *
+ * SQLite không bỏ được NOT NULL / FOREIGN KEY bằng ALTER TABLE, nên nếu bảng còn
+ * `user_id NOT NULL` thì dựng bảng mới rồi chép dữ liệu sang. `user_id` được đặt
+ * NULL cho mọi key vì key không còn thuộc tài khoản nào — log cũ vẫn giữ
+ * `api_request_logs.user_id` để đối chiếu lịch sử.
+ *
+ * Idempotent: chạy lại khi bảng đã đúng mô hình thì không làm gì.
+ */
+function migrateApiKeysToOwnerless() {
+  db.all(`PRAGMA table_info(api_keys)`, [], (err, cols) => {
+    if (err || !cols || !cols.length) return;
+    const byName = {};
+    for (const c of cols) byName[c.name] = c;
+    const userIdCol = byName.user_id;
+    const needsRebuild = !!userIdCol && Number(userIdCol.notnull) === 1;
+    const needsRequireUser = !byName.require_user;
+
+    if (!needsRebuild && !needsRequireUser) return; // đã đúng mô hình mới
+
+    if (!needsRebuild) {
+      // Chỉ thiếu cột → ALTER là đủ, không mất dữ liệu.
+      db.run(`ALTER TABLE api_keys ADD COLUMN require_user INTEGER DEFAULT 1`, (e) => {
+        if (e) console.error('api_keys migration (add require_user):', e.message);
+        else console.log('api_keys migration: added require_user column');
+      });
+      return;
+    }
+
+    // Thiếu cột hoặc user_id còn NOT NULL → dựng bảng mới, chép dữ liệu, đổi tên.
+    console.log('api_keys migration: rebuilding table (key is no longer tied to an account)');
+    db.serialize(() => {
+      db.run(`CREATE TABLE api_keys_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        name TEXT NOT NULL,
+        key_prefix TEXT NOT NULL,
+        key_hash TEXT NOT NULL UNIQUE,
+        scopes TEXT DEFAULT 'lookup,account',
+        rate_limit_per_min INTEGER DEFAULT 60,
+        rate_limit_per_day INTEGER DEFAULT 5000,
+        enabled INTEGER DEFAULT 1,
+        require_user INTEGER DEFAULT 1,
+        last_used_at DATETIME,
+        expires_at DATETIME,
+        revoked_at DATETIME,
+        created_by INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`);
+      // Chép nguyên key đang có (giữ id để api_request_logs.api_key_id còn khớp),
+      // nhưng bỏ liên kết tài khoản.
+      const requireUserExpr = byName.require_user ? 'COALESCE(require_user, 1)' : '1';
+      db.run(`INSERT INTO api_keys_new
+        (id, user_id, name, key_prefix, key_hash, scopes, rate_limit_per_min,
+         rate_limit_per_day, enabled, require_user, last_used_at, expires_at,
+         revoked_at, created_by, created_at)
+        SELECT id, NULL, name, key_prefix, key_hash, scopes, rate_limit_per_min,
+               rate_limit_per_day, enabled, ${requireUserExpr}, last_used_at, expires_at,
+               revoked_at, created_by, created_at
+        FROM api_keys`, function (e) {
+        if (e) { console.error('api_keys migration (copy rows):', e.message); return; }
+        const copied = this.changes;
+        db.run(`DROP TABLE api_keys`, (e2) => {
+          if (e2) return console.error('api_keys migration (drop old):', e2.message);
+          db.run(`ALTER TABLE api_keys_new RENAME TO api_keys`, (e3) => {
+            if (e3) return console.error('api_keys migration (rename):', e3.message);
+            db.run(`CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)`);
+            console.log(`api_keys migration: done (${copied} key(s) kept, owner link removed)`);
+          });
+        });
+      });
+    });
+  });
+}
+
+/**
+ * Seed danh mục nguồn tra cứu IP (`ip_lookup_sources`).
+ *
+ * Chạy MỘT lần sau khi bảng đã được tạo (cùng lý do với migrateApiKeysToOwnerless:
+ * `db.run` bên trong block trên chỉ xếp vào hàng đợi serialize, chưa chắc đã chạy
+ * xong khi module export). Danh sách loại nguồn là hằng ở `ip-lookup.js` —
+ * hàm này chỉ GHI khi thiếu, không bao giờ ghi đè cấu hình admin (key, priority,
+ * enabled). Backfill priority chỉ cho row còn ở mặc định 100.
+ *
+ * Idempotent: gọi lại không sinh row thừa nhờ cột `type` UNIQUE + INSERT ... bỏ qua.
+ */
+let ipSeedRetried = false;
+
+function seedIpLookupSources() {
+  // Nạp TRỄ: ip-lookup.js cũng require('./database'). Nếu ip-lookup.js là module
+  // được nạp TRƯỚC (test, script rời) thì lúc này nó còn đang chạy và
+  // `require('./ip-lookup')` trả về object rỗng → chưa có SOURCE_DEFAULTS.
+  // Thử lại 1 lần ở lượt event loop kế tiếp (khi ip-lookup.js đã chạy xong);
+  // vẫn thiếu thì bỏ qua — lần khởi động sau sẽ seed.
+  let catalog = null;
+  try { catalog = require('./ip-lookup').SOURCE_DEFAULTS; } catch (e) { catalog = null; }
+  if (!catalog) {
+    if (!ipSeedRetried) { ipSeedRetried = true; setImmediate(seedIpLookupSources); }
+    else console.error('ip_lookup_sources seed: ip-lookup.SOURCE_DEFAULTS unavailable — skipped');
+    return;
+  }
+  for (const [type, def] of Object.entries(catalog)) {
+    db.run(`INSERT OR IGNORE INTO ip_lookup_sources (type, name, base_url, api_key, plan, enabled, priority, timeout_ms, cache_days, notes)
+            VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, ?)`,
+      [type, def.name, def.baseUrl || '', def.plan || 'lite', def.enabledDefault ? 1 : 0,
+        def.priority, def.timeoutMs, def.cacheDays, def.notes || ''], (err) => {
+        if (err) return console.error(`ip_lookup_sources seed (${type}):`, err.message);
+      });
+    db.run(`UPDATE ip_lookup_sources SET priority = ? WHERE type = ? AND priority = 100`, [def.priority, type], () => {});
+  }
+}
+// Cho phép module khác (admin-dashboard.js) lấy dung lượng file DB mà không phải
+// lặp lại logic chọn đường dẫn. `db.filename` là đường dẫn THẬT đã mở (test có
+// thể patch sang DB tạm), nên ưu tiên nó.
+db.dbPath = (typeof db.filename === 'string' && db.filename) ? db.filename : dbPath;
+
 module.exports = db;
+
+// Seed SAU khi đã gán module.exports: ip-lookup.js require('./database') và giữ
+// tham chiếu tới object `db` — nếu seed trước khi export, nó nhận `{}` rỗng
+// (circular dependency) rồi mọi truy vấn sau đó ném "db.all is not a function".
+seedIpLookupSources();

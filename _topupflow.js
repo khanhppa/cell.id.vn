@@ -22,7 +22,8 @@ const os = require('os');
 const http = require('http');
 
 const tmpDb = path.join(os.tmpdir(), `topup-flow-${process.pid}-${Date.now()}.sqlite`);
-const realDbPath = path.join(path.dirname(__dirname), 'database.sqlite');
+const realDbPath = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(path.dirname(__dirname), 'database.sqlite');
+// database.js ưu tiên DB_PATH — đặt biến này khi chạy test để cả hai phía trỏ cùng một file tạm.
 
 const realExistsSync = fs.existsSync;
 fs.existsSync = function (p) {

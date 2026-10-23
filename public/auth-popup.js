@@ -153,7 +153,9 @@
       '.ap-top{flex:0 0 auto}',
       '.ap-close{position:absolute;top:12px;right:12px;border:0;background:transparent;cursor:pointer;',
       'font-size:18px;color:var(--text-secondary,#667);line-height:1;padding:4px}',
-      '.ap-brand{font-size:17px;font-weight:800;text-align:center;margin:0 0 2px;color:var(--text-primary,#1a1a2e)}',
+      '.ap-brand{display:block;width:170px;max-width:70%;aspect-ratio:477 / 183;margin:2px auto 6px;',
+      "background:url('/img/logo.png') no-repeat center / contain}",
+      'html[data-theme="dark"] .ap-brand{background-image:url("/img/logo-white.png")}',
       '.ap-tabs{display:flex;gap:6px;background:var(--bg-surface2,rgba(0,0,0,.04));border-radius:10px;padding:4px;margin:10px 0 12px}',
       '.ap-tab{flex:1;padding:8px;border:0;border-radius:8px;background:transparent;cursor:pointer;',
       'font-size:13px;font-weight:600;color:var(--text-secondary,#556)}',
@@ -569,7 +571,7 @@
       ov.setAttribute('aria-modal', 'true');
       ov.innerHTML = '<div id="authPopupBox">' +
         '<button class="ap-close" onclick="AuthPopup.close()" title="' + esc(T('close')) + '">&times;</button>' +
-        '<div class="ap-top"><div class="ap-brand">' + esc(T('title')) + '</div></div>' +
+        '<div class="ap-top"><span class="ap-brand" role="img" aria-label="' + esc(T('title')) + '"></span></div>' +
         '<div id="apBody"></div>' +
         '</div>';
       document.body.appendChild(ov);
@@ -660,6 +662,12 @@
     post('/api/login', { username: u.trim(), password: p }).then(function (r) {
       setBusy(false);
       if (r.ok) return finishLogin(r.d);
+      // Website đang bảo trì → chỉ admin được vào; người thường về trang thông báo.
+      if (r.d && r.d.reason === 'SITE_CLOSED') {
+        closePopup();
+        window.location.replace('/maintenance.html?from=login');
+        return;
+      }
       // Đúng mật khẩu nhưng chưa kích hoạt → sang màn nhập mã và gửi lại mã luôn.
       if (r.d && r.d.reason === 'EMAIL_NOT_VERIFIED') {
         state.email = r.d.email || u.trim();

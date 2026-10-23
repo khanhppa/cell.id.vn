@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Chặn trang khi website đang bảo trì (admin vẫn đi qua). Script chặn render. -->
+  <script src="/site-status.js"></script>
+  <title>Tra cứu địa chỉ IP</title>
+  <!-- Favicon dùng chung toàn ứng dụng (fav.png) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="/img/favicon-64.png">
+  <link rel="icon" type="image/png" sizes="256x256" href="/img/favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script src="/auth.js"></script>
+  <script src="/version.js"></script>
+  <script async src="/ga.js"></script>
+  <style>
+    :root {
+      --bg-body: #f0f2f5;
+      --bg-surface: rgba(255,255,255,0.97);
+      --bg-surface2: rgba(0,0,0,0.03);
+      --bg-hover: rgba(0,0,0,0.06);
+      --bg-btn-primary: #4444cc;
+      --bg-btn-success: #22aa44;
+      --bg-btn-danger: #cc3333;
+      --text-primary: #1a1a2e;
+      --text-secondary: #444466;
+      --text-muted: #888899;
+      --text-faint: #aaaabb;
+      --border-color: rgba(0,0,0,0.1);
+      --border-hover: rgba(68,68,204,0.3);
+      --border-focus: #4444cc;
+      --header-bg: rgba(255,255,255,0.95);
+      --shadow: 0 10px 40px rgba(0,0,0,0.1);
+      --transition: 0.3s ease;
+    }
+    [data-theme="dark"] {
+      --bg-body: #111122;
+      --bg-surface: rgba(15,15,40,0.95);
+      --bg-surface2: rgba(255,255,255,0.04);
+      --bg-hover: rgba(255,255,255,0.1);
+      --bg-btn-primary: #4444cc;
+      --bg-btn-success: #22aa44;
+      --bg-btn-danger: #cc3333;
+      --text-primary: #e0e0ff;
+      --text-secondary: #aaaacc;
+      --text-muted: #666688;
+      --text-faint: #555577;
+      --border-color: rgba(255,255,255,0.08);
+      --border-hover: rgba(100,100,255,0.3);
+      --border-focus: #6666ff;
+      --header-bg: rgba(15,15,40,0.92);
+      --shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-primary);
+      transition: background var(--transition), color var(--transition);
+      min-height: 100vh;
+    }
+    .btn {
+      padding: 7px 14px; border: 1px solid var(--border-color);
+      border-radius: 6px; background: var(--bg-surface2);
+      color: var(--text-secondary); cursor: pointer; font-size: 12px; transition: all 0.2s;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-primary { background: var(--bg-btn-primary); border-color: var(--bg-btn-primary); color: #fff; }
+    .btn-primary:hover { filter: brightness(1.15); }
+    .btn-block { width: 100%; justify-content: center; }
+
+    .container { max-width: 900px; margin: 32px auto 60px; padding: 0 16px; }
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+      margin-bottom: 18px;
+    }
+    .card h2 {
+      font-size: 18px; margin-bottom: 14px; color: var(--text-primary);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .hint { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+    .input-row { display: flex; gap: 10px; margin-bottom: 12px; }
+    .input-row input {
+      flex: 1; min-width: 0; padding: 10px 12px;
+      border: 1px solid var(--border-color); border-radius: 8px;
+      background: var(--bg-surface2); color: var(--text-primary);
+      font-size: 15px; font-family: ui-monospace, Consolas, monospace; outline: none;
+    }
+    .input-row input:focus { border-color: var(--border-focus); }
+    .btn-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .quota { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+
+    /* Hộp "IP WAN của bạn": hiện cả IPv4 và IPv6 vì đây là 2 đường ra Internet
+       độc lập — máy có thể có IPv4 mà không có IPv6 (hoặc ngược lại). */
+    .myip {
+      margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+      border: 1px dashed var(--border-color); background: var(--bg-surface2);
+    }
+    .myip-head {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .myip-list { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .myip-chip {
+      cursor: pointer; border: 1px solid var(--border-color); border-radius: 999px;
+      padding: 4px 12px; background: var(--bg-surface); color: var(--text-primary);
+      font-family: ui-monospace, Consolas, monospace; font-size: 12px;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .myip-chip:hover { border-color: var(--border-focus); color: var(--border-focus); }
+    .myip-chip .fam {
+      font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 10px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase;
+    }
+    .myip-chip.none {
+      cursor: default; border-style: dashed; color: var(--text-muted);
+      font-family: -apple-system, 'Segoe UI', sans-serif;
+    }
+    .myip-chip.none:hover { border-color: var(--border-color); color: var(--text-muted); }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 999px; cursor: pointer;
+      border: 1px solid var(--border-color); background: var(--bg-surface2);
+      color: var(--text-secondary); font-size: 12px; user-select: none;
+    }
+    .chip.on { border-color: var(--border-focus); color: var(--border-focus); background: rgba(68,68,204,0.1); }
+    .chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); }
+    .chip.on .dot { background: var(--border-focus); }
+
+    .alert {
+      padding: 12px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 16px;
+      border: 1px solid var(--border-color); background: var(--bg-surface2);
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .alert.error { border-color: rgba(204,51,51,0.4); background: rgba(204,51,51,0.08); color: var(--bg-btn-danger); }
+    .alert.ok { border-color: rgba(34,170,68,0.4); background: rgba(34,170,68,0.08); }
+    .alert .cta { margin-left: auto; }
+
+    .sum-grid { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 14px; }
+    .sum-item { min-width: 140px; }
+    .sum-item .k { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); }
+    .sum-item .v { font-size: 16px; font-weight: 700; margin-top: 2px; word-break: break-word; }
+    .sum-item .m { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .badge {
+      font-size: 10px; padding: 2px 8px; border-radius: 999px;
+      border: 1px solid var(--border-color); color: var(--text-secondary); background: var(--bg-surface2);
+    }
+    .badge.warn { border-color: rgba(217,119,6,0.5); color: #d97706; }
+    .badge.risk { border-color: rgba(204,51,51,0.5); color: var(--bg-btn-danger); }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border-color); vertical-align: top; }
+    th { font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-muted); white-space: nowrap; }
+    td.mono { font-family: ui-monospace, Consolas, monospace; }
+    tr.fail td { color: var(--text-muted); }
+    tr.fail .err { color: var(--bg-btn-danger); font-size: 11px; }
+    .src-name { font-weight: 600; color: var(--text-primary); }
+    .tag { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--bg-surface2); color: var(--text-muted); margin-left: 6px; }
+    .tag.live { color: var(--bg-btn-success); }
+
+    /* Mỗi dòng nguồn mở rộng được: bấm vào dòng để xem đầy đủ các trường mà
+       nguồn đó trả về (bảng chính chỉ hiện vài cột quan trọng cho dễ so sánh). */
+    .src-row { cursor: pointer; }
+    .src-row:hover td { background: var(--bg-surface2); }
+    .src-row.open td { background: rgba(68,68,204,0.07); }
+    .src-row:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
+    .src-row .caret {
+      display: inline-block; width: 12px; margin-right: 5px;
+      font-size: 10px; color: var(--text-muted); transition: transform .15s ease;
+    }
+    .src-row.open .caret { transform: rotate(90deg); color: var(--border-focus); }
+    .src-detail > td {
+      background: var(--bg-surface2); padding: 12px 14px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    /* `hidden` trên <tr> cần khai báo tường minh: một số UA stylesheet đặt
+       `display: table-row` cho tr và có thể thắng rule [hidden] mặc định. */
+    .src-detail[hidden] { display: none; }
+    .det-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .det-meta { font-size: 11px; color: var(--text-muted); }
+    .det-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 8px 18px;
+    }
+    .det-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .det-item .k { font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-muted); }
+    .det-item .v { font-size: 12px; color: var(--text-primary); word-break: break-word; }
+    .det-item .v.mono { font-family: ui-monospace, Consolas, monospace; }
+    .det-missing { font-size: 11px; color: var(--text-muted); margin-top: 10px; }
+    .det-raw { margin-top: 10px; }
+    .det-raw pre { max-height: 220px; }
+    .det-err { font-size: 12px; color: var(--bg-btn-danger); }
+
+    details { margin-top: 14px; }
+    summary { cursor: pointer; font-size: 12px; color: var(--text-secondary); }
+    pre {
+      margin-top: 10px; padding: 12px; border-radius: 8px; overflow: auto; max-height: 420px;
+      background: var(--bg-surface2); border: 1px solid var(--border-color);
+      font-size: 11px; line-height: 1.5; color: var(--text-secondary);
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar"></nav>
+
+  <div class="container">
+    <div class="card">
+      <h2><i class="fas fa-location-dot"></i> Tra cứu địa chỉ IP</h2>
+      <p class="hint">
+        Tra một địa chỉ IPv4/IPv6 qua nhiều nguồn dữ liệu cùng lúc. Kết quả hiển thị song song
+        từng nguồn (kèm thời gian phản hồi) và một bảng tổng hợp chọn giá trị được
+        <b>nhiều nguồn đồng ý nhất</b> — không phải toạ độ chính xác của thiết bị.
+      </p>
+
+      <div class="input-row" style="margin-top:16px">
+        <input id="ipInput" type="text" inputmode="text" autocomplete="off" spellcheck="false"
+               placeholder="8.8.8.8 hoặc 2001:4860:4860::8888" aria-label="Địa chỉ IP">
+        <button class="btn btn-primary" id="lookupBtn" onclick="doLookup()">
+          <i class="fas fa-magnifying-glass"></i> Tra cứu
+        </button>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" id="myIpBtn" onclick="useMyIp()" title="Lấy IP WAN hiện tại của bạn (IPv4 và IPv6)"><i class="fas fa-user"></i> IP của tôi</button>
+        <button class="btn" id="freshBtn" onclick="doLookup(true)" title="Bỏ qua cache, gọi lại các nguồn">
+          <i class="fas fa-rotate"></i> Tra mới
+        </button>
+        <span class="quota" id="quotaText"></span>
+      </div>
+
+      <!-- IP WAN của người dùng: cả IPv4 và IPv6 (hai đường ra Internet độc lập). -->
+      <div class="myip" id="myIpBox" hidden>
+        <div class="myip-head"><i class="fas fa-network-wired"></i> IP WAN của bạn</div>
+        <div class="myip-list" id="myIpList"></div>
+        <p class="hint" id="myIpHint" style="margin-top:8px"></p>
+      </div>
+
+      <div class="chips" id="sourceChips"></div>
+      <p class="hint" id="sourceHint" style="margin-top:8px"></p>
+    </div>
+
+    <div id="alertBox"></div>
+
+    <div id="resultWrap" hidden>
+      <div class="card">
+        <h2><i class="fas fa-diagram-project"></i> Tổng hợp từ các nguồn</h2>
+        <div class="sum-grid" id="summaryGrid"></div>
+        <div class="badges" id="summaryBadges"></div>
+      </div>
+
+      <div class="card">
+        <h2 style="flex-wrap:wrap">
+          <i class="fas fa-list-check"></i> Kết quả từng nguồn
+          <button class="btn" id="srcExpandAll" onclick="toggleAllSrcDetails()" style="margin-left:auto">
+            <i class="fas fa-expand-alt"></i> Mở rộng tất cả
+          </button>
+        </h2>
+        <p class="hint" style="margin:-6px 0 10px">Bấm vào một dòng để xem chi tiết đầy đủ các trường mà nguồn đó trả về.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nguồn</th><th>Quốc gia</th><th>Thành phố</th>
+                <th>ASN</th><th>Nhà mạng / tổ chức</th><th>Toạ độ</th><th>Thời gian</th>
+              </tr>
+            </thead>
+            <tbody id="srcTableBody"></tbody>
+          </table>
+        </div>
+        <details>
+          <summary>Xem JSON đầy đủ (dữ liệu thô từng nguồn)</summary>
+          <pre id="rawJson"></pre>
+        </details>
+        <p class="hint" style="margin-top:12px">
+          Dữ liệu vị trí IP chỉ mang tính tham khảo: nhà mạng dùng NAT/CGNAT nên nhiều thiết bị
+          có thể dùng chung một IP, và toạ độ là của trung tâm vùng/nhà mạng chứ không phải thiết bị.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================================================
+    // Trang công cụ tra cứu IP — dùng chung Auth (token JWT) với toàn bộ site.
+    // Khách chưa đăng nhập: gọi /api/tools/ip-lookup/guest (hạn mức theo IP).
+    // Đã đăng nhập: /api/tools/ip-lookup (mọi nguồn đang bật + chọn nguồn).
+    // ==========================================================================
+    (function () {
+      'use strict';
+
+      var CONFIG = null;          // cấu hình công khai từ server
+      var SELECTED = null;        // Set các type nguồn đang chọn (chỉ khi đã đăng nhập)
+      var BUSY = false;
+
+      function $(id) { return document.getElementById(id); }
+
+      function esc(v) {
+        if (v === null || v === undefined) return '';
+        return String(v)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+
+      function loggedIn() { return !!(window.Auth && Auth.isLoggedIn()); }
+
+      /**
+       * Đọc JSON an toàn: route chưa có trên bản server đang chạy (chưa restart
+       * sau khi cập nhật), hoặc proxy trả trang chủ cho /api → body là
+       * `<!DOCTYPE html>…`, `res.json()` sẽ ném "Unexpected token '<'" vô nghĩa.
+       * Đổi thành lỗi nói rõ mã HTTP + cần làm gì.
+       */
+      async function readJson(res, url) {
+        var ct = String(res.headers.get('content-type') || '').toLowerCase();
+        if (ct.indexOf('application/json') !== -1) return res.json();
+        var text = '';
+        try { text = await res.text(); } catch (e) { text = ''; }
+        var plain = String(text).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140);
+        var msg = 'Máy chủ trả về HTML thay vì JSON cho ' + url + ' (HTTP ' + res.status + ').';
+        if (res.status === 404) msg += ' Có thể máy chủ chưa được khởi động lại sau khi cập nhật.';
+        if (plain) msg += ' Nội dung: ' + plain;
+        throw new Error(msg);
+      }
+
+      function showAlert(html, kind) {
+        var box = $('alertBox');
+        box.innerHTML = '<div class="alert ' + (kind || '') + '">' + html + '</div>';
+      }
+      function clearAlert() { $('alertBox').innerHTML = ''; }
+
+      function setBusy(on) {
+        BUSY = on;
+        var b = $('lookupBtn');
+        b.disabled = on;
+        b.innerHTML = on
+          ? '<i class="fas fa-spinner fa-spin"></i> Đang tra…'
+          : '<i class="fas fa-magnifying-glass"></i> Tra cứu';
+        $('myIpBtn').disabled = on;
+        $('freshBtn').disabled = on;
+      }
+
+      // ---------------- Cấu hình + chip nguồn ----------------
+      async function loadConfig() {
+        var url = '/api/tools/ip-lookup/config';
+        try {
+          var res = await fetch(url);
+          CONFIG = await readJson(res, url);
+        } catch (e) {
+          CONFIG = { public_enabled: false, sources: [], guest_daily: 1, user_daily: 50 };
+          showAlert('<i class="fas fa-circle-xmark"></i> Không tải được cấu hình tra cứu IP: ' + esc(e.message), 'error');
+        }
+        renderSources();
+        renderQuota();
+      }
+
+      function renderSources() {
+        var box = $('sourceChips');
+        var hint = $('sourceHint');
+        var list = (CONFIG && CONFIG.sources) || [];
+        if (!list.length) {
+          box.innerHTML = '';
+          hint.textContent = 'Chưa có nguồn tra cứu nào được bật trên máy chủ.';
+          return;
+        }
+        if (loggedIn()) {
+          if (!SELECTED) SELECTED = new Set(list.map(function (s) { return s.type; }));
+          box.innerHTML = list.map(function (s) {
+            var on = SELECTED.has(s.type);
+            return '<span class="chip ' + (on ? 'on' : '') + '" data-type="' + esc(s.type) + '" onclick="toggleSource(\'' + esc(s.type) + '\')">'
+              + '<span class="dot"></span>' + esc(s.label) + '</span>';
+          }).join('');
+          hint.textContent = 'Bấm để bật/tắt từng nguồn. Nguồn có API key chỉ chạy khi quản trị viên đã cấu hình key.';
+        } else {
+          box.innerHTML = list.map(function (s) {
+            return '<span class="chip on" title="Đăng nhập để chọn nguồn"><span class="dot"></span>'
+              + esc(s.label) + '</span>';
+          }).join('');
+          hint.innerHTML = 'Khách chỉ tra được các nguồn miễn phí. '
+            + '<a href="/index.html#login">Đăng nhập</a> '
+            + 'để dùng thêm nguồn có API key và chọn từng nguồn.';
+        }
+      }
+
+      window.toggleSource = function (type) {
+        if (!loggedIn()) return;
+        if (SELECTED.has(type)) SELECTED.delete(type); else SELECTED.add(type);
+        renderSources();
+      };
+
+      function renderQuota(usage) {
+        var el = $('quotaText');
+        if (usage && usage.limit != null) {
+          var text = 'Còn ' + usage.remaining + '/' + usage.limit + ' lượt hôm nay';
+          if (usage.limit === 0) text = 'Không giới hạn lượt';
+          el.textContent = text;
+          return;
+        }
+        if (CONFIG && CONFIG.user_daily != null) {
+          el.textContent = loggedIn()
+            ? 'Hạn mức: ' + CONFIG.user_daily + ' lượt/ngày'
+            : 'Khách: ' + CONFIG.guest_daily + ' lượt/ngày';
+        }
+      }
+
+      // ---------------- Dò IP WAN của chính người dùng ----------------
+      // VÌ SAO KHÔNG DÙNG MỘT REQUEST TỚI SERVER:
+      // Một kết nối HTTP chỉ đi qua MỘT họ địa chỉ (IPv4 hoặc IPv6), nên server
+      // chỉ thấy một IP — và khi chạy local/qua proxy thì đó còn có thể là
+      // 127.0.0.1 hoặc IP LAN, không phải IP WAN. Muốn biết CẢ HAI họ, phải hỏi
+      // 2 endpoint chỉ có bản ghi A (IPv4) / AAAA (IPv6): trình duyệt tự chọn
+      // đúng họ cho từng endpoint, và dịch vụ ngoài thấy IP WAN thật sau NAT.
+      //
+      // Đây là các dịch vụ công khai, chỉ nhận đúng địa chỉ IP của người gọi —
+      // không gửi kèm dữ liệu nào khác của người dùng.
+      //
+      // CHỌN ENDPOINT: chỉ dùng dịch vụ trả `Access-Control-Allow-Origin: *`.
+      // (api.ipify.org KHÔNG gửi CORS header nên trình duyệt chặn — dù gọi từ
+      // server thì vẫn thấy IP, fetch từ trang web sẽ thất bại.)
+      var SELF_PROVIDERS = {
+        4: [
+          'https://ipv4.ident.me',
+          'https://api-ipv4.ip.sb/ip',
+          'https://ipv4.icanhazip.com'
+        ],
+        6: [
+          'https://ipv6.ident.me',
+          'https://api-ipv6.ip.sb/ip',
+          'https://ipv6.icanhazip.com'
+        ]
+      };
+      var SELF_TIMEOUT_MS = 4500;
+
+      function familyText(f) { return f === 6 ? 'IPv6' : 'IPv4'; }
+
+      /**
+       * Nhận dạng họ địa chỉ của một chuỗi (4/6/0). Chỉ dùng để kiểm tra dữ
+       * liệu dịch vụ ngoài trả về có đúng họ mong đợi — việc validate chặt nằm
+       * ở server (`normalizeIp`), nên chỗ này chỉ cần đủ chắc để không dán nhầm
+       * một chuỗi rác vào ô tra cứu.
+       */
+      function ipFamily(s) {
+        var v = String(s || '').trim();
+        if (/^\d{1,3}(\.\d{1,3}){3}$/.test(v)) {
+          var oct = v.split('.');
+          for (var i = 0; i < oct.length; i++) if (Number(oct[i]) > 255) return 0;
+          return 4;
+        }
+        if (v.indexOf(':') !== -1 && /^[0-9a-f:.%]+$/i.test(v) && v.split(':').length >= 3) return 6;
+        return 0;
+      }
+
+      /** fetch có timeout — dịch vụ ngoài bị chặn/treo không được làm đơ nút. */
+      async function fetchWithTimeout(url) {
+        var ctl = window.AbortController ? new AbortController() : null;
+        var timer = ctl ? setTimeout(function () { ctl.abort(); }, SELF_TIMEOUT_MS) : null;
+        try {
+          return await fetch(url, {
+            cache: 'no-store', mode: 'cors',
+            signal: ctl ? ctl.signal : undefined
+          });
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      }
+
+      /** Dò IP WAN của một họ (4 hoặc 6). Trả chuỗi IP hoặc null. */
+      async function detectWan(family) {
+        var urls = SELF_PROVIDERS[family] || [];
+        for (var i = 0; i < urls.length; i++) {
+          try {
+            var res = await fetchWithTimeout(urls[i]);
+            if (!res.ok) continue;
+            var ct = String(res.headers.get('content-type') || '').toLowerCase();
+            // Luôn đọc dạng text: phần lớn dịch vụ dò trả IP thuần, một số trả
+            // JSON — parse tại chỗ để không phụ thuộc vào header của dịch vụ.
+            var raw = String(await res.text() || '').trim();
+            if (ct.indexOf('json') !== -1 || raw.charAt(0) === '{') {
+              try {
+                var j = JSON.parse(raw);
+                raw = String((j && (j.ip || j.address)) || '').trim();
+              } catch (e) { raw = ''; }
+            }
+            if (ipFamily(raw) === family) return raw;
+          } catch (e) { /* endpoint bị chặn/timeout → thử endpoint kế tiếp */ }
+        }
+        return null;
+      }
+
+      /** IP mà SERVER nhìn thấy — dùng làm nguồn dự phòng khi dịch vụ ngoài bị chặn. */
+      async function serverSeenIp() {
+        if (!loggedIn()) return null;
+        try {
+          var res = await Auth.fetch('/api/tools/ip-lookup/me');
+          var d = await readJson(res, '/api/tools/ip-lookup/me');
+          if (!res.ok || !d) return null;
+          return d;
+        } catch (e) { return null; }
+      }
+
+      function renderMyIp(found) {
+        var list = $('myIpList');
+        var hint = $('myIpHint');
+        var html = '';
+        var families = [4, 6];
+        for (var i = 0; i < families.length; i++) {
+          var f = families[i];
+          var ip = found[f];
+          if (ip) {
+            html += '<span class="myip-chip" title="Bấm để tra IP này" onclick="useDetectedIp(\'' + ip + '\')">'
+              + '<span class="fam">' + familyText(f) + '</span>' + esc(ip) + '</span>';
+          } else {
+            html += '<span class="myip-chip none" title="Mạng hiện tại không có địa chỉ công khai họ này">'
+              + '<span class="fam">' + familyText(f) + '</span>không có</span>';
+          }
+        }
+        list.innerHTML = html;
+
+        var notes = [];
+        notes.push('Đây là địa chỉ mà Internet nhìn thấy (sau NAT của nhà mạng), không phải IP riêng trong máy.');
+        if (found[4] && found[6]) notes.push('Máy bạn có cả IPv4 và IPv6 — hai họ độc lập, có thể cùng hoặc khác nhà mạng.');
+        else if (found[4]) notes.push('Mạng hiện tại chỉ ra Internet bằng IPv4 (nhiều mạng Việt Nam ở tình trạng này).');
+        else if (found[6]) notes.push('Mạng hiện tại chỉ có IPv6 công khai.');
+        if (found.source === 'server') notes.push('IPv4/IPv6 lấy từ máy chủ Cell.id.vn (dịch vụ dò bên ngoài bị chặn).');
+        else if (found.source === 'mixed') notes.push('Một phần lấy từ máy chủ Cell.id.vn do dịch vụ dò bên ngoài bị chặn.');
+        hint.textContent = notes.join(' ');
+      }
+
+      window.useDetectedIp = function (ip) {
+        $('ipInput').value = ip;
+        doLookup();
+      };
+
+      // ---------------- Tra cứu ----------------
+      window.useMyIp = async function () {
+        var box = $('myIpBox');
+        var list = $('myIpList');
+        var hint = $('myIpHint');
+        var btn = $('myIpBtn');
+        box.hidden = false;
+        hint.textContent = '';
+        list.innerHTML = '<span class="hint" style="padding:2px 0"><i class="fas fa-spinner fa-spin"></i> '
+          + 'Đang xác định IP WAN (IPv4 + IPv6)…</span>';
+        btn.disabled = true;
+        try {
+          var tasks = [detectWan(4), detectWan(6)];
+          if (loggedIn()) tasks.push(serverSeenIp());
+          var out = await Promise.all(tasks);
+          var found = { 4: out[0] || null, 6: out[1] || null, source: 'external' };
+          var anyExternal = !!(found[4] || found[6]);
+
+          // Dự phòng: IP server thấy — chỉ dùng khi là địa chỉ công khai thật
+          // (`wan_ip`), và chỉ cho họ đang thiếu.
+          var seen = out.length > 2 ? out[2] : null;
+          if (seen && seen.wan_ip && seen.ipVersion) {
+            var fam = seen.ipVersion === 6 ? 6 : 4;
+            if (!found[fam]) {
+              found[fam] = seen.wan_ip;
+              found.source = anyExternal ? 'mixed' : 'server';
+            }
+          }
+          renderMyIp(found);
+
+          var pick = found[4] || found[6];
+          if (pick) {
+            $('ipInput').value = pick;
+            doLookup();
+          } else {
+            hint.textContent += ' Không xác định được IP WAN — có thể trình duyệt/tiện ích đang chặn '
+              + 'hai dịch vụ dò (ident.me, ip.sb, icanhazip.com) hoặc mạng không có đường ra Internet.';
+          }
+        } finally {
+          btn.disabled = false;
+        }
+      };
+
+      window.doLookup = async function (fresh) {
+        if (BUSY) return;
+        var ip = ($('ipInput').value || '').trim();
+        if (!ip) { showAlert('Nhập địa chỉ IP cần tra.', 'error'); return; }
+
+        var url;
+        if (loggedIn()) {
+          var sel = SELECTED ? Array.from(SELECTED) : [];
+          url = '/api/tools/ip-lookup?ip=' + encodeURIComponent(ip);
+          if (sel.length && sel.length < ((CONFIG && CONFIG.sources) || []).length) {
+            url += '&sources=' + encodeURIComponent(sel.join(','));
+          }
+          if (fresh) url += '&fresh=1';
+        } else {
+          url = '/api/tools/ip-lookup/guest?ip=' + encodeURIComponent(ip);
+        }
+
+        clearAlert();
+        setBusy(true);
+        $('resultWrap').hidden = true;
+        try {
+          var res = loggedIn() ? await Auth.fetch(url) : await fetch(url);
+          var d = await readJson(res, url);
+          if (!res.ok || !d.ok) {
+            handleLookupError(res.status, d);
+            return;
+          }
+          renderResult(d);
+          if (d.usage) renderQuota(d.usage.guest || d.usage);
+        } catch (e) {
+          if (String(e.message) === 'Session expired') {
+            showAlert('Phiên đăng nhập đã hết hạn. <a class="cta" href="/index.html#login">Đăng nhập lại</a>', 'error');
+            return;
+          }
+          showAlert('<i class="fas fa-circle-xmark"></i> ' + esc(e.message), 'error');
+        } finally {
+          setBusy(false);
+        }
+      };
+
+      function handleLookupError(status, d) {
+        var msg = d && d.error ? d.error : ('Tra cứu không thành công (HTTP ' + status + ')');
+        if (d && d.code === 'API_NOT_FOUND') {
+          // Server đang chạy bản cũ chưa có endpoint tra cứu IP.
+          showAlert('<i class="fas fa-server"></i> ' + esc(msg)
+            + (d.hint ? '<div class="hint" style="margin-top:6px">' + esc(d.hint) + '</div>' : ''), 'error');
+          return;
+        }
+        if (d && d.code === 'IP_TRIAL_EXHAUSTED') {
+          showAlert('<i class="fas fa-circle-info"></i> ' + esc(msg)
+            + ' <a class="cta" href="/index.html#login" onclick="if(window.AuthPopup){AuthPopup.open(\'login\');return false;}">Đăng nhập</a>', 'error');
+          if (d.guestTrial) renderQuota(d.guestTrial);
+          return;
+        }
+        if (d && d.code === 'PUBLIC_DISABLED') {
+          showAlert('<i class="fas fa-lock"></i> ' + esc(msg)
+            + ' <a class="cta" href="/index.html#login">Đăng nhập</a>', 'error');
+          return;
+        }
+        if (d && d.code === 'IP_LOOKUP_QUOTA') {
+          showAlert('<i class="fas fa-hourglass-end"></i> ' + esc(msg), 'error');
+          if (d.usage) renderQuota(d.usage);
+          return;
+        }
+        showAlert('<i class="fas fa-circle-xmark"></i> ' + esc(msg), 'error');
+      }
+
+      // ---------------- Hiển thị kết quả ----------------
+      function renderResult(d) {
+        var agg = d.aggregate || {};
+        var f = agg.fields || {};
+
+        var items = [];
+        items.push(sumItem('Địa chỉ', d.ip, 'IPv' + (d.ipVersion || '?')));
+        items.push(sumItem('Quốc gia', pick(f.country), votes(f.country)));
+        items.push(sumItem('Vùng / thành phố',
+          [pick(f.region), pick(f.city)].filter(Boolean).join(' · ') || '—', votes(f.city)));
+        items.push(sumItem('ASN', pick(f.asn), votes(f.asn)));
+        items.push(sumItem('Nhà mạng / tổ chức', pick(f.isp) || pick(f.org), votes(f.org)));
+        if (agg.lat != null && agg.lon != null) {
+          items.push(sumItem('Toạ độ (trung vị)',
+            Number(agg.lat).toFixed(4) + ', ' + Number(agg.lon).toFixed(4),
+            agg.coordinates ? agg.coordinates.length + ' nguồn có toạ độ' : ''));
+        }
+        if (pick(f.timezone)) items.push(sumItem('Múi giờ', pick(f.timezone), votes(f.timezone)));
+        $('summaryGrid').innerHTML = items.join('');
+
+        var badges = [];
+        badges.push('<span class="badge">' + (agg.sources_ok || 0) + '/' + (agg.sources_total || 0) + ' nguồn trả lời</span>');
+        badges.push('<span class="badge">Đồng thuận ' + Math.round((agg.agreement || 0) * 100) + '%</span>');
+        if (d.cacheHits) badges.push('<span class="badge">' + d.cacheHits + ' nguồn lấy từ cache</span>');
+        var flags = agg.flags || {};
+        // Toạ độ trung vị chỉ để tham khảo — mở bản đồ ngoài (OSM) thay vì nhúng
+        // iframe: không phụ thuộc dịch vụ bản đồ của bên thứ ba khi vừa tải trang.
+        if (agg.lat != null && agg.lon != null) {
+          badges.push('<a class="badge" target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat='
+            + encodeURIComponent(agg.lat) + '&mlon=' + encodeURIComponent(agg.lon) + '#map=12/'
+            + encodeURIComponent(agg.lat) + '/' + encodeURIComponent(agg.lon) + '">'
+            + '<i class="fas fa-map-location-dot"></i> Mở bản đồ</a>');
+        }
+        if (flags.isProxy) badges.push('<span class="badge risk">Có nguồn đánh dấu proxy/VPN</span>');
+        if (flags.isHosting) badges.push('<span class="badge warn">Có nguồn đánh dấu hosting/datacenter</span>');
+        if (flags.isMobile) badges.push('<span class="badge">Có nguồn nhận là mạng di động</span>');
+        (agg.proxyTypes || []).forEach(function (t) {
+          badges.push('<span class="badge risk">' + esc(t) + '</span>');
+        });
+        $('summaryBadges').innerHTML = badges.join('');
+
+        var results = d.results || [];
+        $('srcTableBody').innerHTML = results.map(function (r, i) {
+          return srcRowHtml(r, i) + srcDetailHtml(r, i);
+        }).join('');
+        // Kết quả mới → mọi dòng đóng lại; nhãn nút "Mở rộng tất cả" về trạng thái đúng.
+        var expandBtn = $('srcExpandAll');
+        if (expandBtn) expandBtn.innerHTML = '<i class="fas fa-expand-alt"></i> Mở rộng tất cả';
+
+        $('rawJson').textContent = JSON.stringify(d, null, 2);
+        $('resultWrap').hidden = false;
+      }
+
+      // ---------------- Chi tiết theo từng nguồn (mở rộng/thu gọn) ----------------
+      // Bảng chính chỉ hiện vài cột để dễ so sánh giữa các nguồn; toàn bộ trường
+      // mà một nguồn trả về nằm trong phần mở rộng của chính dòng đó.
+      // `true` = hiển thị bằng font mono (mã/số/toạ độ).
+      var DETAIL_FIELDS = [
+        ['country', 'Quốc gia'],
+        ['countryCode', 'Mã quốc gia', true],
+        ['continent', 'Châu lục'],
+        ['continentCode', 'Mã châu lục', true],
+        ['region', 'Vùng / tiểu bang'],
+        ['city', 'Thành phố'],
+        ['postal', 'Mã bưu chính', true],
+        ['lat', 'Vĩ độ', true],
+        ['lon', 'Kinh độ', true],
+        ['timezone', 'Múi giờ', true],
+        ['gmtOffset', 'GMT offset', true],
+        ['asn', 'ASN', true],
+        ['asnName', 'Tên ASN'],
+        ['isp', 'ISP'],
+        ['org', 'Tổ chức'],
+        ['domain', 'Tên miền', true],
+        ['linkType', 'Loại kết nối'],
+        ['usageType', 'Loại sử dụng'],
+        ['isProxy', 'Proxy / VPN', true],
+        ['proxyType', 'Loại proxy'],
+        ['isHosting', 'Hosting / datacenter', true],
+        ['isMobile', 'Mạng di động', true],
+        ['threatLevel', 'Mức đe doạ']
+      ];
+
+      /** Chuẩn hoá 1 giá trị để hiển thị; null = nguồn không trả trường này. */
+      function detailValue(key, v) {
+        if (v === null || v === undefined || v === '') return null;
+        if (v === true) return 'Có';
+        if (v === false) return 'Không';
+        if (key === 'gmtOffset') {
+          var n = Number(v);
+          if (Number.isFinite(n)) return 'UTC' + (n >= 0 ? '+' : '') + n;
+        }
+        if ((key === 'lat' || key === 'lon') && Number.isFinite(Number(v))) {
+          return String(Math.round(Number(v) * 1e6) / 1e6);
+        }
+        return String(v);
+      }
+
+      function srcRowHtml(r, i) {
+        var caret = '<i class="fas fa-chevron-right caret" aria-hidden="true"></i>';
+        var ok = !!(r.ok && r.data);
+        var attrs = ' id="srcRow-' + i + '" class="src-row' + (ok ? '' : ' fail') + '"'
+          + ' tabindex="0" role="button" aria-expanded="false" aria-controls="srcDetail-' + i + '"'
+          + ' onclick="toggleSrcDetail(' + i + ')"'
+          + ' onkeydown="srcRowKey(event,' + i + ')"';
+        if (!ok) {
+          return '<tr' + attrs + '><td>' + caret
+            + '<span class="src-name">' + esc(r.label || r.source) + '</span></td>'
+            + '<td colspan="6"><span class="err">' + esc(r.error || 'Không có dữ liệu') + '</span></td></tr>';
+        }
+        var x = r.data;
+        var coords = (x.lat != null && x.lon != null)
+          ? Number(x.lat).toFixed(4) + ', ' + Number(x.lon).toFixed(4) : '—';
+        return '<tr' + attrs + '>'
+          + '<td>' + caret
+          + '<span class="src-name">' + esc(r.label || r.source) + '</span>'
+          + (r.cached ? '<span class="tag">cache</span>' : '<span class="tag live">mới</span>') + '</td>'
+          + '<td>' + esc(x.country || '—') + (x.countryCode ? ' (' + esc(x.countryCode) + ')' : '') + '</td>'
+          + '<td>' + esc([x.region, x.city].filter(Boolean).join(', ') || '—') + '</td>'
+          + '<td class="mono">' + esc(x.asn || '—') + '</td>'
+          + '<td>' + esc(x.isp || x.org || x.asnName || '—') + '</td>'
+          + '<td class="mono">' + esc(coords) + '</td>'
+          + '<td>' + (r.ms != null ? esc(r.ms) + ' ms' : '—') + '</td>'
+          + '</tr>';
+      }
+
+      function srcDetailHtml(r, i) {
+        var head = '<div class="det-head"><span class="src-name">'
+          + esc(r.label || r.source) + '</span>';
+        if (!r.ok || !r.data) {
+          return '<tr class="src-detail" id="srcDetail-' + i + '" hidden><td colspan="7">'
+            + head + '<span class="det-meta">nguồn không trả dữ liệu</span></div>'
+            + '<div class="det-err"><i class="fas fa-circle-exclamation"></i> '
+            + esc(r.error || 'Không có dữ liệu') + '</div>'
+            + '</td></tr>';
+        }
+        var x = r.data;
+        var cells = [];
+        var missing = [];
+        for (var k = 0; k < DETAIL_FIELDS.length; k++) {
+          var field = DETAIL_FIELDS[k][0];
+          var label = DETAIL_FIELDS[k][1];
+          var mono = !!DETAIL_FIELDS[k][2];
+          var val = detailValue(field, x[field]);
+          if (val === null) { missing.push(label); continue; }
+          cells.push('<div class="det-item"><span class="k">' + esc(label) + '</span>'
+            + '<span class="v' + (mono ? ' mono' : '') + '">' + esc(val) + '</span></div>');
+        }
+        var meta = [];
+        if (r.ms != null) meta.push(r.ms + ' ms');
+        meta.push(cells.length + ' trường');
+        if (r.cached) meta.push('lấy từ cache');
+        return '<tr class="src-detail" id="srcDetail-' + i + '" hidden><td colspan="7">'
+          + head + '<span class="det-meta">' + esc(meta.join(' · ')) + '</span></div>'
+          + (cells.length
+            ? '<div class="det-grid">' + cells.join('') + '</div>'
+            : '<div class="det-err">Nguồn không trả trường thông tin nào.</div>')
+          + (missing.length
+            ? '<p class="det-missing">Nguồn không trả: ' + esc(missing.join(', ')) + '</p>' : '')
+          + '<details class="det-raw"><summary>JSON của nguồn này</summary><pre>'
+          + esc(JSON.stringify(x, null, 2)) + '</pre></details>'
+          + '</td></tr>';
+      }
+
+      /** Mở/thu gọn chi tiết của 1 nguồn (dòng cha giữ aria-expanded cho screen reader). */
+      function toggleSrcDetail(i) {
+        var row = $('srcRow-' + i);
+        var det = $('srcDetail-' + i);
+        if (!row || !det) return;
+        var open = det.hidden;
+        det.hidden = !open;
+        row.classList.toggle('open', open);
+        row.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+
+      /** Enter/Space trên dòng đang focus = mở/thu gọn (dòng có tabindex). */
+      function srcRowKey(ev, i) {
+        if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar') {
+          ev.preventDefault();
+          toggleSrcDetail(i);
+        }
+      }
+
+      /** Mở rộng tất cả, hoặc thu gọn tất cả nếu mọi dòng đang mở. */
+      function toggleAllSrcDetails() {
+        var rows = document.querySelectorAll('#srcTableBody .src-row');
+        if (!rows.length) return;
+        var anyClosed = false;
+        Array.prototype.forEach.call(rows, function (r) {
+          if (r.getAttribute('aria-expanded') !== 'true') anyClosed = true;
+        });
+        Array.prototype.forEach.call(rows, function (r) {
+          var i = String(r.id || '').replace('srcRow-', '');
+          var det = $('srcDetail-' + i);
+          if (!det) return;
+          det.hidden = !anyClosed;
+          r.classList.toggle('open', anyClosed);
+          r.setAttribute('aria-expanded', anyClosed ? 'true' : 'false');
+        });
+        var btn = $('srcExpandAll');
+        if (btn) {
+          btn.innerHTML = anyClosed
+            ? '<i class="fas fa-compress-alt"></i> Thu gọn tất cả'
+            : '<i class="fas fa-expand-alt"></i> Mở rộng tất cả';
+        }
+      }
+
+      // Export cho HTML (onclick/onkeydown). Hàm khai báo trong classic script vốn
+      // đã thành thuộc tính window, xuất tường minh để không vỡ nếu file bị bọc
+      // trong IIFE/bundler.
+      window.toggleSrcDetail = toggleSrcDetail;
+      window.srcRowKey = srcRowKey;
+      window.toggleAllSrcDetails = toggleAllSrcDetails;
+
+      function pick(v) { return v && v.value ? v.value : '—'; }
+      function votes(v) {
+        if (!v || !v.count) return '';
+        return v.count + ' nguồn đồng ý';
+      }
+      function sumItem(k, v, m) {
+        return '<div class="sum-item"><div class="k">' + esc(k) + '</div>'
+          + '<div class="v">' + esc(v || '—') + '</div>'
+          + (m ? '<div class="m">' + esc(m) + '</div>' : '') + '</div>';
+      }
+
+      // ---------------- Khởi động ----------------
+      window.addEventListener('DOMContentLoaded', async function () {
+        if (window.Auth) Auth.initNavbar();
+        await loadConfig();
+        var input = $('ipInput');
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') doLookup(); });
+        // Điền sẵn IP trên URL (?ip=...) để chia sẻ link tra cứu.
+        var qp = new URLSearchParams(location.search).get('ip');
+        if (qp) { input.value = qp; doLookup(); }
+        else input.focus();
+      });
+    })();
+  </script>
+</body>
+</html>

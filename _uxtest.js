@@ -66,7 +66,7 @@ ok('KHÔNG còn accordion cell con (histChildClick/histToggleBatch đã bỏ)',
   !/function histChildClick/.test(appSrc) && !/function histToggleBatch/.test(appSrc));
 
 console.log('\n== 3. Click dòng kết quả tra cứu → highlight ==');
-ok('có hàm highlightCellOnMap', /function highlightCellOnMap\(lat, lon, range, radio, label\)/.test(appSrc));
+ok('có hàm highlightCellOnMap (nhận thêm `info` để dựng popup chi tiết)', /function highlightCellOnMap\(lat, lon, range, radio, label, info\)/.test(appSrc));
 ok('có hàm clearHighlight', /function clearHighlight\(\)/.test(appSrc));
 const hlBody = fnBody('highlightCellOnMap');
 ok('highlightCellOnMap gọi clearHighlight', /clearHighlight\(\)/.test(hlBody));
@@ -79,11 +79,11 @@ ok('highlightCellOnMap thêm layer vào cellOverlay', /cellOverlay\.addLayer\(hi
 ok('highlightCellOnMap có class cell-hl-ring', /cell-hl-ring/.test(hlBody));
 ok('highlightCellOnMap chặn toạ độ không hợp lệ', /isFinite\(lat\)/.test(hlBody));
 const searchBody = fnBody('searchCells');
-ok('searchCells render onclick highlightCellOnMap', /onclick=\\?"highlightCellOnMap\(/.test(searchBody));
+ok('searchCells render onclick mở cell trên bản đồ (openCellSearchResult)', /onclick=\\?"openCellSearchResult\(/.test(searchBody));
 ok('searchCells chỉ gắn click khi có toạ độ', /hasCoord/.test(searchBody));
 ok('plotCallLogs xoá highlight cũ', /clearHighlight\(\);/.test(fnBody('plotCallLogs')));
 const renderBody = fnBody('renderCallLogs');
-ok('renderCallLogs dòng có toạ độ gắn onclick highlightCellOnMap', /onclick=\\?"highlightCellOnMap\(/.test(renderBody));
+ok('renderCallLogs dòng có toạ độ gắn onclick openClRecordOnMap (popup chi tiết)', /onclick=\\?"openClRecordOnMap\(/.test(renderBody));
 ok('renderCallLogs không còn nút xoá từng bản ghi', !/deleteCallLog\(/.test(renderBody) && !/deleteCallLog\(/.test(appSrc));
 
 console.log('\n== 4. Lịch sử hàng loạt → tab Xem rút list ==');
@@ -120,11 +120,22 @@ ok('popup lịch dựng lưới tháng + Hôm nay / Tất cả ngày',
   /histCalNav\(/.test(fnBody('renderHistDatePopup')) &&
   /hist\.calToday/.test(fnBody('renderHistDatePopup')) &&
   /hist\.calAll/.test(fnBody('renderHistDatePopup')));
-ok('mục đơn lẻ mặc định ĐÓNG (#histSingleBody hidden, aria-expanded=false)',
-  /id="histSingleBody" hidden/.test(htmlSrc) && /aria-expanded="false"[\s\S]{0,200}toggleHistSection\('single'\)/.test(htmlSrc));
-ok('mục đơn lẻ chỉ nạp khi mở lần đầu (histSingle.loaded)',
-  /if \(open && target === 'single' && !histSingle\.loaded\) loadLookupHistory\(/.test(fnBody('toggleHistSection')) &&
-  /histSingle\.loaded = true/.test(fnBody('loadLookupHistory')));
+ok('tab Lịch sử: mục TRA CỨU ĐƠN LẺ ở trên, MỞ sẵn (#histSingleBody không hidden)',
+  /id="histSingleBody">/.test(htmlSrc) && !/id="histSingleBody" hidden/.test(htmlSrc) &&
+  htmlSrc.indexOf('id="histSingleSub"') < htmlSrc.indexOf('id="histBatchSub"') &&
+  /aria-expanded="true"[\s\S]{0,240}toggleHistSection\('single'\)/.test(htmlSrc));
+ok('tab Lịch sử: mục TRA CỨU DANH SÁCH ở dưới, ĐÓNG mặc định (#histBatchBody hidden)',
+  /id="histBatchBody" hidden/.test(htmlSrc) &&
+  /aria-expanded="false"[\s\S]{0,240}toggleHistSection\('batch'\)/.test(htmlSrc) &&
+  /let histSectionOpen = \{ single: true, batch: false \}/.test(appSrc));
+ok('tab Lịch sử: accordion — mở mục này thì đóng mục kia',
+  /if \(open\) \{\s*const other = target === 'batch' \? 'single' : 'batch';\s*histSectionOpen\[other\] = false;/.test(fnBody('toggleHistSection')));
+ok('tab Lịch sử: mục đang mở chiếm hết chiều cao panel (.is-expanded / .is-collapsed)',
+  /is-expanded/.test(fnBody('renderHistSections')) && /is-collapsed/.test(fnBody('renderHistSections')) &&
+  /\.hist-sub\.is-expanded/.test(htmlSrc));
+ok('mục đơn lẻ nạp mỗi lần mở (không có cờ loaded chặn lại)',
+  /if \(open && target === 'single'\) loadLookupHistory\(/.test(fnBody('toggleHistSection')) &&
+  !/histSingle\.loaded/.test(appSrc));
 ok('openCallLogsFromHistory được định nghĩa (giữ tên cho chỗ gọi cũ)',
   /async function openCallLogsFromHistory\(/.test(appSrc));
 ok('card phiên ở Lịch sử mở bằng openCallLogSession', /openCallLogSession\('/.test(fnBody('renderHistBatches')));
@@ -134,7 +145,9 @@ ok('renderCallLogs không đụng tới cờ _fromHistory để vẽ nút xoá',
 console.log('\n== 5. Phiên rút list (upload Excel) — xoá / xem lại ==');
 ok('có hàm deleteCallLogSession', /async function deleteCallLogSession\(batchId\)/.test(appSrc));
 ok('deleteCallLogSession gọi DELETE /api/call-log-sessions/', /apiRequest\('DELETE', '\/api\/call-log-sessions\/'/.test(appSrc));
-ok('deleteCallLogSession có confirm', /confirm\(t\('hist\.clSessionConfirmDelete'\)\)/.test(appSrc));
+ok('deleteCallLogSession xác nhận bằng popup tự dựng (không confirm() của HĐH)',
+  /openConfirmDialog\(\{/.test(fnBody('deleteCallLogSession')) &&
+  !/\bwindow\.confirm\(|\bif \(!confirm\(/.test(fnBody('deleteCallLogSession')));
 ok('deleteCallLogSession dọn list khi xoá phiên đang mở', /currentCallLogBatchId\(\)\s*===\s*batchId/.test(appSrc));
 ok('deleteCallLogBatch là alias của deleteCallLogSession', /function deleteCallLogBatch\(batchId\)\s*\{\s*return deleteCallLogSession\(batchId\)/.test(appSrc));
 ok('có hàm batchLabelText', /function batchLabelText\(bId\)/.test(appSrc));
@@ -172,9 +185,15 @@ ok('openCallLogSession đánh dấu _fromHistory', /_fromHistory:\s*true/.test(f
 ok('openCallLogSession chuyển sang tab calllogs', /switchTab\('calllogs'\)/.test(fnBody('openCallLogSession')));
 ok('KHÔNG còn setHistKind/renderHistKind (bỏ tab con + tra đơn lẻ)',
   !/function setHistKind/.test(appSrc) && !/function renderHistKind/.test(appSrc));
-ok('switchTab(lookuphistory) nạp danh sách phiên (mục đơn lẻ nạp khi mở)',
-  /function switchTab[\s\S]{0,900}loadHistBatches\(1\)/.test(appSrc) &&
-  !/function switchTab[\s\S]{0,900}loadLookupHistory\(/.test(appSrc));
+ok('switchTab(lookuphistory) nạp danh sách phiên', /function switchTab[\s\S]{0,900}loadHistBatches\(1\)/.test(appSrc));
+// Lỗi cũ: "Tra cứu đơn lẻ" mặc định ĐANG MỞ nhưng switchTab không nạp → khung trống,
+// phải đóng rồi mở lại mục mới thấy dữ liệu (vì chỉ toggleHistSection mới nạp).
+ok('switchTab(lookuphistory) nạp LUÔN lịch sử tra đơn lẻ khi mục đang mở',
+  /if \(tabId === 'lookuphistory'\)[\s\S]{0,700}if \(histSectionOpen\.single\) loadLookupHistory\(/.test(appSrc));
+ok('switchTab KHÔNG nạp tra đơn lẻ vô điều kiện (giữ thiết kế chỉ nạp khi mở)',
+  !/if \(tabId === 'lookuphistory'\)[\s\S]{0,700}\n\s*loadLookupHistory\(/.test(appSrc));
+ok('BỎ cờ histSingle.loaded (nguồn gốc lỗi: cờ bị set khi mục đóng → chặn lần nạp sau)',
+  !/histSingle\.loaded/.test(appSrc));
 ok('switchTab(calllogs) KHÔNG nạp danh sách phiên (đã bỏ)', !/function switchTab[\s\S]{0,900}loadCallLogSessions\(1\)/.test(appSrc));
 ok('loadCallLogs lấy limit rộng hơn 500 (không mất bản ghi)', /api\/call-logs\?page=1&limit=2000/.test(fnBody('loadCallLogs')));
 
@@ -192,7 +211,7 @@ ok('KHÔNG còn icon Pro fa-envelope-arrow-* trong index.html', !/fa-envelope-ar
 ok('chip SMS có mũi tên đến/đi (.cl-chip-dir + fa-arrow-down/up)', /fa-arrow-down cl-chip-dir/.test(htmlSrc) && /fa-arrow-up cl-chip-dir/.test(htmlSrc));
 ok('chip gọi đến/đi dùng fa-phone + mũi tên (không còn Pro-only)', /data-action="CALL_IN"[\s\S]{0,160}fa-phone"[\s\S]{0,120}fa-arrow-down cl-chip-dir/.test(htmlSrc) && /data-action="CALL_OUT"[\s\S]{0,160}fa-phone"[\s\S]{0,120}fa-arrow-up cl-chip-dir/.test(htmlSrc));
 ok('KHÔNG còn icon Pro fa-phone-arrow-* trong index.html', !/fa-phone-arrow-(down-left|up-right)/.test(htmlSrc));
-ok('có hàm clearCallLogDate xoá 1 đầu khoảng', /function clearCallLogDate\(which\)/.test(appSrc));
+ok('có hàm clearCallLogDate xoá cả khoảng ngày', /function clearCallLogDate\(\)/.test(appSrc));
 ok('có hàm syncClDateButtons', /function syncClDateButtons\(\)/.test(appSrc));
 ok('applyCallLogFilters gọi syncClDateButtons', /syncClDateButtons\(\)/.test(fnBody('applyCallLogFilters')));
 ok('dateTo so sánh trọn ngày cuối (<= 23:59:59)', /23:59:59/.test(fnBody('getFilteredLogs')));
@@ -264,8 +283,8 @@ ok('KHÔNG còn #histSessionsBox/#clSessionsBox', !/id="clSessionsBox"/.test(htm
 ok('KHÔNG còn tab con #histTabSingle/#histTabBatch (dùng mục con thu gọn)', !/id="histTabSingle"/.test(htmlSrc) && !/id="histTabBatch"/.test(htmlSrc));
 ok('có lại #lookupHistoryList (trong mục con thu gọn #histSingleSub)', /id="lookupHistoryList"/.test(htmlSrc) &&
   /id="histSingleSub"[\s\S]{0,1200}id="lookupHistoryList"/.test(htmlSrc));
-ok('pane #histPaneSingle chứa #histBatchList',
-  /id="histPaneSingle"[\s\S]{0,3000}id="histBatchList"/.test(htmlSrc));
+ok('pane #histPaneSingle chứa #histBatchList (accordion 2 mục trong 1 pane)',
+  /id="histPaneSingle"[\s\S]{0,4000}id="histBatchList"/.test(htmlSrc));
 ok('KHÔNG còn nút Xóa tất cả (deleteAllLookup)', !/onclick="deleteAllLookup\(\)"/.test(htmlSrc) && !/function deleteAllLookup/.test(appSrc));
 ok('KHÔNG còn input type=date #histDate (thay bằng popup lịch)',
   !/id="histDate"/.test(htmlSrc) && !/id="histDateClear"/.test(htmlSrc) && /id="histDatePopup"/.test(htmlSrc));
@@ -285,11 +304,16 @@ ok('có panel bộ lọc #callLogFilterPanel', /id="callLogFilterPanel"/.test(ht
 ok('panel bộ lọc mặc định ẩn (class hidden)', /id="callLogFilterPanel" class="cl-filter-panel hidden"/.test(htmlSrc));
 ok('có nút toggle bộ lọc #clFilterToggle', /id="clFilterToggle"/.test(htmlSrc));
 ok('có dãy chip lọc #clActionChips', /id="clActionChips"/.test(htmlSrc));
-ok('có ô ngày from/to #clDateFromField/#clDateToField', /id="clDateFromField"/.test(htmlSrc) && /id="clDateToField"/.test(htmlSrc));
-ok('giữ input #dateFrom/#dateTo (phủ trong suốt, type=date)', /id="dateFrom"[^>]*class="cl-date-native"/.test(htmlSrc) && /id="dateTo"[^>]*class="cl-date-native"/.test(htmlSrc));
-ok('input date nằm trong .cl-date-field để nhận click mở picker', /<div class="cl-date-field"[\s\S]{0,200}id="dateFrom"/.test(htmlSrc) && /<div class="cl-date-field"[\s\S]{0,200}id="dateTo"/.test(htmlSrc));
+ok('có 1 nút lịch #clDateBtn (không còn 2 ô from/to riêng)',
+  /id="clDateBtn"/.test(htmlSrc) && !/id="clDateFromField"/.test(htmlSrc) && !/id="clDateToField"/.test(htmlSrc));
+ok('giữ input ẩn #dateFrom/#dateTo cho code cũ đọc giá trị',
+  /<input type="hidden" id="dateFrom">/.test(htmlSrc) && /<input type="hidden" id="dateTo">/.test(htmlSrc));
+ok('popup lịch #clCalPop nằm trong .cl-date-range',
+  /<div class="cl-date-range" id="clDateRange">[\s\S]*id="clCalPop"/.test(htmlSrc));
 ok('KHÔNG còn input datetime-local trong index.html', !/type="datetime-local"/.test(htmlSrc));
-ok('CSS có .cl-date-range/.cl-date-field/.cl-date-native/.cl-chip-dir', /\.cl-date-range\s*\{/.test(htmlSrc) && /\.cl-date-field\s*\{/.test(htmlSrc) && /\.cl-date-native\s*\{/.test(htmlSrc) && /\.cl-chip-dir\s*\{/.test(htmlSrc));
+ok('CSS có .cl-date-range/.cl-chip-date/.cl-cal-pop/.cl-chip-dir',
+  /\.cl-date-range\s*\{/.test(htmlSrc) && /\.cl-chip-date/.test(htmlSrc) &&
+  /\.cl-cal-pop\s*\{/.test(htmlSrc) && /\.cl-chip-dir\s*\{/.test(htmlSrc));
 ok("i18n calllogs.dateFrom/dateTo (vi+en)", (appSrc.match(/'calllogs\.dateFrom'/g) || []).length >= 2 && (appSrc.match(/'calllogs\.dateTo'/g) || []).length >= 2);
 ok('chip lọc có đủ 5 loại hành động', ['all','CALL_IN','CALL_OUT','SMS_IN','SMS_OUT'].every(a => htmlSrc.includes('data-action="' + a + '"')));
 ok('KHÔNG còn <select id="actionFilter">', !/id="actionFilter"/.test(htmlSrc));
@@ -796,9 +820,14 @@ console.log('\n== Style #logRecordList ==');
 ok('renderCallLogs dùng .log-card thay inline style cũ', /class="log-card st-\$\{st\.cls\}"/.test(renderBody) &&
   !/display:flex;justify-content:space-between/.test(renderBody));
 ok('renderCallLogs dùng badge RAT + pill trạng thái của bảng cell',
-  /clRadioBadgeHtml\(/.test(renderBody) && /cl-row-status \$\{st\.cls\}/.test(renderBody) && /cl-src-badge/.test(renderBody));
+  /clRadioBadgeHtml\(/.test(renderBody) && /cl-row-status \$\{st\.cls\}/.test(renderBody));
+ok('renderCallLogs KHÔNG còn badge nguồn (đã bỏ nguồn khỏi giao diện)',
+  !/cl-src-badge/.test(renderBody));
 ok('renderCallLogs vẽ chi tiết theo trạng thái cell (clRecordDetailHtml)', /clRecordDetailHtml\(l, st\)/.test(renderBody));
-ok('renderCallLogs dùng clCellShort cho cột cell', /clCellShort\(/.test(renderBody));
+// Cột cell phải là chuỗi ĐẦY ĐỦ MCC-MNC-LAC-CELLID (không rút gọn dạng LAC/TAC).
+ok('renderCallLogs dùng cellLabel đầy đủ cho cột cell',
+  /histEsc\(l\.cellid \? cellLabel : ''\)/.test(renderBody));
+ok('renderCallLogs KHÔNG dùng clCellShort cho cột cell', !/clCellShort\(/.test(renderBody));
 ok('CSS .log-card có viền trái theo trạng thái + sọc chẵn lẻ',
   /\.log-card\.st-found \{ box-shadow: inset 3px 0 0/.test(htmlSrc) &&
   /\.log-card:nth-child\(even\)/.test(htmlSrc) &&
@@ -1334,10 +1363,73 @@ ok('cột trạng thái chỉ ICON + tooltip title (không còn span chữ trong
 ok('CSS .cl-row-status-ico bỏ padding/border (icon đứng riêng)',
   /\.cl-row-status\.cl-row-status-ico\s*\{[^}]*padding: 0/.test(htmlSrc) &&
   /\.cl-row-status\.cl-row-status-ico\s*\{[^}]*border: 0/.test(htmlSrc));
-ok('ô ngày dùng icon fas fa-calendar-days + openClDatePicker',
-  /fas fa-calendar-days cl-date-ico/.test(htmlSrc) &&
-  /openClDatePicker\('from'/.test(htmlSrc) && /openClDatePicker\('to'/.test(htmlSrc) &&
-  /function openClDatePicker/.test(appSrc) && /showPicker/.test(fnBody('openClDatePicker')));
+// Chọn ngày: 1 nút lịch DUY NHẤT mở 1 popup lịch tự vẽ. Không còn <input type=date>
+// native (mỗi input 1 bảng riêng, showPicker() bị chặn → nhấn vào không mở được).
+// Chỉ xét phạm vi panel bộ lọc (#callLogFilterPanel), không tính CSS/modal khác.
+const filterPanelHtml = (() => {
+  const a = htmlSrc.indexOf('id="callLogFilterPanel"');
+  if (a < 0) return '';
+  const b = htmlSrc.indexOf('</div>', htmlSrc.indexOf('id="clDateRange"', a));
+  return htmlSrc.slice(a, b < 0 ? undefined : b + 6);
+})();
+ok('chỉ có 1 icon lịch trong panel bộ lọc',
+  (filterPanelHtml.match(/fa-calendar-days/g) || []).length === 1);
+ok('chip lịch #clDateBtn nằm TRONG .cl-filter-chips, icon-only như các chip khác',
+  /<i class="fas fa-calendar-days"><\/i>/.test(filterPanelHtml) &&
+  /id="clDateBtn"[\s\S]{0,240}onclick="toggleClDatePicker\(event\)"/.test(filterPanelHtml) &&
+  /class="cl-chip cl-chip-date"/.test(filterPanelHtml));
+ok('không còn <input type="date"> native trong panel lọc',
+  !/type="date"/.test(filterPanelHtml));
+ok('không còn ô from/to riêng lẻ (.cl-date-field/.cl-date-native)',
+  !/cl-date-field/.test(htmlSrc) && !/cl-date-native/.test(htmlSrc));
+ok('có popup lịch #clCalPop + nút xoá #clDateClear',
+  /id="clCalPop"/.test(htmlSrc) && /id="clDateClear"/.test(htmlSrc));
+
+// Logic chọn ngày / khoảng ngày trong 1 bảng.
+ok('toggleClDatePicker mở/đóng popup', /function toggleClDatePicker/.test(appSrc) &&
+  /closeClDatePicker\(\)/.test(fnBody('toggleClDatePicker')));
+ok('clCalPick: click 1 ngày = 1 ngày, click 2 ngày = khoảng',
+  /function clCalPick/.test(appSrc) &&
+  /clCal\.from = ymd/.test(fnBody('clCalPick')) &&
+  /clCal\.pending = ymd/.test(fnBody('clCalPick')));
+ok('clCalPick chốt 1 ngày khi bấm lần 2 vào chính ngày đầu',
+  /ymd === clCal\.from && !clCal\.pending/.test(fnBody('clCalPick')) &&
+  /clCalApply\(\)/.test(fnBody('clCalPick')));
+ok('clCalApply đảo khoảng nếu ngày cuối < ngày đầu',
+  /to < from/.test(fnBody('clCalApply')));
+ok('clCalApply ghi vào #dateFrom/#dateTo rồi lọc lại',
+  /df\.value = from/.test(fnBody('clCalApply')) && /applyCallLogFilters\(\)/.test(fnBody('clCalApply')));
+ok('lịch có điều hướng tháng/năm + Hôm nay + Áp dụng',
+  /function clCalNav/.test(appSrc) && /function clCalToday/.test(appSrc) &&
+  /clCalNav\(-12\)/.test(fnBody('renderClCalendar')) && /clCalNav\(12\)/.test(fnBody('renderClCalendar')) &&
+  /clCalToday\(\)/.test(fnBody('renderClCalendar')) && /clCalApply\(\)/.test(fnBody('renderClCalendar')));
+ok('lịch bắt đầu tuần Thứ 2 (ISO)', /\(first\.getDay\(\) \+ 6\) % 7/.test(fnBody('renderClCalendar')));
+ok('lịch tô khoảng: range-start/range-end/in-range',
+  /range-start/.test(fnBody('renderClCalendar')) && /range-end/.test(fnBody('renderClCalendar')) &&
+  /in-range/.test(fnBody('renderClCalendar')));
+ok('lịch có đánh dấu hôm nay (.today)', /ymd === today/.test(fnBody('renderClCalendar')));
+ok('đóng popup khi bấm ra ngoài / Esc',
+  /closest|composedPath/.test(appSrc) && /Escape/.test(appSrc) && /closeClDatePicker\(\)/.test(appSrc));
+// Bug từng gặp: render lại innerHTML làm target bị gỡ khỏi DOM → handler "bấm ra
+// ngoài" thấy target không thuộc #clDateRange và đóng popup ngay sau lần chọn ĐẦU.
+ok('không tự đóng popup sau lần chọn đầu (cờ clCalRendering)',
+  /clCalRendering/.test(appSrc) &&
+  // phải được SET khi render và được HẠ ở macrotask kế tiếp (không hạ đồng bộ)
+  /clCalRendering = true;/.test(fnBody('renderClCalendar')) &&
+  /setTimeout\(\(\) => \{ clCalRendering = false; \}, 0\)/.test(fnBody('renderClCalendar')) &&
+  // và phải thực sự được DÙNG để chặn handler đóng popup
+  /if \(inRange \|\| clCalRendering\) return;/.test(appSrc));
+ok('chip lịch icon-only: có chấm .cl-chip-dir báo đang lọc ngày',
+  /cl-date-dot/.test(htmlSrc) && /clDateDot/.test(fnBody('syncClDateButtons')));
+ok('dòng "khoảng đang lọc" #clDateActive + nút xoá, ẩn khi chưa lọc',
+  /id="clDateActive"/.test(htmlSrc) && /id="clDateClear"/.test(htmlSrc) &&
+  /row\.classList\.toggle\('hidden', !has\)/.test(fnBody('syncClDateButtons')));
+ok('popup neo dưới hàng chip qua positionClCalendar',
+  /function positionClCalendar/.test(appSrc) &&
+  /row\.getBoundingClientRect\(\)/.test(fnBody('positionClCalendar')));
+ok('#clRecordsBlock (chứa bộ lọc + khoảng ngày) LUÔN hiện, không phụ thuộc có phiên',
+  /if \(search\) search\.hidden = false;/.test(fnBody('syncClLoadUi')) &&
+  !/if \(search && has\)/.test(fnBody('syncClLoadUi')));
 ok('card phiên GỌN: 2 cột [nội dung | nút], nội dung xếp dọc 3 dòng',
   /#histBatchList \.hs-main\s*\{[^}]*flex-direction: column/.test(htmlSrc) &&
   /#histBatchList \.hist-session\s*\{[^}]*display: flex/.test(htmlSrc) &&
@@ -1388,7 +1480,7 @@ ok('dòng lần tra bấm được để MỞ BẢNG CELL (giống nút)',
   /onclick="\$\{open\}"/.test(fnBody('renderHistBatches')));
 ok('có nút mở bảng cell (openHistBatchInTable → openCallLogSession)', /function openHistBatchInTable\(/.test(appSrc) &&
   /openCallLogSession\(batchId\)/.test(fnBody('openHistBatchInTable')));
-ok('#histBatchList nằm trong #histPaneSingle', /id="histPaneSingle"[\s\S]{0,3000}id="histBatchList"/.test(htmlSrc));
+ok('#histBatchList nằm trong #histPaneSingle', /id="histPaneSingle"[\s\S]{0,4000}id="histBatchList"/.test(htmlSrc));
 ok('CSS có .hist-section-hd / #histBatchList .hist-session / .hist-batch-pager',
   /\.hist-section-hd\s*\{/.test(htmlSrc) && /#histBatchList \.hist-session\s*\{/.test(htmlSrc) && /\.hist-batch-pager\s*\{/.test(htmlSrc));
 ok('resolveClSelected làm mới lịch sử hàng loạt khi tab Lịch sử đang mở',
@@ -1436,6 +1528,518 @@ ok('client hiện toạ độ CSDL nội bộ ngay sau analyze (clApplyLocalHint
   /function clApplyLocalHints\(/.test(appSrc) && /clApplyLocalHints\(clAnalyze\)/.test(fnBody('uploadCallLogAnalyze')));
 ok('excel-parser đánh dấu unknownMnc khi file không có MNC',
   /unknownMnc/.test(fs.readFileSync(path.join(__dirname, 'excel-parser.js'), 'utf8')));
+
+console.log('\n== 20. Popup xác nhận xoá (thay confirm() của HĐH) ==');
+ok('index.html có popup xác nhận #confirmModal (alertdialog, không phải confirm() native)',
+  /id="confirmModal"/.test(htmlSrc) && /role="alertdialog"/.test(htmlSrc) &&
+  /id="cfOkBtn"/.test(htmlSrc) && /id="cfCancelBtn"/.test(htmlSrc));
+ok('popup xoá có vùng cảnh báo nguy hiểm + ghi chú + chi tiết đối tượng',
+  /id="cfWarnDanger"/.test(htmlSrc) && /id="cfWarnDangerList"/.test(htmlSrc) &&
+  /id="cfWarnInfo"/.test(htmlSrc) && /id="cfWarnInfoList"/.test(htmlSrc) &&
+  /id="cfDetail"/.test(htmlSrc));
+ok('có hàm openConfirmDialog/closeConfirmDialog trả Promise<boolean>',
+  /function openConfirmDialog\(opts\)/.test(appSrc) && /function closeConfirmDialog\(result\)/.test(appSrc) &&
+  /new Promise\(function \(resolve\) \{ cfDialog\.resolve = resolve; \}\)/.test(appSrc));
+ok('popup xoá đóng được bằng Esc / bấm nền / nút Huỷ (đều resolve false)',
+  /e\.key === 'Escape'/.test(appSrc) && /if \(e\.target === modal\) closeConfirmDialog\(false\)/.test(appSrc));
+
+console.log('\n== 21. Vị trí popup ? và popup lịch ==');
+ok('popup ? rộng theo BỀ RỘNG PANEL và canh giữa panel',
+  /const panel = \(btn && \(btn\.closest\('\.sidebar'\)/.test(fnBody('showHelpPopup')) &&
+  /const availW = Math\.max\(180, Math\.round\(pr\.width - pad \* 2\)\)/.test(fnBody('showHelpPopup')) &&
+  /pr\.left \+ \(pr\.width - availW\) \/ 2/.test(fnBody('showHelpPopup')));
+ok('popup ? gắn vào <body> (sidebar là position:fixed → không dùng làm containing block)',
+  /document\.body\.appendChild\(pop\)/.test(fnBody('showHelpPopup')) &&
+  !/anchor\.appendChild\(pop\)/.test(fnBody('showHelpPopup')));
+ok('popup ? đặt lại vị trí khi panel đổi bề rộng / resize',
+  /window\.addEventListener\('resize', onResize\)/.test(fnBody('showHelpPopup')));
+ok('popup ? không tràn viewport: giới hạn maxHeight + cuộn bên trong',
+  /pop\.style\.maxHeight = Math\.max\(140, Math\.round\(maxH\)\) \+ 'px'/.test(fnBody('showHelpPopup')));
+ok('popup lịch neo SÁT icon (cách 2px, canh phải trùng mép nút)',
+  /const pad = 6, gap = 2;/.test(fnBody('placeHistDatePopup')) &&
+  /Math\.round\(r\.bottom \+ gap\)/.test(fnBody('placeHistDatePopup')) &&
+  /Math\.round\(r\.right - w\)/.test(fnBody('placeHistDatePopup')));
+ok('popup lịch chuyển sang <body> trước khi đặt toạ độ',
+  /if \(pop\.parentElement !== document\.body\) document\.body\.appendChild\(pop\)/.test(fnBody('placeHistDatePopup')));
+
+console.log('\n== 22. Nút mở Google Maps cạnh icon copy toạ độ ==');
+ok('có hàm openInGoogleMaps mở tab mới', /function openInGoogleMaps\(lat, lon\)/.test(appSrc) &&
+  /window\.open\(url, '_blank', 'noopener,noreferrer'\)/.test(fnBody('openInGoogleMaps')));
+ok('URL Google Maps đúng dạng điểm (api=1&query=lat,lon)',
+  /google\.com\/maps\/search\/\?api=1&query=\$\{la\},\$\{lo\}/.test(fnBody('openInGoogleMaps')));
+ok('openInGoogleMaps chặn toạ độ không hợp lệ', /isFinite\(la\) \|\| !isFinite\(lo\)/.test(fnBody('openInGoogleMaps')));
+ok('có helper coordActionIcons trả 2 icon (copy + google maps)',
+  /function coordActionIcons\(lat, lon\)/.test(appSrc) &&
+  /fa-copy/.test(fnBody('coordActionIcons')) &&
+  /fa-map-location-dot/.test(fnBody('coordActionIcons')) &&
+  /copyCoords\(\$\{la\},\$\{lo\}\)/.test(fnBody('coordActionIcons')) &&
+  /openInGoogleMaps\(\$\{la\},\$\{lo\}\)/.test(fnBody('coordActionIcons')));
+ok('icon google maps KHÔNG đóng popup bản đồ (event.stopPropagation)',
+  /onclick="event\.stopPropagation\(\); openInGoogleMaps/.test(appSrc));
+ok('popup cell dùng coordActionIcons (thay <i fa-copy> thô)',
+  /coordActionIcons\(lat, lon\)/.test(fnBody('buildCellPopupHtml')) &&
+  !/fa-copy[^\n]*onclick=/.test(appSrc));
+ok('CSS có .cell-coord-acts cho cặp icon', /\.cell-coord-acts\s*\{/.test(htmlSrc));
+ok('i18n hist.openGoogleMaps + hist.copyCoords có cả vi và en',
+  (appSrc.match(/'hist\.openGoogleMaps'/g) || []).length >= 2 &&
+  (appSrc.match(/'hist\.copyCoords'/g) || []).length >= 2);
+ok('KHÔNG còn confirm() native ở các thao tác xoá chính (app.js)',
+  !/if \(!confirm\(/.test(appSrc) &&
+  fnBody('deleteLookupEntry').includes('openConfirmDialog') &&
+  fnBody('deleteCallLogSession').includes('openConfirmDialog') &&
+  fnBody('resetCallSession').includes('openConfirmDialog'));
+ok('xoá lượt tra đơn lẻ + xoá phiên đều hiện cảnh báo không hoàn tác',
+  /confirm\.warnPermanent/.test(fnBody('deleteLookupEntry')) &&
+  /confirm\.warnPermanent/.test(fnBody('deleteCallLogSession')));
+ok('có đủ i18n confirm.* cho cả vi và en',
+  ['title','ok','okDelete','cancel','delSessionTitle','delEntryTitle','warnPermanent','warnAllRecords',
+   'noteCantUndo','noteEntryOnly','fileLabel','cellsLabel'].every(k => {
+    const re = new RegExp("'confirm\\." + k + "'", 'g');
+    return (appSrc.match(re) || []).length >= 2;
+  }));
+
+// ============================================================
+console.log('\n== 24. Mốc thời gian từ server hiển thị đúng GMT+7 (không lệch múi giờ)');
+// SQLite trả 'YYYY-MM-DD HH:MM:SS' theo UTC mà KHÔNG có hậu tố Z. `new Date(chuỗi)`
+// hiểu đó là giờ địa phương → lệch đúng offset (VN chậm 7 tiếng). Phải có
+// parseServerTime() và mọi chỗ format mốc từ server phải đi qua nó.
+ok('có hàm parseServerTime', /function parseServerTime\(ts\)/.test(appSrc));
+ok('parseServerTime coi chuỗi không có zone là UTC (dùng Date.UTC)',
+  /Date\.UTC\(/.test(fnBody('parseServerTime')));
+ok('parseServerTime tôn trọng chuỗi đã có Z / offset (trả sớm, không ép UTC)',
+  /\[zZ\]\$\/\.test\(s\)/.test(fnBody('parseServerTime')) &&
+  /\[\+\-\]/.test(fnBody('parseServerTime')));
+ok('fmtDateTime dùng parseServerTime (KHÔNG new Date(ts) trực tiếp)',
+  /parseServerTime\(ts\)/.test(fnBody('fmtDateTime')) && !/const d = new Date\(ts\)/.test(fnBody('fmtDateTime')));
+ok('card lịch sử tra đơn lẻ format qua fmtDateTime(created_at)',
+  /fmtDateTime\(r\.created_at\)/.test(appSrc));
+ok('lịch sử hàng loạt cũng format qua fmtDateTime',
+  /fmtDateTime\(r\.created_at \|\| meta\.created_at\)/.test(appSrc));
+ok('chi tiết bản ghi dùng fmtDateTime',
+  /fmtDateTime\(row\.created_at\)/.test(appSrc));
+ok('KHÔNG còn new Date(<mốc từ server>) trực tiếp ở các chỗ hiển thị',
+  !/new Date\(r\.timestamp\)/.test(appSrc) &&
+  !/new Date\(a\.timestamp\)/.test(appSrc) &&
+  !/new Date\(p\.timestamp\)/.test(appSrc) &&
+  !/new Date\(points\[/.test(appSrc));
+ok('timeline: fmtTick + t0/t1 dùng parseServerTime',
+  /const d = parseServerTime\(ts\)/.test(appSrc) &&
+  /parseServerTime\(points\[0\]\.timestamp\)/.test(appSrc));
+ok('bảng dữ liệu di động dùng parseServerTime cho cột thời gian',
+  /parseServerTime\(r\.timestamp\)\.toLocaleString/.test(appSrc));
+
+// Kiểm chứng hành vi thật của parseServerTime (chạy trong Node, cùng logic).
+{
+  const m = /function parseServerTime\(ts\)[\s\S]*?\n\}/.exec(appSrc);
+  ok('trích được thân hàm parseServerTime để chạy thử', !!m, m ? undefined : 'không khớp regex');
+  if (m) {
+    const fn = new Function(m[0] + '\nreturn parseServerTime;')();
+    const raw = fn('2026-10-20 14:57:13');            // UTC từ SQLite
+    ok('chuỗi UTC không zone → đúng instant (14:57Z)',
+      raw.toISOString() === '2026-10-20T14:57:13.000Z', raw.toISOString());
+    const iso = fn('2026-10-20T14:57:13Z');
+    ok('chuỗi có Z → giữ nguyên instant', iso.toISOString() === '2026-10-20T14:57:13.000Z', iso.toISOString());
+    const off = fn('2026-10-20T21:57:13+07:00');
+    ok('chuỗi có offset +07:00 → cùng instant', off.toISOString() === '2026-10-20T14:57:13.000Z', off.toISOString());
+    ok('ba cách biểu diễn cùng 1 mốc cho cùng instant',
+      raw.getTime() === iso.getTime() && iso.getTime() === off.getTime());
+    ok('chuỗi chỉ có ngày → 00:00 UTC', fn('2026-10-20').toISOString() === '2026-10-20T00:00:00.000Z');
+    ok('rỗng/null → Invalid Date (không ném lỗi)', isNaN(fn('').getTime()) && isNaN(fn(null).getTime()));
+    ok('số (epoch ms) → giữ nguyên', fn(1700000000000).getTime() === 1700000000000);
+  }
+}
+
+// ============================================================
+console.log('\n== 25. Tổng kết phiên (#clListSummary) nằm TRONG card #clSessionCard');
+// Trước đây tổng kết là 1 dòng riêng trong #clRecordsBlock. Nay nội dung đó dồn vào
+// chỗ card phiên, còn 2 nút "Mở bảng cell cần tra" + "Đóng" giữ nguyên trên card.
+{
+  const cardOpen = htmlSrc.indexOf('id="clSessionCard"');
+  const cardDetail = htmlSrc.indexOf('id="clSessionCardDetail"');
+  const summaryIdx = htmlSrc.indexOf('id="clListSummary"');
+  const recordsIdx = htmlSrc.indexOf('id="clRecordsBlock"');
+  const logListIdx = htmlSrc.indexOf('id="logRecordList"');
+
+  ok('có card #clSessionCard', cardOpen > -1);
+  ok('có #clListSummary', summaryIdx > -1);
+  ok('#clListSummary nằm SAU #clSessionCard', summaryIdx > cardOpen);
+  ok('#clListSummary nằm TRƯỚC #clRecordsBlock (đã rời khối danh sách)',
+    summaryIdx < recordsIdx && summaryIdx < logListIdx);
+  ok('#clRecordsBlock KHÔNG còn chứa #clListSummary',
+    htmlSrc.slice(recordsIdx, htmlSrc.indexOf('<!-- Popup nạp Excel')).indexOf('clListSummary') === -1);
+  ok('#clListSummary nằm trong thân card (sau #clSessionCardDetail, trước nút hành động)',
+    summaryIdx > cardDetail && summaryIdx < htmlSrc.indexOf('class="cls-actions"'));
+  ok('chỉ có ĐÚNG 1 #clListSummary (không để lại bản cũ)', (htmlSrc.match(/id="clListSummary"/g) || []).length === 1);
+  ok('chỉ có ĐÚNG 1 #clSessionCard', (htmlSrc.match(/id="clSessionCard"/g) || []).length === 1);
+
+  // 2 nút phải còn, đúng thứ tự: Mở bảng cell → Đóng. Lấy trọn khối .cls-actions
+  // (cân bằng ngoặc nhọn) chứ không cắt bằng mốc #clListSummary — mốc đó nằm TRƯỚC
+  // khối nút nên sẽ cắt cụt.
+  const actOpen = htmlSrc.indexOf('class="cls-actions"');
+  let actEnd = htmlSrc.indexOf('</div>', actOpen);
+  if (actOpen > -1) {
+    let depth = 0;
+    for (let i = htmlSrc.indexOf('<div', actOpen); i < htmlSrc.length; i++) {
+      if (htmlSrc.startsWith('<div', i)) depth++;
+      else if (htmlSrc.startsWith('</div>', i)) { depth--; if (depth === 0) { actEnd = i; break; } }
+    }
+  }
+  const actions = htmlSrc.slice(actOpen, actEnd);
+  ok('trích được khối .cls-actions', actions && actions.length > 100);
+  ok('giữ nút "Mở bảng cell cần tra"', /data-i18n-title="calllogs\.openTable"/.test(actions) &&
+    actions.includes('onclick="openClTableOverlay()"'));
+  ok('giữ nút "Đóng"', actions.includes('id="clSessionCloseBtn"') &&
+    actions.includes('onclick="closeClSession()"'));
+  ok('nút Mở bảng đứng TRƯỚC nút Đóng',
+    actions.indexOf('openClTableOverlay') < actions.indexOf('closeClSession'));
+  ok('tổng kết KHÔNG chen giữa 2 nút (nằm ngoài .cls-actions)',
+    htmlSrc.slice(summaryIdx, actOpen).indexOf('cls-actions') === -1 &&
+    actions.indexOf('clListSummary') === -1);
+
+  // CSS: trong card thì bỏ khung/nền riêng, và ẩn tên file (đã hiện ở .cls-detail).
+  ok('CSS có luật riêng cho tổng kết trong card', /\.cl-session-card \.cl-list-summary\s*\{/.test(htmlSrc));
+  ok('tổng kết trong card bỏ nền/viền riêng (không lồng 2 khung)',
+    /\.cl-session-card \.cl-list-summary\s*\{[^}]*background:\s*none[^}]*\}/.test(htmlSrc));
+  ok('tên file trong tổng kết bị ẩn khi ở trong card (tránh lặp với .cls-detail)',
+    /\.cl-session-card \.cl-list-summary \.cls-name\s*\{\s*display:\s*none/.test(htmlSrc));
+
+  // JS: card hiện thì tổng kết phải được nạp lại — nếu không sẽ kẹt display:none.
+  ok('syncClLoadUi cập nhật tổng kết khi card hiện',
+    /if \(has\) updateCallSessionUi\(/.test(fnBody('syncClLoadUi')));
+  ok('syncClLoadUi vẫn bật/tắt card theo dữ liệu', /card\.hidden = !has/.test(fnBody('syncClLoadUi')));
+  ok('#clListSummary vẫn do updateCallSessionUi điền',
+    /getElementById\('clListSummary'\)/.test(fnBody('updateCallSessionUi')));
+  ok('updateCallSessionUi vẫn tự ẩn khi không có dữ liệu',
+    /bar\.style\.display = 'none'/.test(fnBody('updateCallSessionUi')));
+}
+
+// ============================================================
+console.log('\n== 26. Lịch sử "Tra cứu danh sách" hiện được khi mở mục');
+// Lỗi thật: renderHistSections() truyền 'histBatchList' (thẻ <div class="hist-list">
+// BÊN TRONG body) thay vì 'histBatchBody'. Kết quả: `hidden` bị gỡ trên danh sách,
+// còn #histBatchBody vẫn giữ `hidden` từ HTML → mở mục ra khung trống.
+{
+  const rb = fnBody('renderHistSections');
+  ok('renderHistSections bật/tắt đúng body của mục danh sách (#histBatchBody)',
+    rb.includes("'histBatchBody'"), rb.slice(0, 200));
+  ok('renderHistSections KHÔNG truyền nhầm #histBatchList làm body',
+    !/\[\[\s*'batch'\s*,\s*'histBatchList'/.test(rb));
+  ok('renderHistSections vẫn dùng #histSingleBody cho mục đơn lẻ',
+    rb.includes("'histSingleBody'"));
+  ok('cả 2 mục đều trỏ wrapper .hist-sub đúng',
+    rb.includes("'histBatchSub'") && rb.includes("'histSingleSub'"));
+
+  // HTML: body của mục danh sách phải có id histBatchBody và mặc định hidden.
+  const bodyTag = /<div[^>]*id="histBatchBody"[^>]*>/.exec(htmlSrc);
+  ok('có #histBatchBody trong HTML', !!bodyTag);
+  ok('#histBatchBody mặc định hidden (mục đóng lúc mới vào)',
+    !!bodyTag && /\bhidden\b/.test(bodyTag[0]));
+  ok('#histBatchList nằm BÊN TRONG #histBatchBody',
+    !!bodyTag && htmlSrc.indexOf('id="histBatchList"') > bodyTag.index);
+  ok('#histBatchBody không phải là #histBatchList (2 id khác nhau)',
+    htmlSrc.indexOf('id="histBatchBody"') !== htmlSrc.indexOf('id="histBatchList"'));
+
+  // Mở mục danh sách phải nạp lại danh sách phiên (không hiện bản cũ/rỗng).
+  ok('toggleHistSection nạp danh sách phiên khi mở mục "batch"',
+    /if \(open && target === 'batch'\) loadHistBatches\(/.test(fnBody('toggleHistSection')));
+  ok('toggleHistSection vẫn nạp mục "single" khi mở',
+    /if \(open && target === 'single'\) loadLookupHistory\(/.test(fnBody('toggleHistSection')));
+  ok('toggleHistSection chỉ nạp khi MỞ (đóng thì không gọi mạng)',
+    (fnBody('toggleHistSection').match(/if \(open && target ===/g) || []).length === 2);
+  ok('toggleHistSection vẫn đóng mục còn lại (chỉ 1 mục mở)',
+    /histSectionOpen\[other\] = false/.test(fnBody('toggleHistSection')));
+
+  // loadHistBatches phải đổ vào đúng khung danh sách của mục.
+  ok('loadHistBatches đổ dữ liệu vào #histBatchList',
+    fnBody('loadHistBatches').includes("getElementById('histBatchList')"));
+  ok('renderHistBatches vẽ vào #histBatchList',
+    fnBody('renderHistBatches').includes("getElementById('histBatchList')"));
+  ok('switchTab(lookuphistory) nạp sẵn danh sách phiên',
+    /loadHistBatches\(1\)/.test(fnBody('switchTab')));
+}
+
+// ============================================================
+console.log('\n== 27. Card phiên gọn + cell ID đầy đủ + bỏ nguồn khỏi giao diện');
+{
+  // (1) Card: bỏ dòng .cls-meta và icon .cls-badge — chỉ còn tên file + tổng kết + 2 nút.
+  ok('clSessionDetailHtml KHÔNG còn .cls-meta', !/cls-meta/.test(fnBody('clSessionDetailHtml')));
+  ok('clSessionDetailHtml chỉ còn tên file (.cls-detail + .cls-file)',
+    /cls-detail/.test(fnBody('clSessionDetailHtml')) && /cls-file/.test(fnBody('clSessionDetailHtml')) &&
+    !/hist\.sessionCells/.test(fnBody('clSessionDetailHtml')));
+  ok('HTML card KHÔNG còn .cls-badge', !/class="cls-badge"/.test(htmlSrc));
+  ok('CSS đã xoá .cls-badge và .cls-meta', !/\.cls-badge\s*\{/.test(htmlSrc) && !/\.cls-meta\s*\{/.test(htmlSrc));
+  ok('card vẫn giữ #clListSummary bên trong', (() => {
+    const a = htmlSrc.indexOf('id="clSessionCard"'), b = htmlSrc.indexOf('id="clListSummary"');
+    const c = htmlSrc.indexOf('id="clRecordsBlock"');
+    return b > a && b < c;
+  })());
+  ok('card vẫn đủ 2 nút Mở bảng + Đóng',
+    /openClTableOverlay\(\)/.test(htmlSrc) && /closeClSession\(\)/.test(htmlSrc));
+  ok('tổng kết KHÔNG lặp tên file khi nằm trong card',
+    /const inCard = !!bar\.closest\('#clSessionCard'\)/.test(fnBody('updateCallSessionUi')) &&
+    /name && !inCard/.test(fnBody('updateCallSessionUi')));
+
+  // (2) Ô ngày: khối chứa nó phải luôn hiện (đã assert ở nhóm 26/ô ngày).
+  ok('#clRecordsBlock không còn thuộc tính hidden cứng trong HTML kèm điều kiện JS',
+    /<div class="cl-records-block" id="clRecordsBlock" hidden>/.test(htmlSrc) &&
+    /if \(search\) search\.hidden = false;/.test(fnBody('syncClLoadUi')));
+
+  // (3) log-card-cell: MCC-MNC-LAC-CELLID đầy đủ.
+  const rb = fnBody('renderCallLogs');
+  ok('log-card-cell dùng cellLabel đầy đủ', /class="log-card-cell"[^>]*>\$\{histEsc\(l\.cellid \? cellLabel : ''\)\}/.test(rb));
+  ok('cellLabel dựng dạng mcc-mnc-lac-cellid',
+    /const cellLabel = `\$\{l\.mcc \|\| ''\}-\$\{l\.mnc \|\| ''\}-\$\{l\.lac \|\| ''\}-\$\{l\.cellid \|\| ''\}`/.test(rb));
+  ok('CSS .log-card-cell cho chiếm trọn dòng (max-width:100%)',
+    /\.log-card-cell\s*\{[^}]*max-width: 100%/.test(htmlSrc));
+
+  // (4) Bỏ nguồn kết quả tra cứu ở MỌI chỗ.
+  ok('không còn .cl-src-badge trong app.js', !/cl-src-badge/.test(appSrc));
+  ok('không còn .cl-src-badge trong HTML/CSS', !/cl-src-badge/.test(htmlSrc));
+  ok('không còn .hist-source trong app.js', !/class="hist-source/.test(appSrc));
+  ok('histSrcIcon trả rỗng (nguồn không hiện ở lịch sử)', /return '';/.test(fnBody('histSrcIcon')));
+  ok('popup cell không chèn dòng nguồn', !/hist\.source/.test(fnBody('buildCellPopupHtml')));
+  ok('trạng thái dòng không ghép nguồn vào text', !/res\.sourceLabel/.test(fnBody('clRecordState')));
+  ok('clRowStatusCellHtml không còn tham số srcBadge',
+    !/srcBadge/.test(fnBody('clRowStatusCellHtml')) && !/srcBadge/.test(appSrc));
+  ok('chi tiết bản ghi không hiện nguồn', !/srcTxt/.test(fnBody('clRecordDetailHtml')));
+}
+
+// ============================================================
+console.log('\n== 28. Lọc trạng thái cell trong tab "Tra cứu danh sách"');
+{
+  ok('có khối chip #clRecordStatusChips', /id="clRecordStatusChips"/.test(htmlSrc));
+  ok('KHÔNG trùng id với chip overlay bảng cell (#clStatusChips)',
+    /id="clStatusChips"/.test(htmlSrc) && /id="clRecordStatusChips"/.test(htmlSrc) &&
+    htmlSrc.indexOf('id="clStatusChips"') !== htmlSrc.indexOf('id="clRecordStatusChips"'));
+  ok('KHÔNG có 2 phần tử cùng id clStatusChips',
+    (htmlSrc.match(/id="clStatusChips"/g) || []).length === 1);
+
+  // 4 chip: Tất cả + 3 nhóm yêu cầu.
+  const box = htmlSrc.slice(htmlSrc.indexOf('id="clRecordStatusChips"'));
+  const chipsBlock = box.slice(0, box.indexOf('</div>', box.indexOf('clStCountMiss')) + 6);
+  ok('có chip Tất cả', /data-status="all"/.test(chipsBlock));
+  ok('có chip "Cell tra được" (found)', /data-status="found"/.test(chipsBlock) &&
+    /filter\.cellFound/.test(chipsBlock));
+  ok('có chip "Cell chưa tra được" (unpaid)', /data-status="unpaid"/.test(chipsBlock) &&
+    /filter\.cellUnpaid/.test(chipsBlock));
+  ok('có chip "Cell không có kết quả" (miss)', /data-status="miss"/.test(chipsBlock) &&
+    /filter\.cellMiss/.test(chipsBlock));
+  ok('mỗi chip có ô đếm số', ['clStCountAll', 'clStCountFound', 'clStCountUnpaid', 'clStCountMiss']
+    .every(id => chipsBlock.includes('id="' + id + '"')));
+  ok('nút "Hiển Thị Bản Đồ" vẫn nằm SAU khối chip (không bị chen)',
+    htmlSrc.indexOf('id="clRecordStatusChips"') < htmlSrc.indexOf('Hiển Thị Bản Đồ'));
+
+  // State + hàm lọc.
+  ok('có state clCellStatusFilter', /let clCellStatusFilter = 'all';/.test(appSrc));
+  ok('getFilteredLogs áp lọc trạng thái cell',
+    /clCellStatusFilter !== 'all'/.test(fnBody('getFilteredLogs')) &&
+    /clRecordStatusClass\(l, cellsByKey\) === clCellStatusFilter/.test(fnBody('getFilteredLogs')));
+  ok('clRecordStatusClass gộp busy/pending vào nhóm "chưa tra được"',
+    /return 'unpaid';/.test(fnBody('clRecordStatusClass')) &&
+    !/return 'busy'/.test(fnBody('clRecordStatusClass')));
+  ok('bấm chip → setClCellStatusFilter render lại',
+    /function setClCellStatusFilter/.test(appSrc) && /renderCallLogs\(\)/.test(fnBody('setClCellStatusFilter')));
+  ok('uỷ quyền click cho #clRecordStatusChips', /closest\('#clRecordStatusChips \.cl-chip'\)/.test(appSrc));
+  ok('renderCallLogs cập nhật số trên chip', /syncClStatusChips\(\)/.test(fnBody('renderCallLogs')));
+  ok('syncClStatusChips đếm theo clRecordStatusClass',
+    /clRecordStatusClass\(l, cellsByKey\)/.test(fnBody('syncClStatusChips')));
+  ok('badge bộ lọc tính cả lọc trạng thái cell',
+    /clCellStatusFilter !== 'all'/.test(fnBody('updateClFilterBadge')));
+
+  // Reset khi nạp/mở phiên mới.
+  ok('nạp phiên mới reset lọc trạng thái cell',
+    (appSrc.match(/clCellStatusFilter = 'all';/g) || []).length >= 3);
+
+  // i18n cả 2 ngôn ngữ.
+  ['cellStatusAll', 'cellFound', 'cellUnpaid', 'cellMiss'].forEach(k => {
+    const re = new RegExp("'filter\\." + k + "'", 'g');
+    ok('có i18n filter.' + k + ' cho cả vi và en', (appSrc.match(re) || []).length >= 2);
+  });
+}
+
+console.log('\n== 29. Đồng bộ hiển thị #clRecordStatusChips với .cl-filter-chips');
+{
+  // Cùng nhịp hình học: 1 hàng, dàn đều, cùng chiều cao/bo góc/gap với hàng hành động.
+  ok('#clRecordStatusChips dàn đều flex:1 như .cl-filter-chips',
+    /#clRecordStatusChips \.cl-chip\s*\{[^}]*flex: 1 1 0/.test(htmlSrc));
+  ok('cùng chiều cao 30px với .cl-filter-chips',
+    /#clRecordStatusChips \.cl-chip\s*\{[^}]*height: 30px/.test(htmlSrc) &&
+    /\.cl-chip\s*\{[^}]*height: 30px/.test(htmlSrc));
+  ok('cùng bo góc 6px', /#clRecordStatusChips \.cl-chip\s*\{[^}]*border-radius: 6px/.test(htmlSrc));
+  ok('cùng gap 4px', /#clRecordStatusChips\s*\{[^}]*gap: 4px/.test(htmlSrc) &&
+    /\.cl-filter-chips\s*\{[^}]*gap: 4px/.test(htmlSrc));
+  ok('KHÔNG còn style pill bo tròn 999px cho chip trạng thái trong panel',
+    !/#clRecordStatusChips \.cl-chip\s*\{[^}]*border-radius: 999px/.test(htmlSrc));
+  ok('số trên chip dùng badge nhỏ, không phá bố cục',
+    /#clRecordStatusChips \.cl-chip b\s*\{[^}]*font-variant-numeric: tabular-nums/.test(htmlSrc));
+  ok('màn hẹp ẩn nhãn chữ, chỉ còn icon + số',
+    /@media \(max-width: 420px\)[\s\S]{0,200}#clRecordStatusChips \.cl-chip span \{ display: none; \}/.test(htmlSrc));
+  ok('giữ bảng màu trạng thái (found/miss/unpaid)',
+    /\.cl-chip-found:not\(\.active\)/.test(htmlSrc) &&
+    /\.cl-chip-miss:not\(\.active\)/.test(htmlSrc) &&
+    /\.cl-chip-unpaid:not\(\.active\)/.test(htmlSrc));
+
+  // Thứ tự trong panel: 2 hàng chip SÁT NHAU, rồi mới tới ô ngày.
+  const ia = htmlSrc.indexOf('id="clActionChips"');
+  const is = htmlSrc.indexOf('id="clRecordStatusChips"');
+  const idt = htmlSrc.indexOf('id="clDateRange"');
+  ok('thứ tự panel: hành động → trạng thái → ngày', ia > 0 && ia < is && is < idt);
+  // Giữa 2 hàng chip chỉ được có comment + các nút con của khối trạng thái. Điểm mốc
+  // là vị trí MỞ của khối ngày, nên thẻ <div> của chính khối đó cũng tính -> cắt nó ra.
+  ok('không có phần tử nào chen giữa 2 hàng chip', (() => {
+    // Mốc cuối: đầu DÒNG chứa thẻ mở .cl-date-range (vì id nằm giữa thẻ).
+    const lineStart = htmlSrc.lastIndexOf('<div', idt);
+    const between = htmlSrc.slice(is, lineStart).replace(/<!--[\s\S]*?-->/g, '');
+    const tags = between.match(/<([a-z]+)\b/g) || [];
+    return tags.length > 0 && tags.every(t => /^<(button|i|b|span)$/.test(t));
+  })());
+
+  // Nhãn ngắn để 4 chip vừa 1 hàng.
+  ok('nhãn chip ngắn gọn (Tra được / Chưa tra / Không KQ)', (() => {
+    const block = htmlSrc.slice(is, idt);
+    return /data-i18n="filter\.cellFound">Tra được</.test(block) &&
+      /data-i18n="filter\.cellUnpaid">Chưa tra</.test(block) &&
+      /data-i18n="filter\.cellMiss">Không KQ</.test(block) &&
+      /data-i18n="filter\.cellStatusAll">Tất cả</.test(block);
+  })());
+  ok('title từng chip mô tả đầy đủ (vì nhãn đã rút gọn)',
+    ['cellStatusAllTip', 'cellFoundTip', 'cellUnpaidTip', 'cellMissTip']
+      .every(k => htmlSrc.includes('data-i18n-title="filter.' + k + '"')));
+  ok('có i18n cho các tooltip mới (vi + en)',
+    ['cellStatusAllTip', 'cellFoundTip', 'cellUnpaidTip', 'cellMissTip']
+      .every(k => (appSrc.match(new RegExp("'filter\\." + k + "'", 'g')) || []).length >= 2));
+}
+
+console.log('\n== 30. Nút lịch nằm CHUNG hàng .cl-filter-chips, cùng format icon');
+{
+  const rowHtml = (() => {
+    const a = htmlSrc.indexOf('id="clActionChips"');
+    if (a < 0) return '';
+    return htmlSrc.slice(a, htmlSrc.indexOf('</div>', a) + 6);
+  })();
+  ok('nút lịch #clDateBtn nằm trong #clActionChips (cùng hàng chip)',
+    rowHtml.includes('id="clDateBtn"'));
+  ok('nút lịch mang class .cl-chip như các chip khác',
+    /class="cl-chip cl-chip-date" id="clDateBtn"/.test(rowHtml));
+  ok('nút lịch KHÔNG có class riêng kiểu .cl-date-btn (đã bỏ)',
+    !/cl-date-btn/.test(htmlSrc));
+  ok('nút lịch icon-only: chỉ 1 icon lịch, không text nhãn',
+    /<i class="fas fa-calendar-days"><\/i>/.test(rowHtml) &&
+    !/clDateBtnTxt/.test(htmlSrc));
+  ok('nút lịch có tooltip title như các chip khác',
+    /id="clDateBtn"[\s\S]{0,240}title="Chọn ngày \/ khoảng ngày"/.test(rowHtml));
+  ok('hàng chip có đúng 6 nút: 5 hành động + 1 lịch',
+    (rowHtml.match(/<button\b/g) || []).length === 6);
+  ok('mọi chip trong hàng đều có title',
+    (rowHtml.match(/<button\b/g) || []).length ===
+    (rowHtml.match(/\s(?<!-i18n-)title="/g) || []).length);
+
+  // Chấm báo "đang lọc ngày" — cùng position:absolute như .cl-chip-dir.
+  ok('chấm lọc ngày dùng .cl-chip-dir (cùng vị trí với mũi tên hướng)',
+    /class="fas fa-circle cl-chip-dir cl-date-dot hidden" id="clDateDot"/.test(htmlSrc));
+
+  // Dòng "khoảng đang lọc" chỉ hiện khi có lọc.
+  ok('#clDateActive ẩn mặc định (class hidden)', /cl-date-active hidden" id="clDateActive"/.test(htmlSrc));
+
+  // Popup neo vào panel, không phải .cl-date-range (từng gây tụt 84px).
+  ok('#clCalPop KHÔNG nằm trong #clDateRange',
+    (() => {
+      const a = htmlSrc.indexOf('id="clDateRange"');
+      const b = htmlSrc.indexOf('id="clCalPop"');
+      return a > 0 && b > a;   // popup đứng SAU khi #clDateRange đã đóng
+    })());
+  ok('.cl-date-range KHÔNG còn position:relative (để popup neo vào panel)',
+    !/\.cl-date-range\s*\{[^}]*position:\s*relative/.test(htmlSrc));
+  ok('positionClCalendar canh top theo đáy #clActionChips',
+    /rr\.bottom - pr\.top/.test(fnBody('positionClCalendar')));
+  ok('canh lại popup khi cửa sổ đổi kích thước',
+    /addEventListener\('resize'/.test(appSrc) && /positionClCalendar\(\)/.test(appSrc));
+}
+
+console.log('\n== 31. Tra cứu 1 cell từ dòng bản ghi');
+{
+  const renderBody = fnBody('renderCallLogs');
+  ok('dòng không có cuộc gọi hiện cell ID dạng .log-card-cell, KHÔNG còn dùng nhãn "Cell trong phiên"',
+    /log-card-cell log-card-cell-lead/.test(renderBody) &&
+    renderBody.indexOf('log-card-cell-lead') < renderBody.indexOf('log-card-phone none'));
+  ok('icon tra cứu ở CUỐI dòng (sau .log-card-spacer trong .log-card-sub)',
+    /log-card-spacer"><\/span>\s*\n\s*\$\{lookupBtn\}/.test(renderBody) ||
+    renderBody.indexOf('log-card-spacer') < renderBody.indexOf('lookupBtn'));
+  ok('nút tra cứu có class .log-card-go + data-cell-key + onclick clLookupOneCell',
+    /class="log-card-go" data-cell-key=/.test(renderBody) &&
+    /onclick="clLookupOneCell\(event, this\)"/.test(renderBody));
+  ok('chỉ cell CHƯA tra mới có nút (found/miss thì không)',
+    /st\.cls === 'unpaid' \|\| st\.cls === 'pending'/.test(renderBody));
+  ok('CSS .log-card-go + .log-lookup-bar có đủ 4 trạng thái',
+    /\.log-card-go\s*\{/.test(htmlSrc) && /\.log-lookup-bar\s*\{/.test(htmlSrc) &&
+    /\.log-lookup-bar\.busy/.test(htmlSrc) && /\.log-lookup-bar\.done/.test(htmlSrc) &&
+    /\.log-lookup-bar\.miss/.test(htmlSrc) && /\.log-lookup-bar\.nofunds/.test(htmlSrc));
+
+  const fn = fnBody('clLookupOneCell');
+  ok('bấm tra → set state busy + hiện thanh trạng thái NGAY trước khi gọi API',
+    fn.indexOf("clShowLookupBar(key, 'busy')") > 0 &&
+    fn.indexOf("clShowLookupBar(key, 'busy')") < fn.indexOf('/api/cells/resolve-batch'));
+  ok('có toạ độ → state found + ghi toạ độ vào myLogsCache (dòng nhảy nhóm đã tra)',
+    /state: 'found', lat: res\.lat, lon: res\.lon/.test(fn) &&
+    /row\.lat = res\.lat; row\.lon = res\.lon/.test(fn));
+  ok('hết điểm → giữ state unpaid, KHÔNG đánh dấu miss',
+    /res\.unpaid \|\| credit\.insufficient/.test(fn) &&
+    /clAnalyze\.results\[cell\.key\] = \{ state: 'unpaid' \}/.test(fn));
+  ok('lỗi mạng → khôi phục trạng thái cũ, không mất state',
+    /catch \(err\) \{\s*[\s\S]{0,200}prevState/.test(fn));
+  ok('thanh trạng thái tự ẩn sau khi hiện kết quả',
+    /setTimeout\(\(\) => clHideLookupBar\(cell\.key\)/.test(fn));
+  ok('chống bấm trùng: clOneCellBusy guard',
+    /if \(clOneCellBusy\.has\(key\)\) return;/.test(fn) && /clOneCellBusy\.add\(key\)/.test(fn));
+  ok('i18n tra 1 cell (vi+en)',
+    (appSrc.match(/'calllogs\.lookupBarBusy'/g) || []).length >= 2 &&
+    (appSrc.match(/'calllogs\.lookupCellNoFunds'/g) || []).length >= 2 &&
+    (appSrc.match(/'calllogs\.lookupBarMiss'/g) || []).length >= 2);
+}
+
+console.log('\n== 32. Nút "Tra lại" trên thẻ lịch sử tra đơn lẻ');
+{
+  const renderBody = fnBody('renderLookupHistory');
+  ok('thẻ hist-card--single có cụm .hist-card-acts chứa nút Tra lại + nút Xoá',
+    /class="hist-card-acts"/.test(renderBody) &&
+    /hist-retry/.test(renderBody) && /hist-del/.test(renderBody));
+  ok('nút Tra lại đứng TRƯỚC nút Xoá trong markup',
+    renderBody.indexOf('hist-retry') < renderBody.indexOf('hist-del'));
+  ok('nút Tra lại có onclick histRetryCell + stopPropagation (không mở bản đồ)',
+    /onclick="event\.stopPropagation\(\); histRetryCell\(\$\{r\.id\}\)"/.test(renderBody));
+  ok('chỉ cell KHÔNG có toạ độ mới hiện nút Tra lại',
+    /const canRetry = !\(r\.lat && r\.lng\);/.test(renderBody));
+
+  const fn = fnBody('histRetryCell');
+  ok('tra lại gọi /api/cells/resolve với mcc/mnc/lac/cellid của dòng',
+    /\/api\/cells\/resolve\?mcc=/.test(fn));
+  ok('tra ra → cập nhật r.lat/r.lng ngay trên thẻ + toast thành công',
+    /r\.lat = d\.lat; r\.lng = d\.lon;/.test(fn) && /showToast\(t\('hist\.retryOk'\)/.test(fn));
+  ok('hết điểm (402) → thanh nofunds, KHÔNG coi là "không ra kết quả"',
+    /e\.code === 402/.test(fn) && /histShowRetryBar\(card, 'nofunds'\)/.test(fn));
+  ok('404 → thanh miss + toast không nguồn nào có cell',
+    /e\.code === 404/.test(fn) && /showToast\(t\('hist\.retryMiss'\)/.test(fn));
+  ok('lỗi khác → thanh fail, không đánh dấu nhầm là miss',
+    /histShowRetryBar\(card, 'fail'\)/.test(fn));
+  ok('thanh trạng thái hiện NGAY trước khi gọi API',
+    fn.indexOf("histShowRetryBar(card, 'busy')") > 0 &&
+    fn.indexOf("histShowRetryBar(card, 'busy')") < fn.indexOf('/api/cells/resolve'));
+  ok('chống bấm trùng: histRetryBusy guard',
+    /if \(histRetryBusy\.has\(String\(id\)\)\) return;/.test(fn) &&
+    /histRetryBusy\.add\(String\(id\)\)/.test(fn));
+  ok('nút chuyển spinner + disable khi đang tra, phục hồi ở finally',
+    /btn\.innerHTML = '<i class="fas fa-spinner fa-spin"><\/i>'/.test(fn) &&
+    /btn\.innerHTML = '<i class="fas fa-rotate-right"><\/i>'/.test(fn));
+  ok('CSS .hist-retry + .hist-card-acts + .hist-retry-bar 4 trạng thái',
+    /\.hist-retry\s*\{/.test(htmlSrc) && /\.hist-card-acts\s*\{/.test(htmlSrc) &&
+    /\.hist-retry-bar\s*\{/.test(htmlSrc) &&
+    /\.hist-retry-bar\.busy/.test(htmlSrc) && /\.hist-retry-bar\.done/.test(htmlSrc) &&
+    /\.hist-retry-bar\.miss/.test(htmlSrc) && /\.hist-retry-bar\.nofunds/.test(htmlSrc));
+  ok('i18n tra lại (vi+en)',
+    (appSrc.match(/'hist\.retry'/g) || []).length >= 2 &&
+    (appSrc.match(/'hist\.retryBarBusy'/g) || []).length >= 2 &&
+    (appSrc.match(/'hist\.retryNoFunds'/g) || []).length >= 2);
+}
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

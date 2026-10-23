@@ -1,0 +1,45 @@
+# ============================================================================
+# .gitattributes — quy tắc xuống dòng + phạm vi `git archive` (artifact deploy)
+# ----------------------------------------------------------------------------
+# Repo dev trên Windows (core.autocrlf=true) nhưng script triển khai được bash
+# chạy trực tiếp trên Linux: nếu working tree có CRLF, bash chết với
+# `bad interpreter: /bin/bash^M` hoặc `$'\r': command not found`.
+# → ép LF cho *.sh cả trong repo lẫn working tree.
+# ============================================================================
+*.sh                text eol=lf
+*.ps1               text eol=crlf
+*.js                text
+*.md                text
+*.json              text
+
+# ============================================================================
+# `git archive` (nguồn artifact cho deploy.ps1 và GitHub Actions)
+# Chỉ ảnh hưởng export, KHÔNG ảnh hưởng clone/checkout.
+# ============================================================================
+# Secrets / cấu hình theo máy
+.env                export-ignore
+.env.*              export-ignore
+
+# Dữ liệu runtime
+*.log               export-ignore
+*.tmp               export-ignore
+*.sqlite            export-ignore
+*.sqlite.*          export-ignore
+uploads/            export-ignore
+dist/               export-ignore
+backups/            export-ignore
+release-artifacts/  export-ignore
+.tools/             export-ignore
+.certs/             export-ignore
+.vscode/            export-ignore
+
+# Dev-only: test, dữ liệu mẫu, script vận hành, hạ tầng CI/CD, tài liệu
+tests/              export-ignore
+sample/             export-ignore
+scripts/            export-ignore
+deploy/             export-ignore
+.github/            export-ignore
+/_*                 export-ignore
+audit-*.txt         export-ignore
+README.md           export-ignore
+API.md              export-ignore

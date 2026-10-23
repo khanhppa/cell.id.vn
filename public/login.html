@@ -4,8 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cell.id.vn - Login</title>
+  <!-- Favicon dùng chung toàn ứng dụng (fav.png) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="/img/favicon-64.png">
+  <link rel="icon" type="image/png" sizes="256x256" href="/img/favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
   <script src="/auth.js"></script>
   <script src="/auth-popup.js"></script>
+  <script async src="/ga.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -31,6 +37,11 @@
       text-align: center;
       font-size: 28px;
       margin-bottom: 8px;
+    }
+    /* Logo chính (logo.png) — nền trong suốt; trang login luôn nền tối nên dùng bản trắng. */
+    .auth-container .login-brand {
+      display: block; width: min(300px, 100%); aspect-ratio: 477 / 183;
+      margin: 0 auto 8px; background: url('/img/logo-white.png') no-repeat center / contain;
     }
     .auth-container .subtitle {
       color: #8888aa;
@@ -143,17 +154,8 @@
 <body>
   <div class="auth-container">
     <a href="/index.html" class="back-home"><i class="fas fa-arrow-left"></i> Về trang chủ</a>
-    <h1>Cell.id.vn</h1>
+    <span class="login-brand" role="img" aria-label="Cell.id.vn"></span>
     <p class="subtitle">Cellular tower mapping & analysis</p>
-
-    <!-- Trang chủ giờ dùng popup. Giữ trang này cho link cũ & test; nút dưới mở popup. -->
-    <div style="background:rgba(120,180,255,.14);border:1px dashed rgba(80,140,220,.5);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#cfe1ff;line-height:1.6">
-      <b>Mẹo:</b> bạn có thể đăng nhập / đăng ký ngay trên trang chủ mà không cần rời bản đồ.
-      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-        <button type="button" onclick="openPopup('login')" style="padding:8px 14px;border:0;border-radius:8px;background:#0ea5e9;color:#fff;font-weight:600;cursor:pointer">Mở popup đăng nhập</button>
-        <button type="button" onclick="openPopup('register')" style="padding:8px 14px;border:1px solid rgba(255,255,255,.25);border-radius:8px;background:transparent;color:#e8ecf7;font-weight:600;cursor:pointer">Mở popup đăng ký</button>
-      </div>
-    </div>
 
     <div class="tab-bar">
       <button id="tabLogin" class="active" onclick="switchTab('login')">Login</button>
@@ -243,6 +245,12 @@
           window.location.href = '/index.html';
         }
       } catch (err) {
+        // Website đang bảo trì: chỉ admin được đăng nhập. Người dùng thường
+        // được đưa về đúng trang thông báo bảo trì như trang chủ.
+        if (err && err.data && err.data.reason === 'SITE_CLOSED') {
+          window.location.replace('/maintenance.html?from=login');
+          return;
+        }
         showMsg('loginMessage', err.message, 'error');
       } finally {
         setLoading('login', false);
@@ -277,10 +285,6 @@
     applyHashTab();
     window.addEventListener('hashchange', applyHashTab);
 
-    // Mở popup mới (màn đăng ký đầy đủ: email + captcha + điều khoản).
-    function openPopup(view) {
-      if (window.AuthPopup) AuthPopup.open(view || 'login');
-    }
     // Hash điều hướng popup (#verify / #reset&email=..) → mở popup thay vì form cũ.
     if (window.AuthPopup && !AuthPopup.autoOpen()) {
       // #login/#register đã được tabs của trang này xử lý; không mở popup trùng.

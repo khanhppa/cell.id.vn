@@ -3,7 +3,7 @@
  * Chạy: node _adminhtml.test.js
  *
  * Kiểm tra:
- *  - Sidebar đúng 6 mục: dashboard, cells, users, payments, settings, version
+ *  - Sidebar đúng 7 mục: dashboard, cells, users, payments, api, settings, version
  *    (đã gộp credits + celldb; thêm payments cho payOS, version — lịch sử phiên bản chỉ admin).
  *  - Cell ID Database có 3 menu con: sources / local / audit.
  *  - Mỗi `id="section-X"` khớp với 1 mục sidebar; không còn section mồ côi.
@@ -27,9 +27,9 @@ const adminJs = fs.readFileSync(path.join(__dirname, 'public', 'admin.js'), 'utf
 console.log('== Sidebar ==');
 const sidebarBlock = html.slice(html.indexOf('<div class="sidebar">'), html.indexOf('<div class="content">'));
 const sections = [...sidebarBlock.matchAll(/data-section="([^"]+)"/g)].map(m => m[1]);
-ok('sidebar có đúng 6 mục', sections.length === 6, sections);
-ok('thứ tự: dashboard, cells, users, payments, settings, version',
-  JSON.stringify(sections) === JSON.stringify(['dashboard', 'cells', 'users', 'payments', 'settings', 'version']), sections);
+ok('sidebar có đúng 8 mục (thêm tab API + Tra cứu IP)', sections.length === 8, sections);
+ok('thứ tự: dashboard, cells, users, payments, api, ipx, settings, version',
+  JSON.stringify(sections) === JSON.stringify(['dashboard', 'cells', 'users', 'payments', 'api', 'ipx', 'settings', 'version']), sections);
 ok('nav tới cells gọi switchSection(\'cells\')', /data-section="cells"\s+onclick="switchSection\('cells'\)"/.test(sidebarBlock));
 ok('nav tới users gọi switchSection(\'users\')', /data-section="users"\s+onclick="switchSection\('users'\)"/.test(sidebarBlock));
 ok('nav tới version gọi switchSection(\'version\')', /data-section="version"\s+onclick="switchSection\('version'\)"/.test(sidebarBlock));
@@ -146,9 +146,9 @@ ok('KHÔNG còn creditUsersBody trong JS', !/creditUsersBody/.test(adminJs));
 ok('KHÔNG còn gọi loadUsers()', !/\bloadUsers\(\)/.test(adminJs));
 ok('loadCreditUsers render vào userTableBody', /function loadCreditUsers\(\)[\s\S]{0,400}userTableBody/.test(adminJs));
 ok('renderUsersTable render vào userTableBody', /function renderUsersTable\(\)[\s\S]{0,200}userTableBody/.test(adminJs));
-ok('renderUsersTable có nút Nạp điểm', /function renderUsersTable\(\)[\s\S]{0,2600}openCreditModal/.test(adminJs));
-ok('renderUsersTable có nút Sửa user', /function renderUsersTable\(\)[\s\S]{0,2600}editUser\(/.test(adminJs));
-ok('renderUsersTable có nút Xoá user', /function renderUsersTable\(\)[\s\S]{0,2600}deleteUser\(/.test(adminJs));
+ok('renderUsersTable có nút Nạp điểm', /function renderUsersTable\(\)[\s\S]{0,4200}openCreditModal/.test(adminJs));
+ok('renderUsersTable có nút Sửa user', /function renderUsersTable\(\)[\s\S]{0,4200}editUser\(/.test(adminJs));
+ok('renderUsersTable có nút Xoá user', /function renderUsersTable\(\)[\s\S]{0,4200}deleteUser\(/.test(adminJs));
 ok('switchSection users KHÔNG còn loadUsers', /name === 'users'\)\s*\{[^}]*loadCreditUsers\(\)[^}]*loadCreditTx\(\)/.test(adminJs));
 
 console.log('\n== Modal ==');
@@ -175,6 +175,53 @@ ok('admin.js render s.last_error trong bảng nguồn', /s\.last_error/.test(adm
 ok('admin.js hiện last_error_at làm tooltip', /esc\(s\.last_error_at/.test(adminJs));
 ok('hint google nhắc xem cột "Lỗi gần nhất"', /Lỗi gần nhất/.test(adminJs));
 ok('không còn placeholder colspan="6" trong bảng nguồn', !/id="sourceTableBody"><tr><td colspan="6"/.test(html));
+
+console.log('\n== Dashboard mới + Google Analytics ==');
+const dashSec = sliceSection('dashboard');
+ok('dashboard có #dashLocalKpis (KPI local)', dashSec.includes('id="dashLocalKpis"'));
+ok('dashboard có #dashGaSection (khối GA)', dashSec.includes('id="dashGaSection"'));
+ok('dashboard có trạng thái GA rỗng #dashGaEmpty + lỗi #dashGaError',
+  dashSec.includes('id="dashGaEmpty"') && dashSec.includes('id="dashGaError"'));
+ok('dashboard có 2 canvas biểu đồ',
+  dashSec.includes('id="dashTrafficChart"') && dashSec.includes('id="dashLocalChart"'));
+ok('dashboard có breakdown trang/nguồn/thiết bị/quốc gia/top user',
+  ['dashTopPages', 'dashChannels', 'dashDevices', 'dashCountries', 'dashTopUsers']
+    .every(id => dashSec.includes(`id="${id}"`)));
+ok('dashboard có #dashActivity + #dashHealth', dashSec.includes('id="dashActivity"') && dashSec.includes('id="dashHealth"'));
+ok('dashboard có select khoảng ngày #dashRange', /id="dashRange"[\s\S]{0,400}value="28"/.test(dashSec));
+ok('dashboard có nút mở cấu hình GA', /onclick="openGaSettings\(\)"/.test(dashSec));
+ok('KHÔNG còn #statUsers cũ', !html.includes('id="statUsers"'));
+
+ok('settings có tab Google Analytics', /data-settingstab="ga"[\s\S]{0,120}switchSettingsTab\('ga'\)/.test(html));
+ok('có pane #settingstab-ga', html.includes('id="settingstab-ga"'));
+ok('pane GA có #setGaEnabled + Measurement + Property + Service Account',
+  /id="settingstab-ga"[\s\S]*?id="setGaEnabled"[\s\S]*?id="setGaMeasurementId"[\s\S]*?id="setGaPropertyId"[\s\S]*?id="setGaServiceAccount"[\s\S]*?\/settingstab-ga/.test(html));
+ok('pane GA có email service account + nút test', html.includes('id="gaAccountEmail"') && html.includes('id="gaTestBtn"'));
+ok('pane GA có nút lưu riêng #gaSaveBtn', /id="gaSaveBtn"[\s\S]{0,120}saveGaSettings\(\)/.test(html));
+ok('admin.js có saveGaSettings + validateGaInputs + applyGaSettingsToForm',
+  /function saveGaSettings\(/.test(adminJs) && /function validateGaInputs\(/.test(adminJs)
+  && /function applyGaSettingsToForm\(/.test(adminJs));
+ok('loadSettings có chống response cũ ghi đè (_settingsLoadSeq)',
+  /_settingsLoadSeq/.test(adminJs) && /seq !== _settingsLoadSeq/.test(adminJs));
+ok('admin.js có testGaConnection + copyGaEmail + collectAnalyticsSettings',
+  /function testGaConnection\(/.test(adminJs) && /function copyGaEmail\(/.test(adminJs)
+  && /function collectAnalyticsSettings\(/.test(adminJs));
+ok('loadSettings nạp ga_measurement_id', /gaMid[\s\S]{0,120}ga_measurement_id/.test(adminJs));
+ok('saveSettings gọi collectAnalyticsSettings', /collectAnalyticsSettings\(settings\)/.test(adminJs));
+
+console.log('\n== Modal sửa user đầy đủ trường ==');
+ok('modal có #userEditId (hidden)', html.includes('id="userEditId"'));
+ok('modal có username/email/verified/password/role/status',
+  ['userFormUsername', 'userFormEmail', 'userFormVerified', 'userFormPassword', 'userFormRole', 'userFormStatus']
+    .every(id => html.includes(`id="${id}"`)));
+ok('status có option disabled', /id="userFormStatus"[\s\S]{0,500}value="disabled"/.test(html));
+ok('modal có vùng meta #userFormMeta', html.includes('id="userFormMeta"'));
+ok('bảng user có filter role/status', html.includes('id="userRoleFilter"') && html.includes('id="userStatusFilter"'));
+ok('editUser chỉ nhận id (không nhúng chuỗi username vào onclick)',
+  /onclick="editUser\(\$\{u\.id\}\)"/.test(adminJs));
+ok('saveUser gọi /api/admin/users', /\/api\/admin\/users/.test(adminJs));
+ok('admin.js có closeUserModal + load chi tiết user', /function closeUserModal\(/.test(adminJs)
+  && /\/api\/admin\/users\/' \+ encodeURIComponent\(id\)/.test(adminJs));
 
 console.log('\n== Cân bằng thẻ ==');
 const openDiv = (html.match(/<div\b/g) || []).length;

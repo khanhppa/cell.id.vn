@@ -3,9 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Chặn trang khi website đang bảo trì (admin vẫn đi qua). Script chặn render. -->
+  <script src="/site-status.js"></script>
   <title>Điều khoản sử dụng — Cell.id.vn</title>
+  <!-- Favicon dùng chung toàn ứng dụng (fav.png) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="/img/favicon-64.png">
+  <link rel="icon" type="image/png" sizes="256x256" href="/img/favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
   <script src="/auth.js"></script>
   <script src="/auth-popup.js"></script>
+  <script async src="/ga.js"></script>
   <style>
     /* Theme sáng/tối: khai báo theo đúng palette topup.html/version.html.
        Kèm 5 biến navbar chung (auth.js) để navbar ăn theo data-theme. */
@@ -39,7 +47,12 @@
     }
     .wrap { max-width: 780px; margin: 0 auto; }
     .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 12px; flex-wrap: wrap; }
-    .brand { font-size: 20px; font-weight: 800; color: var(--text-primary); }
+    .brand {
+      display: block; width: 82px; aspect-ratio: 477 / 183;
+      background: url('/img/logo.png') no-repeat center / contain;
+    }
+    /* Nền tối: dùng bản logo trắng để chữ vẫn rõ. */
+    [data-theme="dark"] .brand { background-image: url('/img/logo-white.png'); }
     .top-actions { display: flex; gap: 8px; align-items: center; }
     .btn {
       display: inline-flex; align-items: center; gap: 7px; padding: 9px 15px; border-radius: 9px;
@@ -71,7 +84,7 @@
 <body>
   <div class="wrap">
     <div class="top">
-      <div class="brand">Cell.id.vn</div>
+      <span class="brand" role="img" aria-label="Cell.id.vn"></span>
       <div class="top-actions">
         <a class="btn" href="/index.html">Về trang chủ</a>
         <a class="btn btn-primary" id="termsRegisterBtn" href="/index.html#register">Đăng ký</a>

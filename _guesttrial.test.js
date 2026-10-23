@@ -333,7 +333,7 @@ async function runWiring() {
   // :root/[data-theme] thì navbar đứng im ở tông sáng dù trang đã sang dark.
   const NAVBAR_VARS = ['--header-bg', '--bg-surface', '--bg-surface2', '--bg-btn-primary', '--border-focus'];
   const THEMED_PAGES = ['index.html', 'admin.html', 'credits.html', 'topup.html', 'version.html',
-    'terms.html', 'tools/port-check.html', 'tools/ebn-eci.html', 'tools/ip-tracker.html'];
+    'terms.html', 'tools/port-check.html', 'tools/ebn-eci.html', 'tools/ip-lookup.html', 'tools/ip-tracker.html'];
   for (const rel of THEMED_PAGES) {
     const html = read(path.join('public', rel));
     const missing = NAVBAR_VARS.filter(v => !new RegExp(v.replace(/-/g, '\\-') + '\\s*:').test(html));

@@ -7,6 +7,626 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
 ## [Unreleased]
 
 ### Changed
+- **IP Tracker → Bẫy địa chỉ IP** (`/tools/ip-tracker.html`): đổi tên hiển thị trên trang,
+  menu **Công cụ** và tiêu đề tab (EN: *IP Address Trap*). Giữ nguyên đường dẫn trang và
+  các endpoint `/api/tools/ip-tracker/*`, `/r/:token`, `/i/:token`, `/d/:token` để link đã
+  phát tán không bị chết.
+
+### Added — Bẫy địa chỉ IP
+- **OG Image: dán link hoặc tải ảnh lên** (cả 2 tab). Ảnh tải lên được `sharp` tự xoay theo
+  EXIF, cắt về **1200×630** và nén JPEG chất lượng 85 rồi lưu ngoài thư mục release; phục vụ
+  qua `GET /og/:token` (cache `immutable`, không ghi log vì đó là IP của Facebook/Telegram).
+  `og_image` dán tay vẫn dùng được; ảnh tải lên được ưu tiên hơn URL.
+- **Thu thập dữ liệu người xem tối đa** — mỗi lượt click/xem ảnh giờ ghi:
+  - IP (ưu tiên `X-Forwarded-For` / `CF-Connecting-IP` / `X-Real-IP`), `wan_ip`, và **mã
+    thiết bị ẩn danh** `_ctid` (cookie 1 năm) trong cột `visitor_id` → nhận ra cùng một máy
+    dù đổi mạng/đổi IP.
+  - **Vị trí + nhà mạng** (quốc gia/tỉnh/thành/ISP/ASN/toạ độ/proxy/hosting) tra qua module
+    `ip-lookup.js` sẵn có, chạy **ở nền** sau khi response đã gửi đi.
+  - **User-Agent được parse** thành `{browser, version, os, device, engine, bot}` (kèm nhận
+    diện bot mạng xã hội, Zalo, Facebook, Telegram, curl…).
+  - **Header đầy đủ**: client hints (`sec-ch-ua-*`), `sec-fetch-*`, `accept-language`,
+    `referer`, `origin`, cờ proxy (`via`, `forwarded`, số hop XFF). Cookie chỉ lưu **tên**,
+    không lưu giá trị.
+  - **Beacon phía trình duyệt** (`POST /px/:token`): màn hình, viewport, DPR, múi giờ, locale,
+    số nhân CPU, RAM, pin, loại mạng (4G/3G/…), canvas fingerprint, `userAgentData` độ chi
+    tiết cao và **IP WAN thật** do chính trình duyệt victim hỏi ipify (chỉ dùng khi server
+    chỉ thấy IP LAN). Nhiều gói beacon được **merge** vào cùng row, gói nào lỗi thì mất đúng
+    phần đó.
+- **Trang trung chuyển nhẹ cho link**: `/r/:token` trả HTML ~3 KB có spinner, gửi beacon bằng
+  `sendBeacon` (không mất dữ liệu khi chuyển trang) rồi `location.replace` sau ~0,4 s; có
+  `<noscript>` meta-refresh.
+- **Modal kết quả mới**: chip tổng hợp (tổng lượt / IP khác nhau / thiết bị khác nhau /
+  quốc gia), thẻ từng lượt mở rộng được (thiết bị, màn hình, múi giờ, pin, mạng, vị trí,
+  header, query params) và nút **Xuất CSV** (UTF-8 BOM, mở được bằng Excel).
+- **`GET /api/tools/ip-tracker/:id/share` trả JSON hoặc HTML** tuỳ `Accept`: `fetch()` nhận
+  JSON (modal trạng thái), người mở link bằng trình duyệt nhận trang trạng thái gọn.
+- **`GET /px.js?token=...`**: file beacon tĩnh (cache 1 năm) cho ai muốn nhúng tay vào trang
+  khác.
+
+### Fixed
+- **`wan_ip` từng ghi IP của MÁY CHỦ** (gọi `api.ipify.org` trong mỗi request): vô nghĩa và
+  làm chậm mỗi lượt click. Giờ `wan_ip` = IP công khai mà server thấy; nếu server chỉ thấy
+  IP LAN thì lấy IP WAN thật từ beacon của trình duyệt victim.
+- **Vị trí IP không bao giờ được điền**: `tracker.pickGeo()` đọc thẳng `aggregate.country`
+  trong khi `aggregate()` trả `{ fields: { country: { value } } }` → luôn `null`. Đã thêm
+  `flattenAggregate()`.
+- **Beacon ghi đè lẫn nhau**: mỗi gói `UPDATE client_json = ?` nên gói sau xoá sạch gói trước
+  (mất pin/màn hình…). Giờ **merge** và mở rộng cửa sổ ghép lên 60 s.
+- **`/api/tools/ip-tracker/:id/share` luôn trả trang OG HTML** nên modal "Link kiểm tra" báo
+  lỗi parse. Đã tách hành vi theo `Accept`.
+- **Xoá bẫy không xoá log** khi `PRAGMA foreign_keys` chưa bật → rò dữ liệu; giờ xoá log
+  tường minh, kèm xoá file ảnh/ảnh OG trên đĩa.
+- **Tạo bẫy ảnh: mọi ảnh không phải PNG đều bị ép `.jpeg`** (kể cả GIF/WEBP) và phần đuôi
+  file suy từ `originalname`; giờ dùng `sharp().metadata()` và giữ đúng loại ảnh
+  (png/jpeg/webp/gif) khi phục vụ.
+- Ảnh tải lên giới hạn **25 MB** và chỉ nhận `image/*`; file tạm của multer được dọn khi
+  route lỗi giữa chừng.
+
+### Added
+- **Bật/đóng website (chế độ bảo trì)**: tab **Cấu hình → Website** cho phép admin bật/tắt
+  truy cập và nhập thông báo bảo trì (để trống = thông báo mặc định). Khi đóng, mọi trang
+  của website (desktop + mobile) chuyển tới `/maintenance.html` có nội dung thông báo
+  (không hiển thị nút đăng nhập — quản trị viên tự mở `/login.html`); API nghiệp vụ trả
+  `403 SITE_CLOSED`, chỉ admin (JWT role `admin`) đăng nhập được và bật/tắt lại. Thêm banner
+  cảnh báo + nút "Mở lại website" ngay trên Dashboard, endpoint công khai
+  `GET /api/site/status`, và script gate `/site-status.js` chặn trang theo trạng thái thật
+  từ server. Webhook payOS, health check và luồng quên/đặt lại mật khẩu vẫn hoạt động
+  trong thời gian bảo trì.
+- **Google Analytics 4 trong trang admin**: tab **Cấu hình → Google Analytics** cho phép
+  bật/tắt tracking, nhập Measurement ID, GA4 Property ID và dán file JSON Service Account
+  (secret được che khi GET, giống payOS/SMTP). Server tự sinh `/ga.js` để gắn thẻ gtag vào
+  các trang public; chưa bật/chưa đủ cấu hình thì trả JS rỗng, không tải gtag.
+- **Xem số liệu GA ngay trong Dashboard**: realtime đang online, người dùng, phiên,
+  lượt xem trang, tỷ lệ tương tác, thời lượng phiên TB, tỷ lệ thoát; so sánh kỳ trước;
+  biểu đồ xu hướng; top trang, nguồn truy cập, thiết bị, quốc gia. Số liệu cache 60s,
+  lỗi Google được map thành mã dễ hiểu (thiếu quyền Viewer, sai Property ID, hết quota…).
+- **Dashboard tổng quan mới**: gom chỉ số local vào một endpoint `/api/admin/dashboard`
+  (người dùng, cell, lượt tra cứu, doanh thu, điểm, API 24h, IP tracker), biểu đồ xu hướng,
+  hoạt động gần đây và sức khoẻ hệ thống (uptime/RAM/DB/version/đồng bộ cuối). Thêm index
+  `created_at` cho các bảng dashboard để tránh full scan.
+- **Sửa user đầy đủ trường**: modal sửa cho phép chỉnh username, email, trạng thái xác thực
+  email, mật khẩu, vai trò và trạng thái (thêm `disabled`). Có `GET /api/admin/users/:id` để
+  nạp dữ liệu mới nhất; đổi email tự reset xác thực; chặn tự hạ quyền/tự khoá/tự xoá và
+  hạ quyền admin cuối cùng. Số dư điểm vẫn chỉ đổi qua ledger (nút "Nạp điểm").
+
+### Changed
+- **Trang thông báo bảo trì** (`/maintenance.html`): bỏ nút Đăng nhập, chỉ còn nút "Thử lại";
+  quản trị viên tự mở `/login.html` khi cần đăng nhập.
+- **Trang đăng nhập `/login.html`**: bỏ khối "Mẹo" và 2 nút mở popup đăng nhập/đăng ký;
+  trang chỉ còn form đăng nhập/đăng ký trực tiếp.
+
+### Fixed
+- **IP Tracker** (`/tools/ip-tracker.html`) — sửa loạt lỗi frontend:
+  - Nút hành động trong bảng dùng `onclick` nội tuyến có nhét URL vào chuỗi
+    (`'${item.trackingUrl}'`), nên URL/tên chứa dấu `'` (rất phổ biến) làm gãy cả thẻ
+    `<button>`; thẻ Xóa còn bị khai báo `class` hai lần. Đổi sang `data-act`/`data-id`
+    và gắn listener một lần trên `<tbody>`.
+  - Tên/User-Agent/header/IP/query param được đưa vào `innerHTML` **không escape**
+    → XSS và vỡ bảng khi User-Agent có `"` hoặc `<`. Thêm `esc()` cho mọi chỗ.
+  - Modal Kết quả có thêm cột **Query params** (server vẫn trả `query_params` nhưng UI
+    bỏ qua); escape tiêu đề và giá trị headers.
+  - Thời gian lưu dạng `YYYY-MM-DD HH:MM:SS` (UTC, không có `Z`) nên hiển thị lệch 7 giờ
+    và ra `Invalid Date` trên Safari. Thêm `fmtDate()`.
+  - Sau khi tạo link, code gán `btn.textContent = ...` lên nút bọc `<span data-i18n>`
+    → mất `<span>`, lần đổi ngôn ngữ sau không dịch lại nhãn nút. Thêm
+    `syncButtonText()` và khôi phục `<span>` sau khi tạo xong.
+  - `navigator.clipboard` không có (http trên LAN) → nút Copy im lặng không làm gì;
+    thêm fallback `execCommand('copy')`.
+  - `/share` trả HTML trang OG chứ không phải JSON nên modal Share luôn báo lỗi parse;
+    UI giờ dò `content-type` và báo "không hỗ trợ" thay vì văng lỗi.
+  - Phần auth chạy ngoài `try/catch` và gọi `Auth.*` mà không kiểm tra tồn tại: thiếu
+    `/auth.js` là `ReferenceError` giết cả file (tab, upload, danh sách chết theo).
+    Giờ được bọc `try` và luôn kiểm tra `typeof Auth !== 'undefined'`.
+  - HTTP `401` (token hết hạn) giờ dọn session rồi về trang chủ mở popup đăng nhập,
+    thay vì hiện bảng trống + alert khó hiểu.
+  - Listener click overlay của modal Kết quả bị gắn lại mỗi lần mở (rò listener).
+  - Dọn markup công cụ bị lọt vào cuối `ip-tracker.html`.
+- **`Unexpected token '<', "<!DOCTYPE "... is not valid JSON`** khi mở tab **Tra cứu IP**
+  hoặc trang `/tools/ip-lookup.html`: khi bản server đang chạy chưa có route mới (chưa
+  khởi động lại sau khi cập nhật), Express trả trang 404 HTML nên `res.json()` chết với
+  thông báo vô nghĩa. Đã sửa hai phía:
+  - Server: mọi `/api/*` không khớp route giờ trả **JSON 404** (`code: "API_NOT_FOUND"`,
+    kèm gợi ý khởi động lại) thay vì trang HTML mặc định của Express.
+  - Client: admin và trang công cụ dùng helper `readJsonHttp`/`readJson` — nếu response
+    không phải JSON thì báo rõ *"Máy chủ trả về HTML thay vì JSON cho &lt;url&gt; (HTTP 404).
+    Có thể máy chủ chưa được khởi động lại sau khi cập nhật"* kèm đoạn nội dung server trả,
+    thay vì ném lỗi parse khó hiểu. Lỗi không còn làm trắng bảng/tab: phần còn lại của
+    trang vẫn dùng được.
+
+### Added
+- **Tra cứu địa chỉ IP đa nguồn** — trang `/tools/ip-lookup.html` + module `ip-lookup.js`
+  và mục quản trị **Tra cứu IP** trong admin. Tra một IPv4/IPv6 qua nhiều nguồn cùng lúc,
+  chuẩn hoá về một bộ trường chung rồi **bỏ phiếu chọn giá trị được nhiều nguồn đồng ý**
+  (toạ độ lấy trung vị), kèm độ đồng thuận và cờ proxy/hosting/mobile hợp nhất.
+  - **Nguồn tích hợp**: **DB-IP** (`http://api.db-ip.com/v2/{key|free}/{ip}`, chỉ HTTP),
+    **IPinfo** (`/lite/` miễn phí hoặc `/lookup/` cho token Core), **ipwho.is**, **ipapi.is**,
+    **ip-api.com** (HTTP, 45 req/phút), **freeipapi.com**, **iplocation.net**, và bản
+    **DB-IP free** (tự bỏ qua khi đã có key DB-IP). Mỗi nguồn có `parse()` riêng nên
+    lỗi riêng của nguồn (DB-IP `errorCode`, IPinfo `error`, freeipapi trả toàn `null`,
+    ip-api.com `status:fail`…) đều thành câu thông báo đọc được thay vì "không có dữ liệu".
+  - **API**: `GET /api/tools/ip-lookup` (đăng nhập: mọi nguồn đang bật, hạn mức theo
+    user/ngày), `GET /api/tools/ip-lookup/guest` (khách: chỉ nguồn không cần key, hạn mức
+    theo IP/ngày), `GET /api/tools/ip-lookup/me` (IP người gọi), `/api/tools/ip-lookup/console`
+    (IP máy chủ — tắt mặc định), `GET /api/tools/ip-lookup/config` (cấu hình công khai).
+  - **Cache + hạn mức**: bảng `ip_lookup_cache` (UNIQUE theo IP/nguồn, TTL theo cấu hình;
+    lỗi chỉ cache 1 ngày để nguồn free tự phục hồi), `ip_lookup_logs` (nhật ký, đếm hạn
+    mức, dọn theo `ip_lookup_log_retention_days`), `ip_guest_trials` (hạn mức khách theo IP).
+    Mốc reset ngày đặt được bằng `ip_lookup_day_cutoff_hour` (giờ Việt Nam).
+  - **Quản trị (admin → Tra cứu IP)**: 3 tab Nguồn / Nhật ký / Cấu hình & chạy thử —
+    bật/tắt, sắp ưu tiên, sửa base_url/plan/timeout/cache, nhập API key (chỉ trả bản che
+    `••••1234`, gửi lại bản che = giữ nguyên), nút **Kiểm tra** từng nguồn, xem lỗi gần nhất,
+    thống kê 24h + tổng, lọc nhật ký theo IP/nguồn, chạy thử kèm tuỳ chọn "gồm nguồn đang tắt"
+    và "bỏ qua cache" (không tính hạn mức).
+  - **Cấu hình mới**: `ip_lookup_public_enabled`, `ip_lookup_public_guest_daily`,
+    `ip_lookup_user_daily`, `ip_lookup_console_enabled`, `ip_lookup_console_per_day`,
+    `ip_lookup_day_cutoff_hour`, `ip_lookup_log_retention_days` (seed tự động, admin sửa
+    trong tab Cấu hình). Cron dọn nhật ký/cache chạy 03:40 hằng ngày.
+  - Test: `_iplookup.test.js` (166 assert — parse từng nguồn, ghép URL, bỏ phiếu/tổng hợp,
+    cache, nguồn thiếu key, một nguồn lỗi không làm gãy lô, hạn mức khách/user, CRUD nguồn,
+    wiring route/UI/DB).
+- **Nút "IP của tôi" lấy IP WAN thật (IPv4 + IPv6)** — trước đây nút này trả địa chỉ
+  mà *server* nhìn thấy, nên khi chạy local là `127.0.0.1`/IP LAN và thường chỉ có một
+  họ địa chỉ. Nay trang công cụ dò **song song** hai endpoint chuyên biệt một họ
+  (`ipv4.ident.me`, `api-ipv4.ip.sb`, `ipv4.icanhazip.com` / bản `ipv6.*`) — chỉ dùng
+  dịch vụ có `Access-Control-Allow-Origin: *` để trình duyệt gọi được — hiển thị một chip
+  cho IPv4 và một chip cho IPv6 (kèm "không có" nếu mạng không có họ đó), bấm chip để tra
+  ngay, tự điền + tra IP ưu tiên IPv4. Có timeout 4,5s mỗi endpoint, tự chuyển endpoint dự phòng,
+  và dự phòng cuối bằng `/api/tools/ip-lookup/me` khi dịch vụ ngoài bị chặn. Route `/me`
+  giờ trả thêm `private` (loopback/LAN/CGNAT) và `wan_ip` (chỉ khi là IP công khai thật)
+  nhờ `ip-lookup.isPrivateIp()` mới. Khách chưa đăng nhập cũng dùng được nút này.
+- **Mở rộng chi tiết từng nguồn** ở bảng "Kết quả từng nguồn": bấm vào một dòng (hoặc
+  Enter/Space khi dòng đang focus) để bung khối chi tiết ngay dưới dòng đó — hiển thị **toàn bộ
+  trường mà nguồn trả về** (quốc gia/mã, châu lục, vùng, thành phố, mã bưu chính, toạ độ,
+  múi giờ + GMT offset, ASN/tên ASN, ISP, tổ chức, tên miền, loại kết nối, loại sử dụng,
+  cờ proxy/hosting/mobile, loại proxy, mức đe doạ), danh sách **trường nguồn không trả**,
+  và JSON riêng của nguồn đó. Nguồn lỗi cũng mở rộng được để xem thông báo lỗi đầy đủ.
+  Có nút **Mở rộng/Thu gọn tất cả**, caret xoay theo trạng thái, giữ `aria-expanded`/`aria-controls`
+  cho screen reader; mọi giá trị của nguồn đều được escape trước khi render.
+- **Tra cứu IP trên ứng dụng di động `/m/`** — tab **Công cụ** có thêm thẻ **Tra cứu địa chỉ IP**:
+  nhập IPv4/IPv6 (bàn phím text, `autocapitalize=off`), nút **Tra cứu IP** và **IP của tôi
+  (IPv4/IPv6)** dò song song 2 endpoint một họ (`ipv4/ipv6.ident.me`, `api-ipv4/6.ip.sb`,
+  `ipv4/6.icanhazip.com` — chỉ dịch vụ có CORS) với timeout 4,5s, dự phòng bằng `/api/tools/ip-lookup/me`;
+  chip IPv4/IPv6 chạm để tra ngay. Kết quả hiển thị các dòng tổng hợp (quốc gia, vùng/thành phố, ASN,
+  nhà mạng, toạ độ trung vị, múi giờ, số nguồn đồng thuận, cảnh báo proxy/hosting) và **danh sách nguồn
+  dạng accordion `<details>`** — chạm tiêu đề nguồn (vùng chạm ≥ 44px) để xem đủ trường nguồn đó trả về
+  + danh sách trường nguồn không trả; nguồn lỗi cũng mở rộng được. Dùng chung endpoint/cache/hạn mức với
+  bản web. `CACHE_VERSION` của service worker tăng `cell-m-v8` → `cell-m-v9` để client nhận bản mới.
+- **Tab Công cụ trên `/m/` thu gọn dạng accordion** — trước đây 3 công cụ (check số điện
+  thoại, chuyển đổi Cell ID, tra cứu IP) xếp dọc luôn mở nên trang rất dài và phải cuộn
+  nhiều. Nay mỗi công cụ là một card có **nút tiêu đề** (vùng chạm ≥ 44px) và phần thân
+  ẩn mặc định: **cả 3 đóng khi mở app**, chạm tiêu đề để mở, **mở công cụ nào thì công cụ
+  đang mở tự đóng** (chỉ một cái mở tại một thời điểm), chạm lại tiêu đề đang mở thì đóng.
+  Có `aria-expanded`/`aria-controls` + mũi tên xoay 180° theo trạng thái, card đang mở viền
+  sáng nhẹ. Captcha VNTA chỉ tải khi mở công cụ check số (trước đây tải ngay khi vào tab).
+  Các luồng nhảy vào công cụ đều tự mở đúng thẻ trước khi hiện kết quả: nút **eNB ↔ ECI**
+  trong kết quả tra cứu gọi `mToolOpen('convert')`, nếu không kết quả sẽ nằm trong thân
+  đang đóng và người dùng không thấy gì. `CACHE_VERSION` `cell-m-v9` → `cell-m-v10`.
+- **Trang NẠP ĐIỂM trên `/m/` (payOS)** — trước đây nút "Nạp thêm điểm" đá sang
+  `/topup.html` (trang máy tính, 62 KB) nên trên điện thoại phải phóng to/thu nhỏ. Nay là
+  một bottom sheet toàn màn hình ngay trong app, dùng đúng API sẵn có (**không thêm endpoint**):
+  - **Chọn gói**: lưới 2 cột lấy từ `/api/credits/packages`, chạm để chọn, hiện ngay
+    "Nhận được X điểm"; hoặc **nạp số tiền tự do** trong khoảng min–max (server trả về),
+    chặn số tiền sai ngay trên client trước khi gọi API.
+  - **Tạo đơn**: `POST /api/credits/topup/create` với `package_id` **hoặc** `amount_vnd` —
+    client KHÔNG gửi số điểm, server tự tính từ gói.
+  - **Đơn chờ**: mã đơn, số tiền, điểm, **đếm ngược hết hạn** (mm:ss, cập nhật mỗi giây),
+    ảnh **VietQR** khi có, nội dung chuyển khoản + nút copy, link mở trang payOS, nút
+    "Tôi đã chuyển khoản — kiểm tra lại" (gọi `/sync`), nút **Huỷ đơn**.
+  - **Tự cập nhật**: hỏi trạng thái mỗi 4 s; quá 20 s mà webhook chưa tới thì tự gọi
+    `/sync` để đối soát; PAID → cộng số dư ngay trên app (topbar + tab Tài khoản + tiêu đề
+    sheet), rung nhẹ, toast xác nhận. Timer được dọn khi đóng sheet.
+  - **Chế độ thử** (`payos_test_mode`): hiện nút **"Thanh toán thử"** gọi `/mock-paid`
+    để test trọn luồng mà không mất tiền thật.
+  - **Đơn gần đây**: 5 đơn cuối kèm badge trạng thái (PENDING/PAID/CANCELLED/EXPIRED/
+    UNDERPAID/FAILED), chạm để mở lại; mở sheet mà có đơn đang chờ thì vào thẳng đơn đó
+    (bấm "Tạo đơn khác" thì mới hiện lại màn chọn gói).
+  - Cổng nạp tắt (`available=false`) → banner báo rõ và ẩn nút tạo đơn.
+  - Back của điện thoại đóng sheet (`popstate`), khoá cuộn trang nền.
+  - `CACHE_VERSION` `cell-m-v10` → `cell-m-v11`.
+- **Sửa lỗi `/m/`: mở lại Nạp điểm sau khi đã nạp vẫn hiện màn "chúc mừng" cũ** — `TP.order`
+  chỉ bị xoá khi bấm "Tạo đơn khác", nên đóng sheet rồi mở lại thì `mTopupLoad()` thấy
+  `TP.order` vẫn là đơn PAID của lần trước và không vẽ lại màn chọn gói → người dùng thấy
+  lại thông báo "Đã cộng N điểm" thay vì trang nạp tiền. Nay `mOpenTopup()` và `mCloseTopup()`
+  đều **reset `TP.order`/`paidShown`/lựa chọn gói** + dừng timer, nên mỗi lần mở là một phiên
+  nạp mới; đơn **PENDING** vẫn được tự mở lại như trước (và "Tạo đơn khác" thì bỏ qua việc
+  mở lại đó). Màn "Đã thanh toán" thêm nút **Nạp thêm điểm** và **Xong**. `cell-m-v11` → `cell-m-v12`.
+- **`/m/` tab Tra cứu: ẩn lối tắt "Xem vị trí trên bản đồ" khi không có kết quả** — nút này
+  trước đây luôn hiện; bấm khi chưa tra (hoặc tra miss) thì `mOpenMap()` không có toạ độ nên
+  **đá người dùng sang `/index.html`** (bản máy tính), phá vỡ trải nghiệm app. Nay:
+  - Nút `#mLkMapBtn` **mặc định ẩn** (`hidden` trong HTML).
+  - Chỉ hiện khi lần tra gần nhất **có toạ độ** (`renderLookup` gọi `mLkMapBtnToggle(true)`);
+    kết quả miss/lỗi (qua `mShowResult` với `#mLkResult`) và **đăng xuất** đều ẩn lại
+    (`mLogout` cũng xoá luôn khung kết quả cũ).
+  - `mOpenMap()` không còn điều hướng sang trang máy tính khi thiếu toạ độ: hiện toast
+    *"Chưa có vị trí để hiển thị. Hãy tra cứu một cell trước."* và ở lại `/m/`.
+  - Lối vào bản đồ vẫn còn: nút **Bản đồ** trong khung kết quả và nút bản đồ trên thẻ lịch sử.
+  - `CACHE_VERSION` `cell-m-v12` → `cell-m-v13`.
+- **Hạ tầng triển khai production (Proxmox LXC)** — `deploy/` chứa runbook và script cho
+  một container Debian 12 (Nginx → Node `127.0.0.1:3000`, systemd, certbot), cùng pipeline
+  đóng gói từ `git HEAD` + deploy có kiểm tra `/api/version` và tự rollback:
+  `deploy/proxmox/create-lxc.sh`, `deploy/proxmox/bootstrap-app.sh`, `deploy/deploy.ps1`,
+  `bin/deploy-release.sh`, `bin/backup-db.sh`.
+- **`.env` cho cấu hình runtime** (dotenv): `DB_PATH`, `UPLOAD_DIR`, `HOST`, `TRUST_PROXY`
+  (xem `.env.example`) — tách dữ liệu (`shared/`) khỏi thư mục code của từng release trên
+  server, đồng thời giữ nguyên hành vi cũ khi không đặt biến (local dev, script test).
+- **Ứng dụng di động `/m/` (PWA)** — bản tối giản dành cho điện thoại, dùng chung
+  `Auth` và toàn bộ API sẵn có (không thêm endpoint, không đổi schema DB). Đăng nhập
+  ở `/m/` có hiệu lực luôn trên bản web và ngược lại (cùng origin, cùng localStorage).
+  - **Giao diện đăng nhập / đăng ký**: đăng nhập bằng username **hoặc email**, đăng ký
+    có **captcha chữ** (server trả `{id, text}`, client vẽ canvas → dataURL), xác nhận
+    điều khoản, **kích hoạt email** bằng mã 6 số (dùng `dev_code` khi máy chủ chưa cấu
+    hình SMTP), **quên / đặt lại mật khẩu** ngay trong app.
+  - **Tab Tra cứu (màn hình chính)**: tra **cell đơn lẻ** (MCC/MNC/LAC/Cell ID + sector
+    + công nghệ), hiện toạ độ, bán kính, nguồn dữ liệu, nhãn RAT; cảnh báo khi công nghệ
+    mạng chỉ là suy luận; copy toạ độ, mở Google Maps, nhảy sang công cụ eNB ↔ ECI.
+    Xử lý đủ **404** (không tìm thấy cell), **402** (hết điểm — kèm số dư + link nạp),
+    mất mạng, và các mã lỗi khác.
+  - **Tab Lịch sử — CHỈ cell đơn lẻ**: luôn gọi `GET /api/lookup-history?mode=single`
+    nên **phiên tra theo danh sách (batch) không bao giờ lọt vào đây**; chip lọc
+    Tất cả / Đã tra được / Không có kết quả, phân trang "Xem thêm", tra lại, copy toạ
+    độ, xoá từng lượt (`DELETE /api/lookup-history/:id`), tự nạp lại sau khi tra.
+  - **Tab Công cụ**:
+    - **Check số điện thoại** = tra **nhà mạng hiện tại** của số qua cổng VNTA
+      (chuyển mạng giữ số), có **captcha ảnh** + session one-shot; hiện thuê bao,
+      mạng gốc, mạng hiện tại, trạng thái chuyển mạng. (Trước đây form này gọi
+      `/api/phones` — danh sách số trong lịch sử cuộc gọi của chính user — sai mục đích.)
+    - **Chuyển đổi** eNB ID ↔ ECI (`GET /api/cells/convert`) + nút "Dùng ECI để tra cứu".
+  - **Tab Tài khoản**: số dư điểm, làm mới thông tin, nạp thêm điểm, đăng xuất, phiên bản.
+  - **PWA**: `public/m/manifest.webmanifest` (start_url/scope `/m/`, `display:standalone`,
+    icon 192/512 + maskable, 3 shortcut), `public/m/sw.js` (precache app shell **tuần tự**
+    — thêm song song bằng `cache.add` từng bị trình duyệt huỷ giữa chừng làm thiếu
+    `app.js`/`auth.js` trong cache, **network-first cho điều hướng**, stale-while-
+    revalidate cho asset, **bỏ qua toàn bộ `/api/`** và request cross-origin → không
+    cache dữ liệu tài khoản), `public/m/offline.html`, đăng ký SW scope `/m/`.
+  - **Điều hướng trong app**: mỗi tab được ghi vào URL (`#lookup/#history/#tools/
+    #account`) bằng `history.pushState` (lần đầu dùng `replaceState` để không tạo mục
+    lịch sử thừa) → **nút Back của Android quay về tab trước thay vì thoát app**, và
+    **shortcut PWA / deep link** (`/m/#history`) mở đúng tab. `popstate` + `hashchange`
+    đều dùng chế độ `silent` để không nhân đôi lịch sử.
+  - **Banner "Cài ứng dụng"**: chỉ hiện **sau khi đã vào app** (trước đây che mất nút
+    Đăng nhập/Tạo tài khoản), tự ẩn khi đăng xuất, và trên **iOS/Safari** (không có
+    `beforeinstallprompt`) hiện hướng dẫn *Chia sẻ → "Thêm vào MH chính"* thay cho nút
+    Cài (nút này bấm sẽ không có tác dụng trên iOS). Nhận diện cả **iPadOS giả UA
+    Macintosh** qua `maxTouchPoints`; đã cài (standalone) thì không hiện nữa.
+  - **Bản đồ trong app** (thay cho việc đá sang trang máy tính): bottom sheet toàn màn
+    hình `#mMapSheet` dùng **Leaflet 1.9.4** (nạp `defer` từ CDN, chỉ khởi tạo lần đầu mở
+    → không tốn tài nguyên lúc khởi động). Marker tròn + **vòng bán kính** theo `range`
+    của cell, popup tên cell + toạ độ. **3 lớp nền giống bản máy tính** (Đường phố/Vệ
+    tinh/Địa hình, nhớ lựa chọn trong `localStorage`), nút phóng to/thu nhỏ/về vị trí
+    (44×44px), dải toạ độ ở tiêu đề, nút Copy + mở Google Maps. Mở từ **kết quả tra
+    cứu** hoặc từ **nút bản đồ trên thẻ lịch sử** (chỉ thẻ có toạ độ). Khoá cuộn trang
+    nền khi mở, **Back của điện thoại đóng bản đồ** thay vì thoát app, `invalidateSize`
+    khi mở sheet / xoay máy (nếu thiếu, Leaflet vẽ lệch hoặc xám). Leaflet tải lỗi
+    (mất mạng, CDN bị chặn) → khối dự phòng + nút mở Google Maps, không màn trắng.
+  - **HTTPS cho LAN (để cài PWA trên điện thoại thật)**: PWA chỉ chạy trong
+    *secure context* — mở `http://<IP-LAN>:3000/m/` thì trình duyệt **không** đăng ký
+    service worker và **không** bắn `beforeinstallprompt`, nên trước đây không có nút
+    cài. `server.js` nhận `HTTPS_PORT` (vd. `HTTPS_PORT=3443 node server.js`) → mở thêm
+    HTTPS song song HTTP, cert tự ký sinh bằng `node:crypto` ([`tls-selfsigned.js`](tls-selfsigned.js),
+    **không cần OpenSSL**, không thêm dependency), SAN tự gồm mọi IPv4 LAN + localhost +
+    127.0.0.1, hạn 825 ngày, dùng lại cert còn hạn và tự sinh lại khi đổi IP. Thư mục
+    `.certs/` đã vào `.gitignore`.
+  - **Banner cài đặt không còn im lặng**: nếu trình duyệt không hỗ trợ cài tự động
+    (iOS/iPadOS, Firefox, hoặc đang chạy HTTP), banner vẫn hiện và nút đổi thành
+    **"Cách cài"** → mở bottom sheet hướng dẫn **theo từng trình duyệt** (Safari iOS:
+    Chia sẻ → Thêm vào MH chính; Chrome iOS: mở bằng Safari; Firefox/Edge: menu ⋮).
+    Riêng trường hợp HTTP, hướng dẫn nói thẳng *cần HTTPS* kèm cách xử lý cảnh báo
+    chứng chỉ tự ký. Có prompt thật thì nút giữ là **"Cài"** và gọi hộp thoại hệ thống.
+  - **Điều hướng**: mở trang chủ bằng UA di động → `302 /m/` (có lối thoát `?desktop=1`);
+    `/m` tự `301` sang `/m/`.
+  - `server.js`: khai báo MIME `application/manifest+json` cho `.webmanifest` (Express 4
+    mặc định trả `octet-stream` → trình duyệt từ chối cài PWA) và ép `Cache-Control:
+    no-cache` cho tài nguyên `/m/*.js|css|html|webmanifest` để bản mới không bị SW giữ lại.
+  - **`_mobtest.js`** — 159 assertion tĩnh: mọi handler inline trong `index.html` đều có
+    trong `app.js`, manifest/SW/offline hợp lệ, đúng endpoint (và **không** dùng
+    `/api/phones`), lịch sử chỉ `mode=single`, dữ liệu máy chủ đều qua `esc()`, server
+    khai báo MIME + redirect đúng thứ tự trước `express.static`, tab ghi vào URL +
+    `popstate` + hướng dẫn cài cho iOS, và bản đồ (Leaflet, 3 lớp nền, marker/vòng bán
+    kính, invalidateSize, Back đóng sheet, escape toạ độ).
+  - **`_mobe2e.js`** — 36 assertion end-to-end trên server thật: đăng ký → captcha →
+    kích hoạt email → đăng nhập → `/api/me` → tra cứu (hit/miss/400) → lịch sử chỉ
+    `mode=single` → xoá 1 lượt → chuyển đổi eNB/ECI (cả 2 chiều) → không lộ lịch sử
+    khi không có token. Tự tạo & xoá user test.
+  - **`_pwatest.js`** — 18 assertion PWA bằng Chrome/Edge headless (CDP): manifest đọc
+    được + không lỗi khả cài đặt, SW `activated` scope `/m/`, precache đủ app shell,
+    **tắt server vẫn mở được app từ cache**, `/m/offline.html` render offline, và
+    **không có response `/api/` nào bị cache**. Tự bỏ qua nếu máy không có Chrome
+    (đặt `CHROME_PATH` để chỉ định).
+- **Public API v1 cho ứng dụng/website khác** — xác thực bằng **API key** (server-to-server)
+  hoặc **JWT** (đăng nhập bằng tài khoản). Không bật CORS.
+  - `GET /api/v1/health` — kiểm tra kết nối, không cần xác thực.
+  - `POST /api/v1/login` — đăng nhập bằng username **hoặc email**, trả `token` (JWT 24h,
+    `expires_in: 86400`) + `user` (id, username, email, role, status, credit_balance).
+  - `GET /api/v1/me` — thông tin tài khoản đang dùng, kèm thông tin key (scope, hạn mức)
+    khi xác thực bằng key.
+  - `GET /api/v1/cells/resolve` — tra cứu cell, trả `cell` (mcc/mnc/lac/cellid/sector/lat/
+    lon/range/radio/address), `source`, `radio_source`, `radio_confident`, `credit`.
+  - **Dùng chung `resolveCellCore()`** với `/api/cells/resolve` của web (tách ra từ handler
+    cũ) → thứ tự nguồn, geo gate và cách trừ điểm không bao giờ lệch nhau.
+  - Mã lỗi máy đọc được: `NO_CREDENTIALS`, `INVALID_KEY`, `INVALID_TOKEN`, `KEY_REVOKED`,
+    `KEY_EXPIRED`, `KEY_DISABLED`, `INSUFFICIENT_SCOPE`, `INSUFFICIENT_CREDIT`,
+    `CELL_NOT_FOUND`, `BAD_REQUEST`, `ACCOUNT_DISABLED`, `EMAIL_NOT_VERIFIED`, `RATE_LIMITED`.
+  - Header hạn mức mỗi response: `X-RateLimit-Limit`, `X-RateLimit-Remaining`,
+    `X-RateLimit-Limit-Day`, `X-RateLimit-Remaining-Day`, `Retry-After` khi 429.
+- **Tab "API" trong trang admin** — 3 tab con: **Khoá API** (tạo, tắt/bật, sửa hạn mức &
+  quyền, thu hồi, xoá), **Nhật ký gọi API** (lọc theo trạng thái / theo khoá), **Tài liệu
+  tích hợp** (endpoint, mã lỗi, ví dụ cURL, nút copy). Thẻ thống kê: tổng key, đang hoạt
+  động, đã thu hồi, request 24h, lỗi 24h, cell đã tra 24h.
+- **Bảng `api_keys`** — key lưu dạng SHA-256 (`key_hash`), chỉ giữ `key_prefix` 12 ký tự đầu
+  để admin nhận ra key. Key thô chỉ trả về **đúng 1 lần** lúc tạo. `revoked_at` (thu hồi vĩnh
+  viễn) tách khỏi `enabled` (tạm tắt, bật lại được) → key đã thu hồi không thể bật lại.
+- **Bảng `api_request_logs`** — mọi request `/api/v1`: key, user, method, path, status,
+  thời gian xử lý, số cell, điểm đã trừ, IP, user-agent, lỗi. Không bao giờ ghi key thô.
+  Tự dọn theo `api_request_logs_retention_days` (mặc định 30 ngày, cron 03:35).
+- **`api-keys.js`** — module sinh/hash/kiểm tra key, rate limit cửa sổ trượt (phút + ngày),
+  CRUD, log, thống kê, prune.
+- **`API.md`** — tài liệu tích hợp đầy đủ: xác thực, từng endpoint, bảng mã lỗi, ví dụ
+  Node.js / PHP / Python, lưu ý bảo mật.
+- **`_apitest.js`** — 148 assertion: health, login (username/email/hoa-thường), JWT, API key
+  (cả `X-API-Key` và `Bearer`), scope, resolve (200/400/404), tắt/bật/hết hạn/thu hồi/xoá,
+  chủ key bị khoá/chưa kích hoạt, log, stats, và kiểm tra bảo mật (không lộ hash/raw key,
+  không có CORS, `hasScope` không bao giờ cấp `admin`).
+
+### Changed
+- **Đường dẫn dữ liệu cấu hình được** — DB và thư mục upload không còn phụ thuộc vị trí code:
+  - `DB_PATH` (mặc định vẫn là thư mục CHA của repo như cũ) — production trỏ vào
+    `/opt/cell-tracker/shared/database.sqlite`.
+  - `UPLOAD_DIR` thay cho `multer({ dest: 'uploads/' })` tương đối theo CWD (trước đây
+    systemd chạy sai `WorkingDirectory` sẽ ghi file vào `/`); thư mục `uploads/tracker`,
+    `uploads/clf` được tạo theo cùng biến này.
+- **`HOST`** để giới hạn interface listen (prod: `127.0.0.1`, sau Nginx).
+- **`TRUST_PROXY`** bật `app.set('trust proxy')` — cần khi chạy sau reverse proxy để link
+  kích hoạt email và `returnUrl` payOS dựng đúng `https` và đúng IP client.
+- **Bỏ `better-sqlite3` khỏi `dependencies`** — không có chỗ nào `require`, chỉ làm nặng
+  `npm ci` trên server (native build).
+- `package.json` thêm `engines.node >= 22` (khớp Node 24 dùng ở local/production).
+
+### Fixed
+- **Production thiếu `JWT_SECRET` giờ dừng hẳn** (log `FATAL`) thay vì chạy với secret
+  mặc định `cell-tracker-secret-key-2024` — trước đây ai biết mã nguồn cũng tự ký được
+  token admin.
+- `HTTPS_PORT` rỗng (`HTTPS_PORT=`) được hiểu là `0` thay vì bật HTTPS trên cổng 0.
+- Script test (`_authtest.js`, `_credittest.js`, `_payos.test.js`, `_topupapi.js`,
+  `_topupflow.js`, `_batchcredit.test.js`, `_googlesource.test.js`) tôn trọng `DB_PATH`
+  để patch sqlite3 trỏ đúng file DB tạm mà `database.js` đang dùng.
+- **Nhấn vào ô ngày vẫn không mở bảng chọn — thay hẳn sang 1 bảng lịch tự vẽ.** Bản sửa
+  trước (bên dưới) vẫn dựa vào `<input type="date">` native nên không đủ: mỗi ô là **một**
+  bảng lịch riêng của trình duyệt, và `showPicker()` bị chặn
+  (`NotAllowedError: requires a user gesture`). Nay:
+  - **Bỏ 2 ô `#clDateFromField`/`#clDateToField`**, thay bằng **1 nút lịch `#clDateBtn`** mở
+    **1 popup lịch `#clCalPop`** dùng chung → cả panel chỉ còn **đúng 1 icon lịch**.
+  - **Chọn 1 ngày**: bấm 1 ngày rồi bấm **Áp dụng** (hoặc bấm lần thứ hai vào chính ngày đó).
+  - **Chọn khoảng**: bấm ngày đầu rồi ngày cuối → tô màu cả khoảng; ngày cuối nhỏ hơn ngày
+    đầu thì tự đảo lại.
+  - Điều hướng **năm trước / tháng trước / tháng sau / năm sau**, nút **Hôm nay**, tuần bắt
+    đầu **Thứ 2**, đánh dấu hôm nay bằng chấm nhỏ, ô ngoài tháng vẫn bấm được (mờ).
+  - Nhãn nút: `Mọi ngày` → `18/10/2026` (1 ngày) → `15/10 → 18/10/2026` (khoảng), kèm nút ✕
+    bỏ lọc ngày. Đóng popup khi bấm ra ngoài hoặc nhấn **Esc**.
+  - Giá trị cuối vẫn ghi vào `#dateFrom`/`#dateTo` (nay `type="hidden"`) nên
+    `getFilteredLogs` và code cũ đọc nguyên trạng.
+  - **Bug tự đóng popup**: `renderClCalendar()` dựng lại `innerHTML` nên phần tử vừa click đã
+    bị gỡ khỏi DOM khi sự kiện nổi lên `document` → handler "bấm ra ngoài" thấy target không
+    thuộc `#clDateRange` và đóng popup **ngay sau lần chọn đầu**, làm lần chọn thứ hai (ngày
+    cuối khoảng) rơi vào khoảng trống. Sửa bằng `composedPath()` + cờ `clCalRendering` hạ ở
+    `setTimeout(…, 0)` — hạ đồng bộ trong `finally` là vô dụng vì sự kiện chưa lan tới
+    `document`.
+- **Chọn ngày trong `.cl-date-range` không hoạt động** (tab Tra cứu danh sách → bộ lọc). Hai
+  nguyên nhân cộng lại:
+  - `#clRecordsBlock` — khối chứa bộ lọc + khoảng ngày — chỉ được gỡ `hidden` khi **đã có**
+    danh sách cell (`if (search && has)`). Lúc chưa nạp file, cả khối bị `display:none` nên ô
+    ngày có kích thước `0×0` và không nhận được click; `showPicker()` cũng không mở vì phần
+    tử không render. Nay khối **luôn hiện** (`if (search) search.hidden = false`).
+  - Icon lịch gọi `openClDatePicker()` → `input.showPicker()`, mà `showPicker()` ném
+    `NotAllowedError` nếu thiếu user-activation. Input native vốn đã phủ khít ô
+    (`opacity:0`, `z-index:1`) nên nhận click trực tiếp — bỏ `onclick` khỏi icon và bỏ
+    `showPicker()` (đổi sang `input.click()`), trình duyệt tự mở bảng chọn ngày.
+- **Lịch sử "Tra cứu danh sách" không hiển thị** — bấm mở mục ra khung trống dù API trả
+  đủ phiên. `renderHistSections()` truyền **`'histBatchList'`** (thẻ `<div class="hist-list">`
+  nằm *bên trong* body) vào chỗ cần **`'histBatchBody'`** (chính body thu gọn). Hệ quả:
+  `hidden` bị gỡ trên **danh sách**, còn `#histBatchBody` vẫn giữ `hidden` từ HTML → wrapper
+  giãn ra (`is-expanded`) nhưng nội dung bên trong vẫn bị ẩn, nên không thấy phiên nào. Mục
+  "Tra cứu đơn lẻ" không bị vì đã trỏ đúng `'histSingleBody'`.
+  - Sửa lại cặp id cho mục danh sách.
+  - `toggleHistSection()` trước đây chỉ nạp dữ liệu cho mục **"single"**; mở mục **"batch"**
+    không gọi lại API nên danh sách có thể là bản cũ. Nay nạp lại cả hai khi mở (vẫn không
+    gọi mạng khi đóng, và vẫn giữ luật chỉ 1 mục mở tại một thời điểm).
+- **Giờ trong Lịch sử tra cứu lệch 7 tiếng** (hiện `14:57` thay vì `21:57`). SQLite lưu
+  `created_at` bằng `CURRENT_TIMESTAMP` theo **UTC**, dạng `"2026-10-20 14:57:13"` và **không
+  kèm hậu tố múi giờ**. `new Date(chuỗi)` của JS hiểu chuỗi đó là giờ **địa phương**, nên
+  mọi mốc thời gian hiển thị đều lệch đúng offset của người xem (VN: chậm 7 tiếng).
+  - Thêm `parseServerTime(ts)`: chuỗi có `Z` hoặc offset `±hh:mm` thì tôn trọng; chuỗi
+    **không có zone** được dựng bằng `Date.UTC(...)` (tức là coi là UTC); số (epoch ms) giữ
+    nguyên; không khớp → `new Date(s)`.
+  - Áp cho `fmtDateTime`, `fmtTick`, so sánh sắp xếp timeline, `t0`/`t1` và cột thời gian ở
+    bảng dữ liệu di động. Đã kiểm chứng cùng một mốc `14:57:13` UTC: Asia/Saigon →
+    `21:57`, Asia/Tokyo → `23:57`, UTC → `14:57`.
+- **Tab Lịch sử: mục "Tra cứu đơn lẻ" không hiện dữ liệu ngay lần đầu mở tab** — phải đóng
+  rồi mở lại mục mới thấy. Nguyên nhân: mục này mặc định ĐANG MỞ (`histSectionOpen.single =
+  true`) nhưng `switchTab('lookuphistory')` chỉ nạp danh sách phiên (`loadHistBatches`), còn
+  lịch sử tra đơn lẻ chỉ được nạp bên trong `toggleHistSection()` — mà hàm đó chỉ chạy khi
+  user bấm đóng/mở. Nay `switchTab` nạp luôn nếu mục đang mở; mục đang đóng vẫn KHÔNG nạp
+  (giữ thiết kế "chỉ nạp khi mở").
+- **Bỏ cờ `histSingle.loaded`** — nguồn gốc lỗi thứ hai: `applyHistDate()` set cờ này ngay cả
+  khi mục đang đóng, nên lần mở sau bị chặn không nạp. Giờ mục "Tra cứu đơn lẻ" nạp lại MỖI
+  LẦN mở (dữ liệu có thể vừa thay đổi do vừa tra cell mới) — đúng hơn cả về mặt dữ liệu.
+- **`hasScope` không còn cấp quyền `admin`**: trước đây nếu chuỗi scope chứa `admin` (hoặc
+  bất kỳ chuỗi khớp) thì `hasScope(scopes, 'admin')` trả `true`. Nay chỉ 2 scope của API
+  công khai (`lookup`, `account`) mới hợp lệ — API công khai không bao giờ có quyền admin.
+- **Xoá `authResultPage` bị khai báo trùng** trong `server.js` (2 bản y hệt).
+- **`deleteLookupEntry` dùng biến `r` trong khi biến là `row`** → `ReferenceError` làm popup
+  xác nhận xoá lượt tra đơn lẻ không mở được.
+
+### Added
+- **Lọc theo trạng thái cell ở tab "Tra cứu danh sách"**: thêm hàng chip trong bộ lọc với 4
+  lựa chọn, mỗi chip kèm số dòng:
+  - **Tất cả** — mọi dòng của phiên.
+  - **Đã tra được** (`found`) — cell đã có toạ độ.
+  - **Chưa tra được** (`unpaid`) — chưa trả phí / hết điểm / đang tra (`unpaid`, `pending`,
+    `busy` gộp chung, vì cả ba đều là "chưa có kết quả cuối cùng").
+  - **Không có kết quả** (`miss`) — đã tra nhưng không nguồn nào có cell.
+
+  Lọc áp **sau** bộ lọc hành động / khoảng ngày / tìm kiếm nên số dòng luôn khớp chip vừa
+  bấm. Số trên chip đếm trên **toàn bộ** danh sách phiên (không phụ thuộc bộ lọc khác) để
+  người dùng thấy tổng quan trước khi bấm; số này cũng là badge trên nút **Bộ lọc**.
+  Đổi/nạp/mở phiên mới tự đưa bộ lọc về **Tất cả**.
+  - Dùng container `#clRecordStatusChips`, **không** dùng `#clStatusChips` — id đó đã thuộc
+    bộ lọc trạng thái của overlay bảng cell; đặt trùng sẽ làm `getElementById` trả sai phần tử
+    và bảng cell mất chip.
+  - Trạng thái dòng lấy từ `clRecordState()` (ưu tiên `clAnalyze.results`, rồi trạng thái cell
+    do server trả, cuối cùng suy từ quyền xem toạ độ) và chuẩn hoá key bằng
+    `canonicalClientKey()` — cell ID ngắn được đổi sang ECI nên nếu so key thô sẽ lệch và mọi
+    dòng bị xếp nhầm vào "chưa tra được".
+
+### Added
+- **Nút "Tra lại" trên thẻ lịch sử tra đơn lẻ** (`.hist-card--single`, thêm `.hist-card--rat`
+  khi có RAT). Chỉ hiện với cell **không tra được** (không có toạ độ); đứng ngay trước nút
+  Xoá trong cụm mới `.hist-card-acts`, cùng khuôn icon 12px.
+  - Bấm → nút chuyển spinner, thẻ hiện thanh trạng thái `.hist-retry-bar.busy` ("Đang tra
+    lại…") **ngay** trước khi gọi API.
+  - Tra ra toạ độ → cập nhật `lat/lng/range/radio/source` ngay trên dòng, thanh xanh, toast
+    `Đã tra lại — tìm thấy toạ độ.`; tải lại danh sách ⇒ **nút Tra lại tự mất** vì thẻ đã có
+    toạ độ.
+  - Vẫn không ra → thanh đỏ + toast `Đã tra lại — vẫn không nguồn nào có cell này.`, giữ nút.
+  - Hết điểm (HTTP 402) → thanh vàng + toast nêu `điểm/cell · số dư`, **không** đánh dấu là
+    "không ra kết quả"; nút Tra lại vẫn còn để tra lại sau khi nạp điểm.
+  - Lỗi khác → thanh `fail`, không nhầm với miss. Chống bấm trùng bằng `histRetryBusy`.
+  - Khác `lookupCell`: **không** ghi vào form tra cứu / khu kết quả ở tab khác, không nhảy bản
+    đồ — kết quả hiện ngay tại thẻ.
+
+### Changed
+- **Dòng không có cuộc gọi hiện chính cell ID thay cho nhãn "Cell trong phiên".** Chỗ số điện
+  thoại giờ là `log-card-cell` dạng `MCC-MNC-LAC-CELLID` (class thêm `log-card-cell-lead` để
+  đậm hơn một chút). Nhãn `calllogs.cellOnly` chỉ còn làm fallback khi dòng không có `cellid`.
+- **Bổ sung tra cứu 1 cell ngay trên dòng bản ghi.** Cuối `.log-card-sub` có icon
+  `.log-card-go` (chỉ hiện với cell **chưa tra** / **chưa đủ điểm**, tức `unpaid` hoặc
+  `pending`; cell đã tra ra hoặc đã xác nhận không có kết quả thì ẩn).
+  - Bấm → dòng chuyển `busy` và hiện thanh trạng thái `.log-lookup-bar.busy` ("Đang tra cell
+    này…") **ngay**, trước khi gửi API.
+  - Tra ra toạ độ → ghi vào `clAnalyze.results` **và** mọi dòng `myLogsCache` cùng cell ⇒ dòng
+    tự nhảy sang nhóm "đã tra được", chip đếm lại, bộ lọc trạng thái thấy ngay. Thanh xanh
+    "Đã tra được — có toạ độ" + toast báo số điểm đã trừ.
+  - Không nguồn nào có cell → state `miss`, thanh đỏ "Không nguồn nào có cell này" + toast.
+  - Thiếu điểm → **giữ `unpaid`** (không đánh dấu miss), thanh vàng + toast báo "1 điểm/cell ·
+    số dư N điểm"; nút tra cứu vẫn còn để nạp điểm rồi tra lại.
+  - Dùng chung `uploadId` của phiên nên server tái dùng kết quả đã trả phí, **không trừ 2 lần**;
+    chống bấm trùng bằng `clOneCellBusy`; lỗi mạng khôi phục nguyên trạng thái cũ.
+  - Thanh trạng thái tự ẩn sau ~3 giây.
+- **Nút lịch nằm CHUNG hàng `.cl-filter-chips`, cùng format icon với các chip khác.**
+  - `#clDateBtn` giờ là chip thứ 6 của `#clActionChips` (5 loại hành động + 1 lịch), cùng
+    class `.cl-chip` → cùng cao **30px**, cùng `flex: 1 1 0`, cùng bo góc **6px**, cùng trạng
+    thái `.active`, **icon-only + tooltip `title`** đúng khuôn các chip hành động.
+  - Bỏ hẳn kiểu nút rộng có nhãn chữ (`.cl-date-btn`, `.cl-date-btn-txt`, `.cl-date-btn-caret`).
+  - Thay nhãn chữ bằng **chấm đỏ `.cl-chip-dir`** ở góc phải-dưới (đúng chỗ mũi tên hướng của
+    chip Gọi/SMS) để báo "đang lọc ngày".
+  - Khoảng ngày đang lọc hiện ở dòng riêng `#clDateActive` (chỉ hiện khi có lọc) kèm nút ✕;
+    toàn bộ khoảng cũng nằm trong `title` của chip.
+  - **Bug popup tụt 84px**: popup từng đặt trong `#clDateRange` mà khối đó có
+    `position: relative` → `offsetParent` là chính khối nằm **dưới** hàng chip nên cộng dồn
+    khoảng cách. Nay `#clCalPop` đặt trực tiếp trong `.cl-filter-panel` (bỏ
+    `position: relative` khỏi `.cl-date-range`) và `positionClCalendar()` canh `top` theo đáy
+    thật của `#clActionChips` (+6px), canh lại mỗi lần render và khi cửa sổ đổi bề rộng.
+- **Bộ lọc trạng thái cell đồng bộ hiển thị với hàng chip hành động.** `#clRecordStatusChips`
+  giờ cùng nhịp hình học với `.cl-filter-chips`: cùng chiều cao **30px**, cùng `gap: 4px`,
+  cùng bo góc **6px**, cùng dàn đều `flex: 1 1 0` → 2 hàng chip xếp khít thành một khối lọc.
+  Bỏ kiểu "pill bo tròn 999px" lệch tông với hàng trên. Thứ tự panel: **hành động → trạng
+  thái → ngày**, hai hàng chip đứng sát nhau.
+  - Nhãn rút gọn để 4 chip vừa 1 hàng: `Tất cả` / `Tra được` / `Chưa tra` / `Không KQ`;
+    mô tả đầy đủ chuyển vào `title` (`filter.cell*Tip`, có i18n vi + en).
+  - Màn hẹp (`≤ 420px`) ẩn nhãn chữ, chỉ còn icon + số.
+  - Giữ nguyên bảng màu trạng thái của overlay bảng cell (xanh/đỏ/cam).
+- **Card phiên gọn hơn**: bỏ dòng `.cls-meta` (mạng · số cell · số dòng) và icon `.cls-badge`.
+  Card giờ chỉ còn tên file + dòng tổng kết + 2 nút **Mở bảng cell cần tra** / **Đóng**. Số
+  liệu chi tiết đã nằm ở `#clListSummary` ngay dưới nên hiện lại ở `.cls-meta` là lặp. Dòng
+  tổng kết cũng **không còn lặp tên file** khi nằm trong card (đã có ở `.cls-detail`).
+- **Cột cell trong danh sách bản ghi hiện ĐẦY ĐỦ `MCC-MNC-LAC-CELLID`** (trước đây rút gọn
+  `MCC-MNC-LAC/TAC-CELLID` — LTE/NR đổi nhãn thành `TAC`). CSS `.log-card-cell` cho chiếm trọn
+  dòng (`max-width:100%`) để chuỗi dài không bị cắt sớm.
+- **Bỏ hoàn toàn "nguồn kết quả tra cứu" khỏi giao diện** (theo yêu cầu): gỡ badge nguồn
+  (`.cl-src-badge`) ở bảng cell và danh sách bản ghi, dòng "Nguồn:" trong popup cell, nhãn
+  nguồn ở kết quả tra đơn lẻ, icon nguồn ở lịch sử (`histSrcIcon` giờ luôn trả rỗng — giữ hàm
+  để chỗ gọi cũ không vỡ), nguồn trong chi tiết bản ghi và hậu tố "· CSDL nội bộ" trong text
+  trạng thái. Xoá CSS không còn dùng (`.cl-src-badge*`, `.hist-src-i*`). Server/API vẫn trả
+  `source` — chỉ giao diện không hiện nữa.
+- **Khoá API không còn gắn tài khoản — key chỉ là cổng kết nối.** Trước đây tạo key phải
+  chọn một tài khoản chủ, và mọi lượt tra qua key đều trừ điểm tài khoản đó (một key = một
+  người dùng). Nay key **không thuộc ai**: ứng dụng ngoài giữ key để chứng minh được cấp
+  phép và chịu hạn mức riêng, còn danh tính — và điểm bị trừ — đến từ JWT của người dùng
+  đăng nhập. Một key phục vụ được nhiều tài khoản.
+  - Tra cứu cần **cả hai** header: `X-API-Key` (cổng) + `Authorization: Bearer <JWT>`
+    (tài khoản). Chỉ gửi key → `401 USER_REQUIRED` kèm `hint: "POST /api/v1/login"`, vì
+    server không biết trừ điểm của ai.
+  - `auth_type` trong response: `key+jwt` (đủ cả hai) · `jwt` (chỉ JWT, hạn mức riêng theo
+    tài khoản) · `key` (không bao giờ dùng được cho endpoint cần danh tính).
+  - Scope hiệu lực = **giao** của scope key và scope tài khoản → cấp key hẹp vẫn không vượt
+    được quyền của chính người dùng.
+  - Trường mới `require_user` (mặc định `1`) trên key: tắt chỉ dành cho endpoint công khai;
+    endpoint cần danh tính vẫn trả `USER_REQUIRED` khi thiếu JWT.
+  - **Migration `migrateApiKeysToOwnerless()`** — SQLite không bỏ được `NOT NULL`/FK bằng
+    `ALTER TABLE`, nên dựng bảng mới và chép dữ liệu, **giữ nguyên `id`** để
+    `api_request_logs.api_key_id` còn khớp. `user_id` chuyển thành `NULL`. Idempotent:
+    chạy lại không làm gì.
+  - Bỏ `owner_username` / `owner_role` / `user_id` khỏi mọi response; thêm `user_count` (số
+    tài khoản khác nhau đã dùng key) và `require_user`.
+  - **Trang admin**: bỏ ô chọn "Chủ sở hữu", thay bằng công tắc **Bắt buộc đăng nhập**; cột
+    thứ 3 đổi tên thành **Đăng nhập** hiện `bắt buộc` / `không cần`. Tab Tài liệu viết lại:
+    mẫu cURL 4 bước dùng cả 2 header, bảng lỗi thêm `USER_REQUIRED`.
+  - **`API.md` viết lại** theo mô hình cổng + JWT; ví dụ Node.js/PHP/Python đều đăng nhập lấy
+    JWT rồi gửi kèm key. Ghi rõ: không nhúng key vào JS trình duyệt, không dùng chung JWT
+    giữa các người dùng (JWT là nguồn trừ điểm).
+- **Tổng kết phiên chuyển vào trong card phiên** (tab Tra cứu danh sách): `#clListSummary`
+  rời khỏi `#clRecordsBlock` để nằm ngay trong card `#clSessionCard`, dưới tên file — đúng
+  chỗ của phiên đang làm việc thay vì một dải riêng phía trên danh sách. Nội dung giữ
+  nguyên: số bản ghi · số cell có kết quả · không ra · chưa tra. Hai nút **Mở bảng cell cần
+  tra** và **Đóng** giữ nguyên vị trí bên phải card.
+  - Trong card, tổng kết bỏ nền/viền riêng (card đã có khung) và **ẩn tên file** vì tên đã
+    hiện ở `.cls-detail` ngay trên — tránh lặp.
+  - `syncClLoadUi()` nay cập nhật luôn tổng kết khi card hiện; trước đây phần tử mang sẵn
+    `display:none` nên nếu chỉ chuyển chỗ mà không nạp lại thì card hiện mà tổng kết vẫn ẩn.
+- **Thêm nút "Mở trên Google Maps" cạnh icon copy toạ độ** trong popup thông tin cell: cặp
+  icon `.cell-coord-acts` (copy + `fa-map-location-dot`) đứng cạnh nhau sau toạ độ. Bấm mở tab
+  mới `https://www.google.com/maps/search/?api=1&query=<lat>,<lon>` với
+  `window.open(url, '_blank', 'noopener,noreferrer')`. Helper dùng chung
+  `coordActionIcons(lat, lon)` + `openInGoogleMaps(lat, lon)` nên áp cho **mọi** chỗ hiện toạ độ:
+  popup marker bản đồ (`buildCellPopupHtml`), kết quả tra đơn lẻ, ô toạ độ ở bảng cell, dòng
+  chi tiết bản ghi (`clRecordDetailHtml`), và popup lịch sử chuyển động. Icon có
+  `event.stopPropagation()` để không đóng popup/card, kèm `role`/`aria-label`/`title`.
+- **Bấm toạ độ trên bản đồ của cell tra ĐƠN LẺ → popup chi tiết đầy đủ** (giống tra theo
+  danh sách): MCC-MNC-LAC-CellID, eNB/Sector/ECI, công nghệ mạng (màu theo RAT), nguồn dữ
+  liệu (chỉ admin), bán kính, toạ độ + nút copy, địa chỉ cell. Trước đây `highlightCellOnMap`
+  chỉ bind một nhãn chữ nên bấm vào cell không xem được gì.
+  - `highlightCellOnMap(lat, lon, range, radio, label, info)` nhận thêm `info` và dựng popup
+    bằng `buildCellPopupHtml()` — dùng chung builder với marker tra theo danh sách.
+  - Bind popup cho **cả pin và đường tròn bán kính** → bấm vùng nào cũng mở chi tiết.
+  - Áp dụng cho 3 đường: dòng ở Lịch sử tra đơn lẻ (`histOpenOnMap`), dòng bản ghi ở tab
+    "Tra cứu danh sách" (`openClRecordOnMap`, kèm danh sách lần gọi/SMS cùng cell), và dòng
+    ở ô tìm kiếm cell (`openCellSearchResult`). Hai handler sau thay cho `onclick` nhồi tham
+    số, dữ liệu lấy từ map `clRecordRows` / `cellSearchRows`.
+- **Sửa lỗi `ReferenceError` trong `deleteLookupEntry`**: dùng biến `r` trong khi biến là
+  `row` → popup xác nhận xoá lượt tra đơn lẻ bị lỗi trước khi mở.
+- **Popup `?` bám theo panel**: bề rộng = bề rộng panel trừ lề 8px mỗi bên, **canh giữa panel**
+  (đo thật: panel 340 → popup 324, khe 8/8; kéo panel lên 520 → popup 504, vẫn cân). Tự đặt lại
+  vị trí khi panel đổi bề rộng hoặc cửa sổ resize. Nội dung dài thì cuộn bên trong, không tràn
+  viewport.
+- **Popup lịch nằm SÁT icon lịch**: cách đáy nút 2px, mép phải popup trùng mép phải nút (đo thật
+  `topGap: 2`, `rightAligned: true`).
+- **Sửa lỗi toạ độ popup trong panel**: `#sidebar` là `position: fixed` nên nó trở thành
+  containing block của phần tử con `position: fixed` → popup bị lệch đúng 48px theo trục dọc.
+  Hai popup (`showHelpPopup`, `histDatePopup`) nay được gắn vào `<body>` trước khi đặt toạ độ.
+- **Tab "Lịch sử tra cứu" thành accordion**: mục **Tra cứu đơn lẻ** lên trên, **mở sẵn**; mục
+  **Tra cứu danh sách** xuống dưới, **đóng mặc định**. Mục đang mở chiếm hết chiều cao panel
+  (`.hist-sub.is-expanded`, danh sách tự cuộn, pager ghim đáy); mục đang đóng chỉ còn dòng
+  tiêu đề (33px). Mở mục này thì mục kia **tự đóng** (`toggleHistSection` đặt
+  `histSectionOpen[other] = false`, vẽ lại qua `renderHistSections()`), nên 2 danh sách không
+  bao giờ mở cùng lúc.
+- **Mọi nút xoá trong app dùng popup xác nhận tự dựng** (`#confirmModal` / `openConfirmDialog()`
+  → `Promise<boolean>`) thay `window.confirm()` của hệ điều hành: có tiêu đề + icon, mô tả,
+  khối **cảnh báo nguy hiểm** (đỏ), khối **ghi chú** (xanh), **chi tiết đối tượng sẽ xoá**
+  (tên file / mạng / số cell / số bản ghi / toạ độ / thời gian) và 2 nút Huỷ / Xoá vĩnh viễn.
+  Đóng bằng Esc, bấm nền mờ hoặc nút Huỷ — cả 3 đều trả `false` (không xoá). Áp dụng cho:
+  xoá 1 lượt tra đơn lẻ (`deleteLookupEntry`), xoá 1 phiên tra theo danh sách
+  (`deleteCallLogSession`, cảnh báo riêng "điểm đã trừ KHÔNG hoàn lại" khi phiên đã tra cell),
+  xoá toàn bộ dữ liệu rút list (`resetCallSession`).
 - **Tab "Xem rút list" đổi tên thành "Tra cứu danh sách"** (`tab.callLogs`, cả vi + en).
 - **Chọn mạng + nạp file chỉ hiện ở bước đầu**: khi phiên đã có danh sách cell, khối upload
   được thay bằng **card phiên đang làm việc** (tên file, mạng, số cell, số dòng) với nút
@@ -36,6 +656,11 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
   vietnamobile/gmobile `.png`), tên mạng, mũi tên; mạng chưa hỗ trợ bị khoá trong list.
 
 ### Fixed
+- **Khôi phục `public/index.html`** bị hỏng encoding (ký tự tiếng Việt thành `?`/control char) và
+  thừa 1 thẻ `</div>` làm vỡ layout panel trái. Lấy lại bản sạch từ commit `0f548dd5`, sau đó
+  áp lại toàn bộ thay đổi của đợt này (tab đổi tên, card phiên + nút Đóng, select chọn mạng
+  có logo thật, nút `?` tra cứu đơn lẻ). Đã kiểm tra: 0 ký tự hỏng, số `<div>` mở/đóng khớp
+  (151/151), `_uxtest.js` 606/606 pass.
 - **Tra cứu danh sách Excel nhanh hơn nhiều**: `POST /api/cells/resolve-batch` phase 1
   (tra CSDL nội bộ) không còn 1 query/cell `await` tuần tự. Gom mọi khoá của lô vào
   ít câu `SELECT ... WHERE (lac, cellid) IN (VALUES (?, ?), ...)` (400 khoá/câu) —

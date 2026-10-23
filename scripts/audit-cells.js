@@ -8,7 +8,7 @@
  *   Z — cellid quá dài mà gán radio='GSM' (cellid form ECI bị gán nhầm RAT)
  *   + phân bố row theo source / created_at / user_id
  *
- * Chạy:  node audit-cells.js
+ * Chạy:  node scripts/audit-cells.js
  * Xuất:  audit-cells-report.txt  (cạnh script)
  *
  * Script này chỉ SELECT. Muốn xóa/sửa thì dùng cleanup-online-cells.js.
@@ -18,8 +18,11 @@ const path = require('path');
 const fs = require('fs');
 const sqlite3 = require('sqlite3').verbose();
 
-const DB_PATH = process.env.DB_PATH || 'D:/Code/database.sqlite';
-const OUT_PATH = path.join(__dirname, 'audit-cells-report.txt');
+// Mặc định giữ hành vi cũ: DB nằm ở thư mục CHA của repo (local dev).
+// Production: đặt DB_PATH (xem .env.example).
+const REPO_ROOT = path.dirname(__dirname);
+const DB_PATH = process.env.DB_PATH || path.join(path.dirname(REPO_ROOT), 'database.sqlite');
+const OUT_PATH = path.join(REPO_ROOT, 'audit-cells-report.txt');
 
 const db = new sqlite3.Database(DB_PATH, sqlite3.OPEN_READONLY);
 const q = (sql, params = []) => new Promise((res, rej) =>

@@ -33,13 +33,10 @@ release-artifacts/  export-ignore
 .certs/             export-ignore
 .vscode/            export-ignore
 
-# Dev-only: test, dữ liệu mẫu, script vận hành, hạ tầng CI/CD, tài liệu
-tests/              export-ignore
-sample/             export-ignore
+# Dev-only: script vận hành, hạ tầng CI/CD, tài liệu
 scripts/            export-ignore
 deploy/             export-ignore
 .github/            export-ignore
-/_*                 export-ignore
 audit-*.txt         export-ignore
 README.md           export-ignore
 API.md              export-ignore

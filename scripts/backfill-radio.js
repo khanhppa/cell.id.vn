@@ -6,10 +6,10 @@
  * bừa). Các row như vậy sẽ được ghi nhãn rõ ràng là 'UNKNOWN' để lần chạy sau
  * không xử lại, và để nhìn thấy ngay trong `distribution`.
  *
- * Cách chạy: node backfill-radio.js
+ * Cách chạy: node scripts/backfill-radio.js
  */
-const db = require('./database');
-const { inferRadio } = require('./radio-util');
+const db = require('../database');
+const { inferRadio } = require('../radio-util');
 
 const CHUNK = 5000;
 

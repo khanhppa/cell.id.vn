@@ -22,6 +22,9 @@ coverage/
 .probe*
 *.tmp
 
+# Báo cáo do scripts/audit-cells.js sinh ra
+audit-*.txt
+
 # Logs
 *.log
 server.err

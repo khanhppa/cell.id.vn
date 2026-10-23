@@ -17,15 +17,18 @@
  *   3. Ghi mọi thao tác vào cells_audit.
  *   4. Idempotent: chạy lần 2 → 0 changes, không lỗi.
  *
- * Chạy:  node cleanup-online-cells.js            (dry-run, chỉ in)
- *        node cleanup-online-cells.js --apply    (ghi thật)
+ * Chạy:  node scripts/cleanup-online-cells.js            (dry-run, chỉ in)
+ *        node scripts/cleanup-online-cells.js --apply    (ghi thật)
  */
 
 const path = require('path');
 const fs = require('fs');
 const sqlite3 = require('sqlite3').verbose();
 
-const DB_PATH = process.env.DB_PATH || 'D:/Code/database.sqlite';
+// Mặc định giữ hành vi cũ: DB nằm ở thư mục CHA của repo (local dev).
+// Production: đặt DB_PATH (xem .env.example).
+const REPO_ROOT = path.dirname(__dirname);
+const DB_PATH = process.env.DB_PATH || path.join(path.dirname(REPO_ROOT), 'database.sqlite');
 const APPLY = process.argv.includes('--apply');
 const STAMP = new Date().toISOString().replace(/[:.]/g, '-');
 

@@ -1,12 +1,15 @@
 /**
  * Script 1 lần: xoá dữ liệu "Xem Rút list" (call_logs) + shape bản đồ (annotations)
- * của tài khoản admin (user_id = 1). Chạy: node _purge_admin_logs.js
+ * của tài khoản admin (user_id = 1). Chạy: node scripts/purge-admin-logs.js
  * Backup database.sqlite TRƯỚC khi chạy. Xoá file này sau khi dùng xong.
  */
+const path = require('path');
 const sqlite3 = require('sqlite3');
 const ADMIN_ID = 1;
-// DB thật nằm ngoài repo — theo convention cleanup-online-cells.js.
-const DB_PATH = process.env.DB_PATH || 'D:/Code/database.sqlite';
+// Mặc định giữ hành vi cũ: DB nằm ở thư mục CHA của repo (local dev).
+// Production: đặt DB_PATH (xem .env.example).
+const REPO_ROOT = path.dirname(__dirname);
+const DB_PATH = process.env.DB_PATH || path.join(path.dirname(REPO_ROOT), 'database.sqlite');
 const db = new sqlite3.Database(DB_PATH);
 const all = (sql, p) => new Promise((res, rej) => db.all(sql, p || [], (e, r) => e ? rej(e) : res(r)));
 const run = (sql, p) => new Promise((res, rej) => db.run(sql, p || [], function (e) { e ? rej(e) : res(this.changes); }));

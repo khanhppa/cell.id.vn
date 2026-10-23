@@ -1,0 +1,36 @@
+# ============================================================================
+# /etc/sudoers.d/celltracker-ci — quyền TỐI THIỂU cho GitHub Actions runner
+# ----------------------------------------------------------------------------
+# Cài:  sed 's/__RUNNER_USER__/ghrunner/g' deploy/ci/sudoers-celltracker \
+#         > /etc/sudoers.d/celltracker-ci
+#       chmod 440 /etc/sudoers.d/celltracker-ci
+#       visudo -cf /etc/sudoers.d/celltracker-ci
+#
+# Nguyên tắc:
+#  • Không cấp ALL=(ALL). Chỉ đúng script deploy + lệnh đọc trạng thái.
+#  • deploy-release.sh phải chạy root vì nó: npm ci vào thư mục release, chown
+#    cho user app, đổi symlink /opt/cell-tracker/current, restart systemd.
+#  • Wildcard `*` cho phép truyền artifact bất kỳ — chấp nhận được vì runner chỉ
+#    phục vụ repo này (không cho workflow từ fork chạy trên self-hosted runner),
+#    và script tự kiểm tra artifact phải có server.js/package.json.
+# ============================================================================
+
+Defaults:__RUNNER_USER__ !requiretty
+Defaults:__RUNNER_USER__ secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Deploy một release (script tự rollback nếu health gate fail)
+__RUNNER_USER__ ALL=(root) NOPASSWD: /opt/cell-tracker/bin/deploy-release.sh *
+
+# Trạng thái/khởi động lại service (workflow chỉ dùng để chẩn đoán)
+__RUNNER_USER__ ALL=(root) NOPASSWD: /usr/bin/systemctl restart cell-tracker, \
+                                     /usr/bin/systemctl is-active cell-tracker, \
+                                     /usr/bin/systemctl reset-failed cell-tracker, \
+                                     /usr/bin/systemctl status cell-tracker, \
+                                     /bin/systemctl restart cell-tracker, \
+                                     /bin/systemctl is-active cell-tracker, \
+                                     /bin/systemctl reset-failed cell-tracker, \
+                                     /bin/systemctl status cell-tracker
+
+# Log service khi deploy lỗi
+__RUNNER_USER__ ALL=(root) NOPASSWD: /usr/bin/journalctl -u cell-tracker *, \
+                                     /bin/journalctl -u cell-tracker *

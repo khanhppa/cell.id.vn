@@ -1319,6 +1319,25 @@ app.get('/api/version/changelog', requireAuth, requireAdmin, (req, res) => {
 });
 
 // ========================
+// Health check (public, KHÔNG lộ dữ liệu)
+// ========================
+// Dùng cho: Nginx/uptime monitor, CI/CD sau khi deploy, smoke test.
+// Khác `/api/version`: endpoint này TRUY VẤN SQLite (`SELECT 1`) nên phát hiện được
+// DB hỏng/khoá/chưa mount — đúng loại lỗi làm web "xanh process nhưng chết chức năng".
+// Không trả thông tin nội bộ (không tên bảng, không số user, không đường dẫn).
+app.get('/healthz', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  db.get('SELECT 1 AS ok', [], (err) => {
+    if (err) {
+      return res.status(503).json({ ok: false, error: 'db_unavailable' });
+    }
+    let ver = null;
+    try { ver = version.getInfo().version; } catch (_) { /* không chặn health check */ }
+    res.json({ ok: true, version: ver, uptime: Math.round(process.uptime()) });
+  });
+});
+
+// ========================
 // Guest trial (public) — 1 lượt tra cứu miễn phí, CHỈ dữ liệu nội bộ.
 // ========================
 // Đọc/parse cookie thô của request thành map tên → giá trị.
@@ -7109,6 +7128,10 @@ ensureUploadDirs();
 
 const HS_PORT = Number(process.env.HTTPS_PORT) || 0; // 0/không đặt/rỗng = không bật HTTPS
 
+// Server handle để shutdown êm đóng được (xem shutdown() ở cuối file).
+let httpServer = null;
+let httpsServer = null;
+
 if (HS_PORT) {
   // HTTPS cho LAN: PWA (service worker + cài đặt) chỉ chạy trong secure context.
   // Cert tự ký sinh bằng node:crypto — không cần OpenSSL. Bỏ qua bằng HTTPS_PORT=0.
@@ -7118,7 +7141,7 @@ if (HS_PORT) {
       dir: path.join(__dirname, '.certs'),
       hosts: ['localhost', '127.0.0.1', ...tlsSelfSigned.lanAddresses()]
     });
-    https.createServer({ key: cred.key, cert: cred.cert }, app).listen(HS_PORT, '0.0.0.0', () => {
+    httpsServer = https.createServer({ key: cred.key, cert: cred.cert }, app).listen(HS_PORT, '0.0.0.0', () => {
       console.log(`HTTPS (LAN, cert tự ký) tại https://localhost:${HS_PORT}`);
       console.log(`  → điện thoại: https://<IP-LAN>:${HS_PORT}/m/  (IP: ${tlsSelfSigned.lanAddresses().join(', ') || 'n/a'})`);
       if (cred.generated) console.log(`  cert mới: ${cred.path.cert}`);
@@ -7137,5 +7160,42 @@ function onListening() {
   initIpLookupRetention();
 }
 
-if (HOST) app.listen(port, HOST, onListening);
-else app.listen(port, onListening);
+// ========================
+// Shutdown êm (SIGTERM/SIGINT)
+// ========================
+// systemd gửi SIGTERM mỗi lần `systemctl restart` (deploy) hoặc reboot. Không bắt
+// signal ⇒ Node thoát ngay, request đang chạy (upload Excel, tra cứu) bị cắt giữa
+// chừng và SQLite có thể để lại WAL/journal chưa checkpoint.
+// Ở đây: ngừng nhận kết nối mới → đóng DB → thoát. Quá 10s thì thoát cứng để
+// systemd không phải chờ hết TimeoutStopSec.
+let shuttingDown = false;
+function shutdown(reason) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[shutdown] nhận ${reason} — đóng server…`);
+  for (const task of scheduledTasks.values()) {
+    try { task.stop(); } catch (_) { /* task có thể đã dừng */ }
+  }
+  const finish = () => {
+    db.close((err) => {
+      if (err) console.error('[shutdown] đóng DB lỗi:', err.message);
+      process.exit(0);
+    });
+  };
+  const servers = [httpServer, httpsServer].filter(Boolean);
+  if (!servers.length) return finish();
+  let pending = servers.length;
+  for (const s of servers) {
+    s.close(() => { if (--pending === 0) finish(); });
+  }
+  // Đóng cứng sau 10s: kết nối keep-alive hoặc request treo giữ server mở.
+  setTimeout(() => {
+    console.error('[shutdown] quá 10s — thoát cứng');
+    process.exit(1);
+  }, 10000).unref();
+}
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
+
+if (HOST) httpServer = app.listen(port, HOST, onListening);
+else httpServer = app.listen(port, onListening);

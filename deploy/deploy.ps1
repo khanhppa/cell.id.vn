@@ -110,13 +110,13 @@ try {
         }
     }
 
-    # ---------- 1. test -----------------------------------------------------
-    if ($SkipTests) { Warn2 "Bo qua test (-SkipTests)" }
+    # ---------- 1. smoke test ----------------------------------------------
+    if ($SkipTests) { Warn2 "Bo qua smoke test (-SkipTests)" }
     else {
-        Step "Smoke test cuc bo (_authtest.js)"
-        & node _authtest.js
-        if ($LASTEXITCODE -ne 0) { throw "_authtest.js that bai (exit $LASTEXITCODE) - dung deploy." }
-        Ok "test OK"
+        Step "Smoke test cuc bo (npm run smoke)"
+        & npm run smoke
+        if ($LASTEXITCODE -ne 0) { throw "npm run smoke that bai (exit $LASTEXITCODE) - dung deploy." }
+        Ok "smoke OK"
     }
 
     # ---------- 2. dong goi ------------------------------------------------

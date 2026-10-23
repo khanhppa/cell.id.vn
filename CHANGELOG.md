@@ -6,6 +6,30 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
 
 ## [Unreleased]
 
+### Removed — dọn repo trước khi lên production
+- **Toàn bộ test/harness thủ công ở gốc repo** (31 file `_*.js`) và `tests/` (5 file).
+  Đã chạy baseline trước khi xoá: `_authtest.js` 99/99, `_payos.test.js` 103/103,
+  `_credittest.js` 304/304, `_uxtest.js` 800/800, `_version.test.js` 76/77 (1 fail có sẵn:
+  `ALWAYS_REVALIDATE` đã mở rộng cho `admin.js`/`admin.html` nhưng test chưa cập nhật).
+  Toàn bộ vẫn lấy lại được từ tag `backup/pre-cleanup-20261024`.
+- **Dữ liệu mẫu `sample/`** (Mobifone/Viettel/Vinaphone) — chỉ dùng bởi test đã xoá.
+- **Snapshot wiki OpenCellID** `opencellid-api.html`, `opencellid-tok.html`,
+  `opencellid-downloads.html` (không file nào tham chiếu; nội dung đã nằm trong `API.md`).
+- **File rác/debug**: `.probe_*` (một file chứa JWT!), log tạm, `audit-cells-report.txt`,
+  `Cell-tracker.code-workspace`, `stop.ps1`.
+- `better-sqlite3` khỏi `dependencies` (không chỗ nào `require`) — trước đó đã bỏ nhưng
+  ghi lại ở đây cho đủ ngữ cảnh.
+
+### Changed — cấu trúc repo
+- **Script vận hành một lần chuyển vào `scripts/`**: `audit-cells.js`, `backfill-radio.js`,
+  `cleanup-online-cells.js`, `purge-admin-logs.js` (trước là `_purge_admin_logs.js`).
+  Bỏ hard-code `D:/Code/database.sqlite`; dùng `DB_PATH` với mặc định giữ hành vi cũ.
+  Kèm `scripts/README.md`. Cả thư mục bị loại khỏi artifact deploy.
+- `.gitignore` chặn `.probe*`, `*.tmp`, `*.tar.gz`, `release-artifacts/`, `audit-*.txt`;
+  `.gitattributes` ép `*.sh` LF, `*.ps1` CRLF và loại `scripts/`, `deploy/`, `.github/`,
+  tài liệu khỏi `git archive`.
+- `package.json`: version `2.10.0`, thêm `npm run smoke` / `npm run check`.
+
 ### Changed
 - **IP Tracker → Bẫy địa chỉ IP** (`/tools/ip-tracker.html`): đổi tên hiển thị trên trang,
   menu **Công cụ** và tiêu đề tab (EN: *IP Address Trap*). Giữ nguyên đường dẫn trang và

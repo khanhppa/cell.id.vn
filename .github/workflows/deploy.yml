@@ -1,0 +1,162 @@
+# ============================================================================
+# Deploy Production — build artifact trên GitHub, deploy trong LXC (LAN)
+# ----------------------------------------------------------------------------
+# Luồng:
+#   push main ──▶ [build: ubuntu-latest]  checkout → npm ci → syntax → smoke
+#                                        → git archive → release.tar.gz + sha256
+#              ──▶ [deploy: self-hosted] download artifact → sudo deploy-release.sh
+#                                        → /healthz + /api/version
+#
+# Vì sao self-hosted: runner chạy TRONG LXC nên gọi được `systemctl` và npm ci
+# tại chỗ, KHÔNG cần mở SSH/port từ Internet. `deploy-release.sh` tự rollback
+# nếu health gate thất bại (xem bin/deploy-release.sh).
+#
+# Cài runner: xem deploy/CICD.md (mục 4). Label yêu cầu: celltracker-lxc
+# ============================================================================
+name: Deploy Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Lý do deploy tay (ghi vào log)'
+        required: false
+        default: 'manual deploy'
+
+permissions:
+  contents: read
+
+# Không bao giờ chạy 2 lần deploy song song (SQLite + node-cron không chịu được
+# 2 instance). Xếp hàng thay vì huỷ — huỷ giữa lúc symlink đang đổi là rủi ro.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  build:
+    name: Build artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      sha256: ${{ steps.meta.outputs.sha256 }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install (production deps only)
+        run: npm ci --omit=dev --no-audit --no-fund
+
+      - name: Syntax check server-side modules
+        run: |
+          set -euo pipefail
+          files=$(git ls-files '*.js' | grep -v '^public/' || true)
+          for f in $files; do node --check "$f"; done
+          echo "OK: $(echo "$files" | wc -l) file"
+
+      - name: Smoke test
+        run: npm run smoke
+
+      - name: Package release
+        id: meta
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          OUT="release-${VERSION}-${GITHUB_SHA::7}.tar.gz"
+          git archive --format=tar.gz -o "$OUT" HEAD
+          SHA=$(sha256sum "$OUT" | awk '{print $1}')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          echo "artifact=$OUT" >> "$GITHUB_OUTPUT"
+          echo "Release $VERSION ($OUT), sha256=$SHA"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: release-*.tar.gz
+          retention-days: 14
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy to LXC
+    needs: build
+    runs-on: [self-hosted, linux, celltracker-lxc]
+    environment:
+      name: production
+    timeout-minutes: 25
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: ${{ runner.temp }}/release
+
+      - name: Show build info
+        run: |
+          echo "version=${{ needs.build.outputs.version }}"
+          echo "sha256=${{ needs.build.outputs.sha256 }}"
+          echo "commit=${{ github.sha }}"
+          echo "trigger=${{ github.event_name }} ${{ inputs.reason }}"
+
+      - name: Stage artifact
+        run: |
+          set -euo pipefail
+          # /opt/cell-tracker/incoming thuộc user runner (install-runner.sh tạo + chown),
+          # nên chỉ cần cp; deploy-release.sh mới cần root.
+          ARTIFACT=$(ls "${{ runner.temp }}"/release/release-*.tar.gz | head -n1)
+          test -n "$ARTIFACT"
+          BASENAME=$(basename "$ARTIFACT")
+          install -m 640 "$ARTIFACT" "/opt/cell-tracker/incoming/$BASENAME"
+          echo "ARTIFACT=/opt/cell-tracker/incoming/$BASENAME" >> "$GITHUB_ENV"
+
+      - name: Deploy (auto-rollback on failed health gate)
+        run: |
+          set -euo pipefail
+          sudo -n /opt/cell-tracker/bin/deploy-release.sh "$ARTIFACT" "${{ needs.build.outputs.version }}"
+
+      - name: Verify from inside LXC
+        run: |
+          set -euo pipefail
+          echo "--- /healthz ---"
+          curl -fsS --max-time 5 http://127.0.0.1:3000/healthz | tee /tmp/healthz.json
+          echo
+          echo "--- /api/version ---"
+          curl -fsS --max-time 5 http://127.0.0.1:3000/api/version
+          echo
+          node -e '
+            const fs = require("fs");
+            const h = JSON.parse(fs.readFileSync("/tmp/healthz.json", "utf8"));
+            if (!h.ok) { console.error("healthz ok=false"); process.exit(1); }
+            const expected = process.env.VERSION;
+            if (expected && h.version !== expected) {
+              console.error(`version mismatch: expected ${expected}, got ${h.version}`);
+              process.exit(1);
+            }
+            console.log(`OK: ${h.version} khỏe, uptime ${h.uptime}s`);
+          '
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+
+      - name: Dump service log on failure
+        if: failure()
+        run: |
+          echo "===== journalctl -u cell-tracker ====="
+          sudo -n journalctl -u cell-tracker -n 120 --no-pager || true
+          echo "===== systemctl status ====="
+          systemctl status cell-tracker --no-pager || true
+          echo "===== releases ====="
+          ls -1dt /opt/cell-tracker/releases/*/ 2>/dev/null | head -n 5 || true
+          echo "===== current -> ====="
+          readlink -f /opt/cell-tracker/current || true

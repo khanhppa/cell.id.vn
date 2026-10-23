@@ -99,9 +99,9 @@ pwsh ./deploy/deploy.ps1 -Target root@192.168.1.50 -FirstDeploy `
        -SeedUploads D:\Code\cell-tracker\uploads
 ```
 
-Script: commit check → smoke test `_authtest.js` → `git archive HEAD` → zip →
+Script: commit check → smoke test `npm run smoke` → `git archive HEAD` → zip →
 scp → (lần đầu: chép DB/uploads vào `shared/`) → chạy `bin/deploy-release.sh`
-trên server → kiểm tra `/api/version`.
+trên server → kiểm tra `/healthz` + `/api/version`.
 
 Sau khi deploy xong:
 
@@ -130,16 +130,18 @@ pwsh ./deploy/deploy.ps1 -Target root@192.168.1.50
 1. Từ chối nếu working tree còn thay đổi chưa commit (`-AllowDirty` để bỏ qua — khi đó zip
    **chỉ chứa HEAD**, không chứa thay đổi chưa commit).
 2. So version với `/api/version` trên server; trùng thì cảnh báo (`-AllowSameVersion` để bỏ qua).
-3. Chạy `node _authtest.js` (smoke test) — `-SkipTests` để bỏ qua.
+3. Chạy `npm run smoke` (boot server với DB tạm + gọi `/healthz`) — `-SkipTests` để bỏ qua.
 4. `git archive HEAD` → `dist/cell-tracker-<version>-<timestamp>.zip`
-   (loại `node_modules`, test `_*`, `sample/`, `tests/`, `.env`, `uploads`, log — theo `.gitattributes`).
+   (loại `node_modules`, `scripts/`, `deploy/`, `.github/`, tài liệu, `.env`, `uploads`, log — theo `.gitattributes`).
 5. scp lên `/opt/cell-tracker/incoming/`, rồi SSH chạy `bin/deploy-release.sh`:
    - giải nén vào `releases/<ts>-<ver>` (staging `mktemp -d` cùng filesystem → `mv` atomic),
    - `npm ci --omit=dev` (compile `sqlite3`/`sharp` nếu cần, ~1–3 phút lần đầu),
    - chuyển symlink `current` (atomic), `systemctl restart`,
-   - **health gate**: poll `/api/version` tới 60s; sai version/như cũ → tự quay về release
-     trước, restart, exit 1,
+   - **health gate**: poll `/healthz` (truy vấn SQLite) tới 60s; sai version/DB lỗi → tự
+     quay về release trước, restart, exit 1,
    - giữ 5 release gần nhất.
+
+> Muốn CI/CD tự động thay vì chạy tay: xem [CICD.md](CICD.md).
 
 Tải ảnh hưởng: mỗi lần deploy app downtime ~2–5 giây (restart Node). Dữ liệu không bị ảnh hưởng.
 
@@ -222,8 +224,12 @@ Sửa `.env` xong phải `systemctl restart cell-tracker`.
 |---|---|---|
 | `deploy/proxmox/create-lxc.sh` | node Proxmox | tạo + cài LXC |
 | `deploy/proxmox/bootstrap-app.sh` | trong LXC | systemd + Nginx + `.env` + ufw + cron backup + certbot |
-| `deploy/deploy.ps1` | máy dev | đóng gói & đẩy bản mới |
-| `bin/deploy-release.sh` | trong LXC (`/opt/cell-tracker/bin`) | nhận release: cài deps, switch symlink, restart, health check, rollback |
+| `deploy/deploy.ps1` | máy dev | đóng gói & đẩy bản mới (thủ công, dự phòng khi runner hỏng) |
+| `deploy/CICD.md` | — | **hướng dẫn CI/CD** (GitHub Actions + self-hosted runner trong LXC) |
+| `deploy/ci/install-runner.sh` | trong LXC | cài GitHub Actions runner (user `ghrunner`, systemd service) |
+| `deploy/ci/sudoers-celltracker` | trong LXC | quyền tối thiểu để runner gọi deploy script |
+| `bin/deploy-release.sh` | trong LXC (`/opt/cell-tracker/bin`) | nhận release (.zip/.tar.gz): cài deps, switch symlink, restart, health check, rollback |
+| `bin/smoke.js` | repo | smoke test boot server + `/healthz` (dùng cho local & CI) |
 | `bin/backup-db.sh` | trong LXC | backup SQLite an toàn khi app đang chạy |
 | `.env.example` | repo | danh sách biến môi trường |
 

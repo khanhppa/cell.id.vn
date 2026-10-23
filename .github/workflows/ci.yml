@@ -1,0 +1,88 @@
+# ============================================================================
+# CI — kiểm tra mọi push/PR, KHÔNG deploy
+# ----------------------------------------------------------------------------
+# Mục đích: bắt lỗi cú pháp, lỗi boot, artifact bẩn TRƯỚC khi merge vào main.
+# Chạy trên runner của GitHub (ubuntu-latest) vì không cần chạm hạ tầng LAN.
+# Deploy thật nằm ở deploy.yml (self-hosted runner trong LXC).
+# ============================================================================
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main          # main do Deploy Production xử lý (đã gồm toàn bộ bước CI)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check + smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install (production deps only)
+        run: npm ci --omit=dev --no-audit --no-fund
+
+      - name: Syntax check server-side modules
+        run: |
+          set -euo pipefail
+          # Chỉ file chạy trên Node (bỏ public/ là JS trình duyệt) — vẫn parse được
+          # nhưng mục tiêu ở đây là bắt lỗi cú pháp của phía server.
+          files=$(git ls-files '*.js' | grep -v '^public/' || true)
+          echo "$files" | sed 's/^/  /'
+          for f in $files; do node --check "$f"; done
+          echo "OK: $(echo "$files" | wc -l) file"
+
+      - name: Smoke test (boot server + /healthz + static)
+        run: npm run smoke
+
+      - name: Verify deploy artifact is clean
+        run: |
+          set -euo pipefail
+          git archive --format=tar.gz -o /tmp/release.tar.gz HEAD
+          tar -tzf /tmp/release.tar.gz | sort > /tmp/release-files.txt
+          echo "--- artifact ($(wc -l < /tmp/release-files.txt) entries) ---"
+          head -n 40 /tmp/release-files.txt
+
+          fail=0
+          need() { if ! grep -qx "$1" /tmp/release-files.txt; then echo "THIẾU: $1"; fail=1; fi; }
+          must_not() { if grep -qE "$1" /tmp/release-files.txt; then echo "KHÔNG ĐƯỢC CÓ: $1"; fail=1; fi; }
+
+          need "server.js"
+          need "package.json"
+          need "package-lock.json"
+          need "database.js"
+          need "public/index.html"
+          need "public/m/sw.js"
+          need "bin/deploy-release.sh"
+          need "bin/smoke.js"
+          need "CHANGELOG.md"
+
+          must_not '^\.env$'
+          must_not '^\.env\.'
+          must_not '^(_|tests/|sample/|scripts/|deploy/|\.github/)'
+          must_not '\.log$'
+          must_not '\.sqlite'
+          must_not '^node_modules/'
+
+          if [ "$fail" -ne 0 ]; then
+            echo "Artifact KHÔNG sạch — xem .gitattributes (export-ignore)."
+            exit 1
+          fi
+          echo "OK: artifact chỉ chứa file production"

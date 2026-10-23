@@ -8,9 +8,12 @@
 # ============================================================================
 *.sh                text eol=lf
 *.ps1               text eol=crlf
-*.js                text
-*.md                text
-*.json              text
+deploy/ci/sudoers-* text eol=lf
+*.js                text eol=lf
+*.json              text eol=lf
+*.md                text eol=lf
+*.yml               text eol=lf
+*.yaml              text eol=lf
 
 # ============================================================================
 # `git archive` (nguồn artifact cho deploy.ps1 và GitHub Actions)

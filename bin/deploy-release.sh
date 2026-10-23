@@ -2,17 +2,22 @@
 # ============================================================================
 # Cell.id.vn — deploy một bản release lên server (chạy TRONG container, bằng root)
 # ----------------------------------------------------------------------------
-#   bin/deploy-release.sh <đường-dẫn-zip> [version-tuỳ-chọn]
+#   bin/deploy-release.sh <artifact.zip|artifact.tar.gz> [version-tuỳ-chọn]
+#
+# Artifact: `git archive` từ máy dev (deploy.ps1) hoặc GitHub Actions (ci/deploy).
+#   - .zip      → unzip
+#   - .tar.gz   → tar -xzf   (định dạng workflow dùng)
 #
 # Các bước (dừng ngay khi gặp lỗi):
-#   1. Giải nén vào $APP_ROOT/releases/<thời-gian>-<version>
-#   2. `npm ci --omit=dev` trong release mới (compile sqlite3/sharp nếu cần)
-#   3. Chuyển symlink `current` sang bản mới (atomic)
-#   4. restart service rồi GỌI /api/version để kiểm tra — sai version hoặc không
-#      lên được ⇒ TỰ ĐỘNG quay về release trước và restart lại, exit 1.
+#   1. Giải nén vào staging trong $APP_ROOT/releases (cùng filesystem → mv atomic)
+#   2. `npm ci --omit=dev` trong staging (compile sqlite3/sharp nếu cần)
+#   3. Chuyển symlink `current` sang bản mới (atomic rename)
+#   4. restart service rồi gọi /healthz + /api/version — sai version, DB lỗi hoặc
+#      không lên được ⇒ TỰ ĐỘNG quay về release trước và restart lại, exit 1.
 #   5. Giữ 5 release gần nhất.
 #
 # Dữ liệu (DB, uploads) nằm ở $APP_ROOT/shared → KHÔNG bao giờ bị đụng tới ở đây.
+# Chạy tay:  sudo /opt/cell-tracker/bin/deploy-release.sh /opt/cell-tracker/incoming/x.tar.gz
 # ============================================================================
 set -euo pipefail
 
@@ -21,44 +26,76 @@ APP_USER="celltracker"
 APP_ROOT="${APP_ROOT:-/opt/cell-tracker}"
 KEEP_RELEASES="${KEEP_RELEASES:-5}"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-60}"   # giây
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/healthz}"
 
-ZIP_PATH="${1:-}"
+ARTIFACT="${1:-}"
 VERSION_ARG="${2:-}"
 
 say()  { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m[warn] %s\033[0m\n' "$*" >&2; }
-die()  { printf '\033[1;31m[deploy] ERROR: %s\033[0m\n' "$*" >&2; exit 1; }
+die()  { printf '\n\033[1;31m[deploy] ERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 
-[[ $EUID -eq 0 ]] || die "phải chạy bằng root"
-[[ -n "$ZIP_PATH" && -f "$ZIP_PATH" ]] || die "không thấy file zip: '${ZIP_PATH}'"
+# Đọc version từ package.json trong artifact mà không cần giải nén toàn bộ.
+read_version() {
+  if [[ "$ARTIFACT" == *.zip ]]; then
+    unzip -p "$ARTIFACT" package.json 2>/dev/null
+  else
+    tar -xzOf "$ARTIFACT" package.json 2>/dev/null
+  fi | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{let v="0";try{v=String(JSON.parse(s).version||"0")}catch(e){};process.stdout.write(v)})'
+}
+
+# Trích `version` từ JSON trên stdin (không cần jq).
+json_version() {
+  node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{let v="";try{v=String(JSON.parse(s).version||"")}catch(e){};process.stdout.write(v)})'
+}
+
+[[ $EUID -eq 0 ]] || die "phải chạy bằng root (dùng: sudo $0 <artifact>)"
+[[ -n "$ARTIFACT" && -f "$ARTIFACT" ]] || die "không thấy artifact: '${ARTIFACT}'"
 id -u "$APP_USER" >/dev/null 2>&1 || die "chưa có user $APP_USER — chạy deploy/proxmox/bootstrap-app.sh trước"
 [[ -f "$APP_ROOT/shared/.env" ]] || die "thiếu $APP_ROOT/shared/.env — chạy bootstrap-app.sh trước"
 [[ -L "$APP_ROOT/current" || -d "$APP_ROOT/current" ]] || warn "chưa có release nào (lần deploy đầu)"
 
+case "$ARTIFACT" in
+  *.zip)     ARTIFACT_TYPE="zip" ;;
+  *.tar.gz|*.tgz) ARTIFACT_TYPE="tar" ;;
+  *) die "artifact phải là .zip hoặc .tar.gz (nhận: $(basename "$ARTIFACT"))" ;;
+esac
+
 TS="$(date +%Y%m%d-%H%M%S)"
 
-# Đọc version từ package.json trong zip mà không cần giải nén toàn bộ
 VERSION="$VERSION_ARG"
 if [[ -z "$VERSION" ]]; then
-  VERSION="$(unzip -p "$ZIP_PATH" package.json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{let v="0";try{v=String(JSON.parse(s).version||"0")}catch(e){};process.stdout.write(v)})' || echo 0)"
+  VERSION="$(read_version || echo 0)"
 fi
+[[ -n "$VERSION" && "$VERSION" != "0" ]] || die "không đọc được version từ package.json trong artifact"
 REL_NAME="$TS-$VERSION"
 NEW_REL="$APP_ROOT/releases/$REL_NAME"
 PREV_REL="$(readlink -f "$APP_ROOT/current" 2>/dev/null || true)"
 
-say "Deploy cell-tracker $VERSION  (release: $REL_NAME)"
+say "Deploy cell-tracker $VERSION  ($ARTIFACT_TYPE, release: $REL_NAME)"
 [[ -n "$PREV_REL" ]] && echo "    release hiện tại: $PREV_REL"
 
 # ---- 1. giải nén ----------------------------------------------------------
 say "1/5 Giải nén"
 mkdir -p "$APP_ROOT/releases"
 STAGING="$(mktemp -d "$APP_ROOT/releases/.staging-XXXXXX")"
-trap 'rm -rf "$STAGING"' EXIT
-unzip -q "$ZIP_PATH" -d "$STAGING"
-[[ -f "$STAGING/server.js" && -f "$STAGING/package.json" ]] || die "zip không đúng cấu trúc (thiếu server.js/package.json)"
+cleanup() { rm -rf "$STAGING"; }
+trap cleanup EXIT
+if [[ "$ARTIFACT_TYPE" == "zip" ]]; then
+  unzip -q "$ARTIFACT" -d "$STAGING"
+else
+  tar -xzf "$ARTIFACT" -C "$STAGING"
+fi
+[[ -f "$STAGING/package.json" ]] || die "artifact không đúng cấu trúc (thiếu package.json)"
+# `git archive` có thể bọc thư mục con tuỳ --prefix: chui vào nếu tầng gốc không có code.
+if [[ ! -f "$STAGING/server.js" ]] && compgen -G "$STAGING/*/server.js" >/dev/null; then
+  nested="$(dirname "$(compgen -G "$STAGING/*/server.js" | head -n1)")"
+  mv "$nested"/* "$STAGING"/ && rmdir "$nested"
+fi
+[[ -f "$STAGING/server.js" ]] || die "artifact không đúng cấu trúc (thiếu server.js)"
 mkdir -p "$STAGING/public" "$STAGING/bin"
 
-# Script quản trị lấy bản mới nhất từ zip nếu có (để bản deploy sau dùng code mới)
+# Script quản trị lấy bản mới nhất từ artifact nếu có (để bản deploy sau dùng code mới)
 for f in deploy-release.sh backup-db.sh; do
   [[ -f "$STAGING/bin/$f" ]] && install -m 755 -o root -g root "$STAGING/bin/$f" "$APP_ROOT/bin/$f"
 done
@@ -73,7 +110,7 @@ if ! npm ci --omit=dev --no-audit --no-fund 2>&1 | tail -n 20; then
   die "npm ci thất bại — release cũ ($PREV_REL) GIỮ NGUYÊN, chưa restart gì."
 fi
 [[ -f "$STAGING/node_modules/sqlite3/lib/sqlite3.js" ]] || die "npm ci xong nhưng thiếu module sqlite3"
-# Bỏ file log/DB lỡ nằm trong zip
+# Bỏ file log/DB lỡ nằm trong artifact
 rm -f "$STAGING"/*.log "$STAGING"/*.sqlite "$STAGING"/*.sqlite-* 2>/dev/null || true
 rm -rf "$STAGING/uploads" "$STAGING/.certs" 2>/dev/null || true
 
@@ -90,16 +127,16 @@ mv -Tf "$APP_ROOT/current.tmp" "$APP_ROOT/current"   # atomic rename
 chown -h "$APP_USER:$APP_USER" "$APP_ROOT/current"
 
 # ---- 4. restart + health gate --------------------------------------------
-say "4/5 Restart service + kiểm tra /api/version"
+say "4/5 Restart service + kiểm tra /healthz"
 systemctl reset-failed "$APP_NAME" >/dev/null 2>&1 || true
 systemctl restart "$APP_NAME"
 
 health_ok=0
 deadline=$(( $(date +%s) + HEALTH_TIMEOUT ))
 while [[ $(date +%s) -lt $deadline ]]; do
-  body="$(curl -fsS --max-time 3 http://127.0.0.1:3000/api/version 2>/dev/null || true)"
+  body="$(curl -fsS --max-time 3 "$HEALTH_URL" 2>/dev/null || true)"
   if [[ -n "$body" ]]; then
-    got="$(printf '%s' "$body" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(String(JSON.parse(s).version||""))}catch(e){}})' || true)"
+    got="$(printf '%s' "$body" | json_version)"
     if [[ -n "$got" && "$got" == "$VERSION" ]]; then health_ok=1; break; fi
   fi
   systemctl is-active --quiet "$APP_NAME" || break
@@ -119,7 +156,7 @@ if [[ $health_ok -ne 1 ]]; then
   fi
   exit 1
 fi
-echo "    OK: /api/version = $VERSION"
+echo "    OK: /healthz báo $VERSION"
 
 # ---- 5. dọn release cũ ----------------------------------------------------
 say "5/5 Giữ $KEEP_RELEASES release gần nhất"

@@ -1,6 +1,6 @@
 {
   "name": "cell-tracker",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "description": "Cell.id.vn — Cell ID Call Log and SMS Location Tracker",
   "main": "server.js",
   "engines": {
@@ -8,7 +8,9 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "smoke": "node bin/smoke.js",
+    "check": "node --check server.js"
   },
   "dependencies": {
     "@payos/node": "^2.0.5",

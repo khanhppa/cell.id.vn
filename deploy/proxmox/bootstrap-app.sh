@@ -40,6 +40,12 @@ mkdir -p "$APP_ROOT"/{releases,shared/uploads,shared/uploads/tracker,shared/uplo
 # Code + runtime file do user app sở hữu; releases bị thay khi deploy nên chown sau mỗi lần.
 chown -R "$APP_USER:$APP_USER" "$APP_ROOT"
 chmod 755 "$APP_ROOT"
+# Nếu đã cài GitHub Actions runner (deploy/ci/install-runner.sh) thì `incoming/`
+# thuộc user runner — chown -R ở trên vừa lấy lại, trả về để CI ghi được artifact.
+if id -u ghrunner >/dev/null 2>&1; then
+  chown -R ghrunner:ghrunner "$APP_ROOT/incoming"
+  chmod 750 "$APP_ROOT/incoming"
+fi
 # .env chứa secret → chỉ user app đọc được
 [ -f "$APP_ROOT/shared/.env" ] && chown "$APP_USER:$APP_USER" "$APP_ROOT/shared/.env" && chmod 600 "$APP_ROOT/shared/.env"
 
@@ -100,7 +106,7 @@ say "systemd: /etc/systemd/system/$APP_NAME.service"
 cat > "/etc/systemd/system/$APP_NAME.service" <<UNIT
 [Unit]
 Description=Cell.id.vn (cell-tracker) — Node production
-Documentation=file://$APP_ROOT/README.md
+Documentation=https://github.com/khanhppa/cell.id.vn#readme
 After=network-online.target
 Wants=network-online.target
 # Chặn vòng restart vô hạn khi cấu hình sai (sửa .env → systemctl reset-failed)

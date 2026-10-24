@@ -43,6 +43,9 @@ esac
 if [[ "$TLS_MODE" != "none" && -z "$DOMAIN" ]]; then
   die "TLS_MODE=$TLS_MODE cần DOMAIN=<tên miền> (vd DOMAIN=cell.id.vn)"
 fi
+# In rõ chế độ ngay đầu để phát hiện chạy NHẦM BẢN SCRIPT CŨ trên server
+# (bản cũ không hiểu TLS_MODE → vẫn chạy certbot và fail).
+say "bootstrap-app.sh — TLS_MODE=$TLS_MODE${DOMAIN:+, DOMAIN=$DOMAIN}"
 
 [[ $EUID -eq 0 ]] || die "phải chạy bằng root trong container"
 command -v node >/dev/null || die "chưa có node — cài bằng deploy/proxmox/create-lxc.sh"
@@ -321,6 +324,13 @@ EOF
 case "$TLS_MODE" in
   self)
     say "Xin chứng chỉ Let's Encrypt cho $DOMAIN (TLS_MODE=self)"
+    # Cảnh báo sớm: HTTP-01 chỉ hoạt động khi domain trỏ THẲNG vào container này.
+    resolved="$(getent ahosts "$DOMAIN" 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ' || true)"
+    [[ -n "$resolved" ]] && echo "    $DOMAIN → $resolved"
+    if printf '%s\n' $resolved | grep -qE '^(104\.(1[6-9]|2[0-7])\.|172\.6[7-9]\.|2606:4700:)'; then
+      warn "$DOMAIN đang đi qua Cloudflare/CDN — Let's Encrypt HTTP-01 sẽ KHÔNG xác thực được từ container này."
+      warn "Dùng TLS_MODE=npm (NPM xin cert bằng DNS-01/Origin Cert), hoặc tạm tắt proxy (grey cloud) khi xin cert."
+    fi
     apt-get install -y -qq certbot python3-certbot-nginx
     cert_ok=0
     if [[ -n "$EMAIL" ]]; then

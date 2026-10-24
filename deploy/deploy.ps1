@@ -43,8 +43,16 @@ param(
     [switch]$AllowSameVersion,
     [string]$SshKey = "",                  # vd: C:\Users\me\.ssh\proxmox_ed25519
     [string]$KnownHostsFile = "",
-    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$RepoRoot = ""                 # mac dinh: thu muc cha cua deploy/
 )
+
+# $PSScriptRoot KHONG duoc danh gia trong param default khi chay bang
+# `powershell -File ...` tren Windows PowerShell 5.1 -> phai tinh sau khi vao script.
+if (-not $RepoRoot) {
+    if ($PSScriptRoot) { $RepoRoot = Split-Path -Parent $PSScriptRoot }
+    elseif ($MyInvocation.MyCommand.Path) { $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path) }
+    else { $RepoRoot = (Get-Location).Path }
+}
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -91,6 +99,42 @@ try {
         }
     }
     else { Ok "working tree sach" }
+
+    # ---------- 0b. kiem tra seed TRUOC khi dung toi server -----------------
+    # Fail som: tranh truong hop da chep artifact / stop service roi moi bao
+    # "khong thay file seed" (da tung xay ra voi D:\Code\database.seed.sqlite).
+    if ($FirstDeploy) {
+        if ($SeedDatabase) {
+            if (-not (Test-Path -LiteralPath $SeedDatabase -PathType Leaf)) {
+                $hint = @(
+                    "Khong thay file seed: $SeedDatabase",
+                    "",
+                    "Tao ban sao nhat quan cua DB truoc (KHONG copy file khi app dang chay):",
+                    "  sqlite3 `"D:\Code\database.sqlite`" `".backup '$SeedDatabase'`"",
+                    "",
+                    "Kiem tra:",
+                    "  sqlite3 `"$SeedDatabase`" `"PRAGMA integrity_check; SELECT COUNT(*) FROM cells;`"",
+                    "",
+                    "Neu khong co sqlite3 trong PATH, cai: winget install SQLite.SQLite",
+                    "Hoac bo qua seed: chay lai KHONG co -SeedDatabase (DB moi, trang)."
+                ) -join "`n"
+                throw $hint
+            }
+            $seedMb = [math]::Round((Get-Item -LiteralPath $SeedDatabase).Length / 1MB, 1)
+            if ($seedMb -lt 0.01) { throw "File seed rong (0 MB): $SeedDatabase - tao lai bang lenh .backup o tren." }
+            Ok "seed DB: $SeedDatabase ($seedMb MB)"
+        }
+        else {
+            Warn2 "Khong co -SeedDatabase: server se dung DB moi (trong)."
+            Warn2 'Muon chuyen du lieu: them -SeedDatabase D:\Code\database.seed.sqlite'
+        }
+        if ($SeedUploads) {
+            if (-not (Test-Path -LiteralPath $SeedUploads -PathType Container)) {
+                throw "Khong thay thu muc uploads: $SeedUploads"
+            }
+            Ok "seed uploads: $SeedUploads"
+        }
+    }
 
     # version dang chay tren server
     $remoteVersion = $null
@@ -164,8 +208,6 @@ try {
     if ($FirstDeploy) {
         if ($SeedDatabase) {
             Step "Seed CSDL (lan dau): $SeedDatabase"
-            if (-not (Test-Path $SeedDatabase)) { throw "Khong thay $SeedDatabase" }
-            Warn2 "Nen tao ban sao nhat quan truoc: sqlite3 `"$SeedDatabase`" `".backup '$SeedDatabase.seed'`""
             & ssh @sshCommon $Target "systemctl stop cell-tracker 2>/dev/null; true"
             & scp @sshCommon $SeedDatabase "${Target}:$APP_ROOT/shared/database.sqlite.upload"
             if ($LASTEXITCODE -ne 0) { throw "scp DB seed that bai" }
@@ -174,7 +216,6 @@ try {
         }
         if ($SeedUploads) {
             Step "Seed uploads (lan dau): $SeedUploads"
-            if (-not (Test-Path $SeedUploads)) { throw "Khong thay $SeedUploads" }
             & scp @sshCommon -r $SeedUploads "${Target}:$APP_ROOT/shared/uploads.incoming"
             if ($LASTEXITCODE -ne 0) { throw "scp uploads that bai" }
             Invoke-Ssh "cp -a $APP_ROOT/shared/uploads.incoming/. $APP_ROOT/shared/uploads/ && rm -rf $APP_ROOT/shared/uploads.incoming && chown -R celltracker:celltracker $APP_ROOT/shared/uploads"

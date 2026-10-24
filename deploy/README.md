@@ -170,18 +170,28 @@ Script (idempotent, chạy lại nhiều lần được):
 Dữ liệu đang chạy ở local: `D:\Code\database.sqlite` (~61MB) và `D:\Code\cell-tracker\uploads\`.
 
 ```powershell
-# 1) (Khuyến nghị) tạo bản sao nhất quán của DB đang dùng (an toàn cả khi app đang chạy)
-sqlite3 D:\Code\database.sqlite ".backup 'D:\Code\database.seed-20261022.sqlite'"
+# 1) Tạo bản sao nhất quán của DB đang dùng (an toàn cả khi app đang chạy)
+#    KHÔNG copy file database.sqlite khi app đang chạy (WAL có thể làm file hỏng).
+sqlite3 D:\Code\database.sqlite ".backup 'D:\Code\database.seed.sqlite'"
 
-# 2) từ gốc repo, deploy lần đầu kèm seed dữ liệu
+# 2) Kiểm tra bản sao trước khi deploy (phải in "ok" + số cell)
+sqlite3 D:\Code\database.seed.sqlite "PRAGMA integrity_check; SELECT COUNT(*) FROM cells;"
+
+# 3) Từ gốc repo, deploy lần đầu kèm seed dữ liệu
 pwsh ./deploy/deploy.ps1 -Target root@192.168.1.50 -FirstDeploy `
-       -SeedDatabase D:\Code\database.seed-20261022.sqlite `
+       -SeedDatabase D:\Code\database.seed.sqlite `
        -SeedUploads D:\Code\cell-tracker\uploads
 ```
 
-Script: commit check → smoke test `npm run smoke` → `git archive HEAD` → zip →
-scp → (lần đầu: chép DB/uploads vào `shared/`) → chạy `bin/deploy-release.sh`
-trên server → kiểm tra `/healthz` + `/api/version`.
+> Nếu `deploy.ps1` báo **`Khong thay file seed`**, nghĩa là bước 1 chưa chạy (hoặc
+> sai đường dẫn). Script kiểm tra seed **trước khi** chép artifact/stop service, nên
+> không làm hỏng gì; chạy bước 1 rồi deploy lại.
+> Không có `sqlite3` trong PATH: cài `winget install SQLite.SQLite`, hoặc bỏ seed
+> (chạy deploy **không** có `-SeedDatabase`) để bắt đầu với DB trống.
+
+Script: commit check → kiểm tra seed → smoke `npm run smoke` + `verify:payments` →
+`git archive HEAD` → zip → scp → (lần đầu: chép DB/uploads vào `shared/`) → chạy
+`bin/deploy-release.sh` trên server → kiểm tra `/healthz` + `/api/version`.
 
 Sau khi deploy xong:
 
@@ -314,6 +324,8 @@ Sửa `.env` xong phải `systemctl restart cell-tracker`.
 
 | Triệu chứng | Nguyên nhân / cách xử lý |
 |---|---|
+| `deploy.ps1` báo **`Khong thay file seed`** | Chưa tạo bản sao DB: `sqlite3 D:\Code\database.sqlite ".backup 'D:\Code\database.seed.sqlite'"` rồi chạy lại. Hoặc bỏ `-SeedDatabase` để dùng DB trống. Script kiểm tra trước khi chép/stop service nên không làm hỏng gì. |
+| Phải nhập mật khẩu root nhiều lần khi deploy | Chưa cấu hình SSH key. Trên Windows: `ssh-keygen -t ed25519` rồi `type $env:USERPROFILE\.ssh\id_ed25519.pub \| ssh root@<IP> "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"`. Sau đó có thể truyền `-SshKey`. |
 | `systemctl status` = `activating (auto-restart)`, log `FATAL: JWT_SECRET` | Chưa đặt `JWT_SECRET` trong `shared/.env`. Sinh: `openssl rand -hex 32`. |
 | Deploy fail ở `npm ci` (`gyp ERR!`, thiếu compiler) | Thiếu `build-essential python3` → `apt install -y build-essential python3` rồi deploy lại. |
 | Deploy fail "Health check THẤT BẠI" | Xem 60 dòng log ngay trên output; app tự quay về bản trước. Thường do migration DB hoặc lỗi cú pháp mới. |

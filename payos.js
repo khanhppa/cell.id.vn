@@ -137,10 +137,14 @@ async function getStatus() {
 
 /**
  * URL công khai của site, dùng cho returnUrl/cancelUrl/webhook.
- * Thứ tự ưu tiên: public_base_url → payos_webhook_url (bỏ path) → host của request.
+ * Thứ tự ưu tiên: PUBLIC_BASE_URL (env) → public_base_url (Admin) →
+ * payos_webhook_url (bỏ path) → host của request.
  * Nhờ vậy local tự nhận http://localhost:3000 mà không cần cấu hình gì.
+ * Env đứng trước để cấu hình production không phụ thuộc dữ liệu trong DB.
  */
 async function resolveBaseUrl(req) {
+  const envBase = String(process.env.PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+  if (envBase) return envBase;
   const c = await getConfig();
   if (c.publicBaseUrl) return c.publicBaseUrl;
   if (c.webhookUrl) {

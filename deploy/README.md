@@ -83,27 +83,87 @@ Ghi chú:
 
 ## 2. Cấu hình app server (trong container)
 
+Chọn **một** trong hai kiểu TLS:
+
+| Hoàn cảnh | Lệnh |
+|---|---|
+| **Có Nginx Proxy Manager (NPM) làm reverse proxy + SSL** (phổ biến) | `TLS_MODE=npm DOMAIN=<domain>` |
+| Không có NPM, muốn container tự xin Let's Encrypt | `TLS_MODE=self DOMAIN=<domain> EMAIL=<email>` |
+| Chưa có domain, chỉ test bằng IP nội bộ | chạy không tham số (`TLS_MODE=none`) |
+
 ```bash
 # trên node Proxmox (không cần SSH vào container)
 pct push <CTID> deploy/proxmox/bootstrap-app.sh /root/bootstrap-app.sh
-pct exec <CTID> -- bash /root/bootstrap-app.sh
 
-# khi đã có domain trỏ về IP container và port 80 mở:
-pct exec <CTID> -- env DOMAIN=cell.example.vn EMAIL=admin@example.vn bash /root/bootstrap-app.sh
+# TRƯỜNG HỢP CÓ NGINX PROXY MANAGER (khuyến nghị)
+pct exec <CTID> -- env TLS_MODE=npm DOMAIN=cell.id.vn bash /root/bootstrap-app.sh
+
+# TRƯỜNG HỢP KHÔNG CÓ NPM: port 80 phải trỏ THẲNG vào IP container này
+pct exec <CTID> -- env TLS_MODE=self DOMAIN=cell.id.vn EMAIL=admin@example.com bash /root/bootstrap-app.sh
 ```
+
+> Nếu đã chạy `DOMAIN=...` (chế độ cũ) và bị lỗi ở bước `certbot` — thường vì port 80
+> đang do NPM giữ — chỉ cần chạy lại với `TLS_MODE=npm`. Script idempotent, không mất dữ liệu.
+
+### 2.1 Khi dùng Nginx Proxy Manager (NPM)
+
+Luồng request: `Internet → router :443 → NPM (TLS) → http://<IP-LXC-app>:80 → nginx nội bộ → Node 127.0.0.1:3000`.
+
+1. **Bootstrap ở chế độ NPM** (lệnh trên). Script sẽ:
+   - Nginx nội bộ **chỉ nghe :80** (không 443, không redirect);
+   - ghi `.env`: `PUBLIC_BASE_URL=https://<domain>`, `TRUST_PROXY=2`;
+   - **không** cài/xin certbot trong container.
+2. **Lấy IP container app**: `pct exec <CTID> -- hostname -I` (hoặc xem IP đã in khi tạo).
+3. **Thêm Proxy Host trong NPM** (`http://<IP-NPM>:81`):
+
+   | Trường | Giá trị |
+   |---|---|
+   | Domain Names | `cell.id.vn` (thêm `www.cell.id.vn` nếu cần) |
+   | Scheme | `http` |
+   | Forward Hostname/IP | **IP của container app** (vd `192.168.1.50`) |
+   | Forward Port | `80` |
+   | Block Common Exploits | ON (tuỳ chọn) |
+   | Websockets Support | **ON** |
+
+4. **Tab Advanced** (bắt buộc để upload Excel lớn):
+   ```nginx
+   client_max_body_size 220m;
+   proxy_request_buffering off;
+   proxy_read_timeout 300s;
+   proxy_send_timeout 300s;
+   ```
+5. **Tab SSL**: *Request a new SSL Certificate* (Let's Encrypt) → bật **Force SSL**,
+   **HTTP/2**, HSTS tuỳ chọn → Save.
+6. **DNS + router**: bản ghi `A` của domain → IP công khai; forward `80/443` →
+   **IP của NPM** (KHÔNG forward vào container app).
+7. **Kiểm tra**:
+   ```bash
+   curl -I https://cell.id.vn/healthz          # 200
+   curl -s https://cell.id.vn/api/version      # version mới
+   ```
+8. Trong Admin: đặt `payos_webhook_url = https://cell.id.vn/api/payos/webhook`
+   (`public_base_url` đã có từ `.env`, không bắt buộc đặt lại).
+
+> **Bảo mật (tuỳ chọn)**: chỉ cho IP của NPM gọi vào container app port 80 —
+> thêm `allow <IP-NPM>; deny all;` trong `server {}` của
+> `/etc/nginx/sites-available/cell-tracker` rồi `nginx -t && systemctl reload nginx`.
+> Không cần mở port 443 trên container app.
 
 Script (idempotent, chạy lại nhiều lần được):
 
 1. Tạo user hệ thống `celltracker` (no-login) + `/opt/cell-tracker/{releases,shared/uploads,incoming,bin}`.
 2. Tạo `shared/.env` với **secret ngẫu nhiên** (`JWT_SECRET`, `GUEST_SECRET`), chmod `600`.
-   Nếu file đã có → **không ghi đè**, chỉ thêm khoá còn thiếu.
+   Nếu file đã có → **không ghi đè secret**, chỉ thêm khoá còn thiếu.
+   `TLS_MODE=npm` → `PUBLIC_BASE_URL=https://<domain>`, `TRUST_PROXY=2`.
 3. Cài `/etc/systemd/system/cell-tracker.service` (Restart=always, hardening:
    `ProtectSystem=full`, `PrivateTmp`, `NoNewPrivileges`, `ReadWritePaths` chỉ shared+releases).
-4. Cấu hình Nginx reverse proxy (`client_max_body_size 220m`, `proxy_request_buffering off`,
-   `X-Forwarded-Proto/Host`, giữ `Host`, `gzip`) → thay `default` site.
-5. `ufw`: cho 22/80/443.
+4. Cấu hình Nginx nội bộ (`client_max_body_size 220m`, `proxy_request_buffering off`,
+   `gzip`, chuyển tiếp `X-Forwarded-Proto/Host` **từ NPM** xuống Node) → thay `default` site.
+5. `ufw`: cho 22/80/443 — **không bắt buộc**, bỏ qua nếu LXC không cho iptables.
 6. `/etc/cron.d/cell-tracker-backup`: backup CSDL 03:20 hằng ngày (trước OCID sync 03:30).
-7. Có `DOMAIN` → `certbot --nginx` (HTTP-01, tự gia hạn qua `certbot.timer`).
+7. `TLS_MODE=self` → `certbot --nginx` (HTTP-01). Fail → **cảnh báo, app vẫn chạy HTTP**,
+   không abort (trước đây `die` làm hỏng cả quá trình).
+
 
 ## 3. Deploy lần đầu + chuyển dữ liệu từ local
 
@@ -127,8 +187,9 @@ Sau khi deploy xong:
 
 1. Mở `https://<domain>/` (hoặc `http://<IP>/` nếu chưa có cert).
 2. Đăng nhập admin → **Admin ▸ Cài đặt** đặt:
-   - `public_base_url` = `https://<domain>`  ← dùng cho link kích hoạt email + returnUrl payOS.
-     Không đặt thì app suy ra từ header `Host`; sau Nginx vẫn đúng, nhưng đặt tường minh an toàn hơn.
+   - `public_base_url` = `https://<domain>` ← link kích hoạt email + returnUrl payOS.
+     Khi bootstrap có `DOMAIN`, `.env` đã có `PUBLIC_BASE_URL` (ưu tiên hơn DB) nên
+     thường **không cần** đặt lại; chỉ đặt nếu bạn muốn đổi domain mà không sửa `.env`.
    - `payos_webhook_url` = `https://<domain>/api/payos/webhook`, rồi bấm đăng ký webhook bên payOS.
    - Cấu hình SMTP (nếu chưa) → gửi thử.
 3. Đổi mật khẩu admin (nếu đang dùng mật khẩu dev).
@@ -256,14 +317,16 @@ Sửa `.env` xong phải `systemctl restart cell-tracker`.
 | `systemctl status` = `activating (auto-restart)`, log `FATAL: JWT_SECRET` | Chưa đặt `JWT_SECRET` trong `shared/.env`. Sinh: `openssl rand -hex 32`. |
 | Deploy fail ở `npm ci` (`gyp ERR!`, thiếu compiler) | Thiếu `build-essential python3` → `apt install -y build-essential python3` rồi deploy lại. |
 | Deploy fail "Health check THẤT BẠI" | Xem 60 dòng log ngay trên output; app tự quay về bản trước. Thường do migration DB hoặc lỗi cú pháp mới. |
-| Upload file lớn bị 413 | `client_max_body_size` trong Nginx (đang 220m) hoặc giới hạn của app. |
-| Link email / payOS trỏ về `http://...` hoặc IP nội bộ | Thiếu `TRUST_PROXY=1` hoặc chưa đặt `public_base_url` trong Admin. |
+| Upload file lớn bị 413 | `client_max_body_size` trong Nginx (đang 220m) hoặc giới hạn của app. Khi có NPM: đặt thêm trong tab Advanced của Proxy Host. |
+| Link email / payOS trỏ về `http://...` hoặc IP nội bộ | Thiếu `TRUST_PROXY` (=1 sau Nginx, =2 khi có NPM) hoặc `PUBLIC_BASE_URL`/`public_base_url` sai. |
+| Bootstrap báo lỗi ở bước `certbot` | Port 80 đang do Nginx Proxy Manager giữ hoặc DNS chưa trỏ vào container. Chạy lại `TLS_MODE=npm DOMAIN=<domain>` — xem mục 2.1. |
+| NPM trả `502 Bad Gateway` | Sai Forward Host: phải là IP container app + port `80`; kiểm tra `pct exec <CTID> -- systemctl status nginx` và `curl -I http://<IP>:80/healthz`. |
 | Trang nạp báo **"Nạp điểm tạm chưa khả dụng"** dù đã bật cổng | Mở **Admin ▸ Nạp điểm ▸ Trạng thái cổng thanh toán**: thẻ này ghi đúng lý do (cổng tắt, thiếu `payos_client_id`/`payos_api_key`/`payos_checksum_key`, webhook…). API `/api/credits/packages` trả `reason` + `gateway.missing` tương ứng. Cổng tắt/thiếu credential thì bật/nhập lại ở Cài đặt ▸ payOS. Trạng thái API không bị cache (`Cache-Control: no-store`) nên không cần xoá cache CDN. |
 | Khách đã chuyển khoản mà đơn vẫn **"Chờ thanh toán"** | Webhook chưa đăng ký hoặc không tới được: bấm **Đăng ký webhook**; kiểm tra `[payos webhook]` trong `journalctl -u cell-tracker`. Trang nạp/trang kết quả giữ kết nối long-poll `/wait` nên **cập nhật ngay khi webhook tới** (~1 giây, không cần F5); đồng thời mỗi ~25 giây vẫn gọi `/sync` để đối soát trực tiếp với payOS khi webhook chưa đăng ký. Nếu đơn chuyển `Trả thiếu`: số tiền nhận < giá trị đơn → **không cộng điểm**, admin đối soát tay. |
 | Đơn nạp của khách trả muộn bị `Hết hạn` | Nếu payOS xác nhận đã thu tiền (webhook/đối soát), hệ thống vẫn cộng điểm và chuyển `Đã thanh toán` — log ghi rõ. Chỉ đơn chưa từng được payOS xác nhận mới giữ `Hết hạn`. |
 | Điện thoại vẫn thấy UI cũ sau deploy | `CACHE_VERSION` trong `public/m/sw.js` chưa đổi. |
 | `EADDRINUSE` khi start | Còn process cũ: `ss -lptn 'sport = :3000'`, hoặc instance thứ 2 — **không được chạy 2 instance** (cron sync/retention và SQLite sẽ tranh nhau). |
-| Certbot fail | DNS chưa trỏ về IP container, hoặc port 80 bị chặn (kiểm tra router/port-forward, `ufw status`). |
+| Certbot fail (chế độ `TLS_MODE=self`) | DNS chưa trỏ về IP container, hoặc port 80 đang thuộc NPM. Dùng `TLS_MODE=npm` nếu có NPM. |
 | DB ở sai chỗ sau lần chạy đầu | `DB_PATH` chưa đặt ⇒ DB rơi về thư mục cha repo. Đặt lại trong `.env` rồi chuyển file vào `shared/`. |
 
 ## 9. Giới hạn đã biết của bản production hiện tại
@@ -280,7 +343,7 @@ Sửa `.env` xong phải `systemctl restart cell-tracker`.
 | File | Ở đâu | Vai trò |
 |---|---|---|
 | `deploy/proxmox/create-lxc.sh` | node Proxmox | tạo + cài LXC |
-| `deploy/proxmox/bootstrap-app.sh` | trong LXC | systemd + Nginx + `.env` + ufw + cron backup + certbot |
+| `deploy/proxmox/bootstrap-app.sh` | trong LXC | systemd + Nginx + `.env` + ufw + cron backup + TLS (`TLS_MODE=npm/self/none`) |
 | `deploy/deploy.ps1` | máy dev | đóng gói & đẩy bản mới (thủ công, dự phòng khi runner hỏng) |
 | `deploy/CICD.md` | — | **hướng dẫn CI/CD** (GitHub Actions + self-hosted runner trong LXC) |
 | `deploy/ci/install-runner.sh` | trong LXC | cài GitHub Actions runner (user `ghrunner`, systemd service) |

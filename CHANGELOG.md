@@ -6,6 +6,22 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
 
 ## [Unreleased]
 
+### Added — triển khai sau Nginx Proxy Manager (NPM)
+- **`bootstrap-app.sh` có `TLS_MODE`**: `npm` (NPM lo HTTPS, container chỉ nghe :80,
+  ghi `PUBLIC_BASE_URL=https://<domain>` + `TRUST_PROXY=2`, không chạy certbot),
+  `self` (container tự xin Let's Encrypt như trước), `none` (chỉ HTTP).
+- **Nginx nội bộ chuyển tiếp `X-Forwarded-Proto` từ proxy phía trước** (map
+  `$http_x_forwarded_proto` → fallback `$scheme`) — trước đây NPM→LXC là http nên
+  app dựng link email/returnUrl payOS thành `http://`.
+- **`PUBLIC_BASE_URL` trong `.env`** được `mailer.js` + `payos.js` ưu tiên trước
+  `public_base_url` trong DB → cấu hình production không phụ thuộc dữ liệu đã nhập.
+- `deploy/README.md`: mục **2.1** hướng dẫn cấu hình Proxy Host/SSL/Advanced trong NPM.
+
+### Fixed — bootstrap không còn chết vì certbot
+- `certbot` fail (port 80 thuộc NPM, DNS chưa trỏ) → **cảnh báo và tiếp tục** với
+  HTTP, không `die` giữa chừng; in gợi ý chạy lại `TLS_MODE=npm`.
+- `ufw` trong LXC unprivileged không làm hỏng cả bootstrap.
+
 ### Fixed — nạp điểm / thanh toán payOS (chuẩn bị production)
 - **NGUYÊN NHÂN CHÍNH của "Nạp điểm tạm chưa khả dụng" dù đã bật cổng**: thuộc tính
   HTML `hidden` bị CSS của trang ghi đè. `[hidden] { display: none }` của trình duyệt

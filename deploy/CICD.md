@@ -64,9 +64,15 @@ tự cứu được. Có đường dự phòng `deploy/deploy.ps1` (deploy tay q
 # trên node Proxmox
 bash deploy/proxmox/create-lxc.sh              # tạo LXC + Node 24 + nginx + toolchain
 pct push <CTID> deploy/proxmox/bootstrap-app.sh /root/bootstrap-app.sh
-pct exec <CTID> -- bash /root/bootstrap-app.sh
-pct exec <CTID> -- env DOMAIN=cell.example.vn EMAIL=admin@example.vn bash /root/bootstrap-app.sh
+
+# Có Nginx Proxy Manager lo TLS (khuyến nghị):
+pct exec <CTID> -- env TLS_MODE=npm DOMAIN=cell.id.vn bash /root/bootstrap-app.sh
+
+# Không có NPM (container tự xin Let's Encrypt, port 80 trỏ thẳng vào LXC):
+pct exec <CTID> -- env TLS_MODE=self DOMAIN=cell.id.vn EMAIL=admin@example.com bash /root/bootstrap-app.sh
 ```
+
+> Chi tiết cấu hình Proxy Host/SSL trong NPM: xem mục **2.1** của [README.md](README.md).
 
 Kiểm tra trước khi làm CI/CD:
 

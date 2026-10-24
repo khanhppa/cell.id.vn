@@ -223,10 +223,12 @@ function getTransport(cfg) {
 
 /**
  * URL công khai của site, dùng để dựng link kích hoạt/đặt lại mật khẩu.
- * Thứ tự ưu tiên: public_base_url → host của request (local tự nhận
- * http://localhost:3000 mà không cần cấu hình gì).
+ * Thứ tự ưu tiên: PUBLIC_BASE_URL (env) → public_base_url (Admin) → host của
+ * request (local tự nhận http://localhost:3000 mà không cần cấu hình gì).
  */
 async function resolveBaseUrl(req) {
+  const envBase = String(process.env.PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+  if (envBase) return envBase;
   const c = await getConfig();
   if (c.publicBaseUrl) return c.publicBaseUrl;
   if (req && req.get) {

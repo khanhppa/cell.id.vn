@@ -4,11 +4,20 @@
 # ----------------------------------------------------------------------------
 # Chạy TRONG container, user root. Idempotent: chạy lại nhiều lần an toàn.
 #
-#   bash bootstrap-app.sh                          # không có domain, chỉ HTTP
-#   DOMAIN=cell.example.vn EMAIL=admin@example.vn bash bootstrap-app.sh
+#   # 1) Đứng sau Nginx Proxy Manager (KHUYẾN NGHỊ khi đã có NPM):
+#   TLS_MODE=npm DOMAIN=cell.id.vn bash bootstrap-app.sh
 #
-# DOMAIN trống → Nginx chỉ nghe :80 (dùng tạm IP). Có DOMAIN → cài certbot và xin
-# chứng chỉ Let's Encrypt (HTTP-01), bật :443 + redirect http→https.
+#   # 2) Không có domain / chỉ dùng IP nội bộ:
+#   bash bootstrap-app.sh
+#
+#   # 3) Để CHÍNH container xin Let's Encrypt (port 80 phải trỏ thẳng vào LXC này):
+#   TLS_MODE=self DOMAIN=cell.id.vn EMAIL=admin@example.vn bash bootstrap-app.sh
+#
+# TLS_MODE:
+#   npm  — KHÔNG xin cert trong container; Nginx nội bộ chỉ nghe :80, NPM lo
+#          HTTPS/redirect. Đặt PUBLIC_BASE_URL=https://$DOMAIN + TRUST_PROXY=2.
+#   self — cài certbot, xin cert HTTP-01, bật :443 + redirect (như bản cũ).
+#   none — chỉ HTTP, server_name = DOMAIN (nếu có) hoặc "_". Mặc định.
 #
 # KHÔNG tự deploy code. Lần deploy đầu do máy dev chạy deploy/deploy.ps1
 # (nó gọi bin/deploy-release.sh), sau đó script này khởi động service.
@@ -20,10 +29,20 @@ APP_USER="celltracker"
 APP_ROOT="/opt/cell-tracker"
 DOMAIN="${DOMAIN:-}"
 EMAIL="${EMAIL:-}"
+TLS_MODE="${TLS_MODE:-none}"          # none | npm | self
 
 say() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
+warn() { printf '\033[1;33m[warn] %s\033[0m\n' "$*" >&2; }
 die() { printf '\n\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 rand_hex() { openssl rand -hex 32; }
+
+case "$TLS_MODE" in
+  none|npm|self) ;;
+  *) die "TLS_MODE không hợp lệ: '$TLS_MODE' (chỉ nhận: none | npm | self)" ;;
+esac
+if [[ "$TLS_MODE" != "none" && -z "$DOMAIN" ]]; then
+  die "TLS_MODE=$TLS_MODE cần DOMAIN=<tên miền> (vd DOMAIN=cell.id.vn)"
+fi
 
 [[ $EUID -eq 0 ]] || die "phải chạy bằng root trong container"
 command -v node >/dev/null || die "chưa có node — cài bằng deploy/proxmox/create-lxc.sh"
@@ -54,7 +73,7 @@ fi
 
 # ---- 2. .env production (chỉ tạo khi chưa có) ----------------------------
 ENV_FILE="$APP_ROOT/shared/.env"
-if [[ ! -f "$ENV_FILE" ]]; then
+[ -f "$ENV_FILE" ] || {
   say "Tạo $ENV_FILE với secret ngẫu nhiên"
   umask 077
   cat > "$ENV_FILE" <<ENVEOF
@@ -72,25 +91,45 @@ ENVEOF
   umask 022
   chown "$APP_USER:$APP_USER" "$ENV_FILE"
   chmod 600 "$ENV_FILE"
-else
-  say "$ENV_FILE đã có — giữ nguyên (không ghi đè secret)"
-  # Bảo đảm có các khoá tối thiểu nếu file cũ thiếu (chỉ THÊM, không sửa giá trị đang có).
-  add_missing() {
-    local key="$1" value="$2"
-    grep -qE "^${key}=" "$ENV_FILE" || printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
-  }
-  add_missing NODE_ENV production
+}
+[[ -f "$ENV_FILE" ]] || die "không tạo được $ENV_FILE"
 
-  add_missing PORT 3000
-  add_missing HOST 127.0.0.1
-  add_missing TRUST_PROXY 1
-  add_missing JWT_SECRET "$(rand_hex)"
-  add_missing GUEST_SECRET "$(rand_hex)"
-  add_missing DB_PATH "$APP_ROOT/shared/database.sqlite"
-  add_missing UPLOAD_DIR "$APP_ROOT/shared/uploads"
-  add_missing HTTPS_PORT 0
-  chmod 600 "$ENV_FILE"
+# Thêm khoá nếu thiếu; KHÔNG ghi đè giá trị đã có (trừ khi dùng upsert_env).
+add_missing() {
+  local key="$1" value="$2"
+  grep -qE "^${key}=" "$ENV_FILE" || printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+}
+# Ghi đè/đặt giá trị (dùng cho cấu hình phụ thuộc TLS_MODE/DOMAIN).
+upsert_env() {
+  local key="$1" value="$2"
+  if grep -qE "^${key}=" "$ENV_FILE"; then
+    sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+  else
+    printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+  fi
+}
+
+add_missing NODE_ENV production
+add_missing PORT 3000
+add_missing HOST 127.0.0.1
+add_missing TRUST_PROXY 1
+add_missing JWT_SECRET "$(rand_hex)"
+add_missing GUEST_SECRET "$(rand_hex)"
+add_missing DB_PATH "$APP_ROOT/shared/database.sqlite"
+add_missing UPLOAD_DIR "$APP_ROOT/shared/uploads"
+add_missing HTTPS_PORT 0
+add_missing PUBLIC_BASE_URL ""
+
+# Đứng sau NPM: 2 hop proxy (NPM → nginx nội bộ) để req.ip là IP thật của client.
+if [[ "$TLS_MODE" == "npm" ]]; then
+  upsert_env TRUST_PROXY 2
+  upsert_env PUBLIC_BASE_URL "https://$DOMAIN"
+  say "TLS_MODE=npm: PUBLIC_BASE_URL=https://$DOMAIN, TRUST_PROXY=2"
+elif [[ -n "$DOMAIN" ]]; then
+  upsert_env PUBLIC_BASE_URL "https://$DOMAIN"
 fi
+chown "$APP_USER:$APP_USER" "$ENV_FILE"
+chmod 600 "$ENV_FILE"
 
 # ---- 3. Quản lý release: bin/deploy-release.sh + bin/backup-db.sh ---------
 # Hai script này cũng nằm trong repo (bin/), nhưng bản chạy trên server được chép
@@ -195,11 +234,15 @@ server {
         proxy_pass http://cell_tracker_app;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
-        # Host gốc được giữ nguyên để app dựng URL công khai (email, payOS returnUrl)
+        # Host gốc được giữ nguyên để app dựng URL công khai (email, payOS returnUrl).
+        # Khi đứng sau Nginx Proxy Manager, NPM gửi X-Forwarded-Proto=https và
+        # X-Forwarded-Host=<domain> → phải chuyển tiếp giá trị ĐÓ, không dùng $scheme
+        # (NPM→LXC là http nên $scheme sẽ làm app tưởng đang chạy http).
+        # Host được NPM giữ nguyên (proxy_set_header Host $host) nên $host = domain.
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $cell_tracker_proto;
         proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Forwarded-Port $server_port;
         # Service worker + PWA: không cache HTML của app ở proxy
@@ -207,6 +250,21 @@ server {
     }
 }
 NGINX
+
+# Map "proto thật": request đến từ proxy phía trước (NPM) thì dùng header của nó,
+# truy cập trực tiếp thì fallback $scheme. (Host dùng $host — NPM giữ nguyên Host.)
+cat > /etc/nginx/conf.d/cell-tracker-forwarded.conf <<'NGINXMAP'
+# Sinh bởi bootstrap-app.sh — dùng cho site cell-tracker.
+map $http_x_forwarded_proto $cell_tracker_proto {
+    default $http_x_forwarded_proto;
+    ""      $scheme;
+}
+NGINXMAP
+
+if [[ -n "$DOMAIN" ]]; then
+  sed -i "s/server_name _;/server_name ${DOMAIN};/" "/etc/nginx/sites-available/$APP_NAME"
+  say "server_name = $DOMAIN"
+fi
 
 ln -sf "/etc/nginx/sites-available/$APP_NAME" "/etc/nginx/sites-enabled/$APP_NAME"
 rm -f /etc/nginx/sites-enabled/default
@@ -241,16 +299,16 @@ cat > /etc/cron.d/cell-tracker-backup <<CRON
 CRON
 chmod 644 /etc/cron.d/cell-tracker-backup
 
-# ---- 9. .env: nhắc public_base_url -------------------------------------
+# ---- 9. Hướng dẫn còn lại ------------------------------------------------
 say "Bước thủ công còn lại"
 cat <<EOF
 
   • Deploy lần đầu (chạy trên MÁY DEV):
-       ./deploy/deploy.ps1 -Target root@<IP-CONTAINER-VAY> -FirstDeploy
+       pwsh ./deploy/deploy.ps1 -Target root@<IP-CONTAINER-VAY> -FirstDeploy
 
-  • Sau khi đăng nhập được vào trang Admin, đặt:
+  • Sau khi đăng nhập được trang Admin, kiểm tra/đặt:
        public_base_url = https://<domain>
-     (mailer.js + payos.js dùng để dựng link kích hoạt và returnUrl/webhook)
+     (.env đã có PUBLIC_BASE_URL=$DOMAIN nên thường không cần; app đọc env trước DB)
        payos_webhook_url = https://<domain>/api/payos/webhook
 
   • Bật khởi động cùng Proxmox:  pct set <CTID> --onboot 1   (trên node Proxmox)
@@ -259,18 +317,72 @@ cat <<EOF
   Trạng thái: systemctl status $APP_NAME --no-pager
 EOF
 
-if [[ -n "$DOMAIN" ]]; then
-  say "Xin chứng chỉ Let's Encrypt cho $DOMAIN"
-  apt-get install -y -qq certbot python3-certbot-nginx
-  sed -i "s/server_name _;/server_name ${DOMAIN};/" "/etc/nginx/sites-available/$APP_NAME"
-  nginx -t && systemctl reload nginx
-  if [[ -n "$EMAIL" ]]; then
-    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect || die "certbot thất bại (DNS đã trỏ về IP này chưa? port 80 mở chưa?)"
-  else
-    certbot --nginx -d "$DOMAIN" --register-unsafely-without-email --non-interactive --agree-tos --redirect || die "certbot thất bại (DNS đã trỏ về IP này chưa? port 80 mở chưa?)"
-  fi
-  systemctl list-timers 'certbot.timer' --no-pager | sed 's/^/    /'
-else
-  echo
-  echo "  (Chưa có HTTPS vì DOMAIN trống. Khi có domain: chạy lại với DOMAIN=... EMAIL=... )"
-fi
+# ---- 10. TLS -----------------------------------------------------------------
+case "$TLS_MODE" in
+  self)
+    say "Xin chứng chỉ Let's Encrypt cho $DOMAIN (TLS_MODE=self)"
+    apt-get install -y -qq certbot python3-certbot-nginx
+    cert_ok=0
+    if [[ -n "$EMAIL" ]]; then
+      certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect && cert_ok=1
+    else
+      certbot --nginx -d "$DOMAIN" --register-unsafely-without-email --non-interactive --agree-tos --redirect && cert_ok=1
+    fi
+    if [[ $cert_ok -eq 1 ]]; then
+      systemctl list-timers 'certbot.timer' --no-pager | sed 's/^/    /' || true
+    else
+      # KHÔNG abort: app vẫn chạy được qua HTTP; certbot thường fail vì port 80
+      # đang do Nginx Proxy Manager giữ hoặc DNS chưa trỏ về LXC này.
+      warn "certbot thất bại — app vẫn chạy HTTP bình thường."
+      warn "Nếu bạn dùng Nginx Proxy Manager: chạy lại với TLS_MODE=npm DOMAIN=$DOMAIN."
+      warn "Nếu không: kiểm tra DNS A → IP container này và port 80 đã mở/forward đúng chưa."
+      # certbot --nginx có thể đã sửa site trước khi fail → nạp lại cấu hình sạch.
+      nginx -t && systemctl reload nginx || true
+    fi
+    ;;
+  npm)
+    say "TLS_MODE=npm — KHÔNG xin cert trong container"
+    cat <<EOF
+
+  Nginx nội bộ đang nghe HTTP :80 (không redirect, không 443). Làm trên Nginx Proxy Manager:
+
+    1) Hosts ▸ Proxy Hosts ▸ Add Proxy Host
+       Domain Names      : $DOMAIN
+       Scheme            : http
+       Forward Hostname  : <IP CỦA CONTAINER NÀY>   (xem: hostname -I)
+       Forward Port      : 80
+       Websockets Support: ON
+       Block Common Exploits: ON (tuỳ chọn)
+
+    2) Tab Advanced (custom Nginx) — upload Excel tới 200MB:
+       client_max_body_size 220m;
+       proxy_request_buffering off;
+       proxy_read_timeout 300s;
+       proxy_send_timeout 300s;
+
+    3) Tab SSL:
+       SSL Certificate   : Request a new SSL Certificate (Let's Encrypt)
+       Force SSL         : ON
+       HTTP/2 Support    : ON
+       HSTS Enabled      : tuỳ chọn
+
+    4) DNS: bản ghi A của $DOMAIN → IP công khai; router forward 80/443 → IP của NPM
+       (KHÔNG forward vào container này).
+
+    5) Kiểm tra từ ngoài:  curl -I https://$DOMAIN/healthz
+
+  Nếu dùng ufw/Proxmox firewall: chỉ cho IP của NPM truy cập container này port 80.
+EOF
+    ;;
+  none)
+    echo
+    if [[ -n "$DOMAIN" ]]; then
+      echo "  Nginx nội bộ: HTTP :80, server_name=$DOMAIN (chưa bật HTTPS trong container)."
+      echo "  Muốn container tự xin cert: chạy lại với TLS_MODE=self DOMAIN=$DOMAIN EMAIL=..."
+    else
+      echo "  Nginx nội bộ: HTTP :80 (server_name _), chưa có domain/HTTPS."
+      echo "  Đứng sau Nginx Proxy Manager: chạy lại với TLS_MODE=npm DOMAIN=<domain>."
+      echo "  Muốn container tự xin cert: TLS_MODE=self DOMAIN=<domain> EMAIL=<email>."
+    fi
+    ;;
+esac

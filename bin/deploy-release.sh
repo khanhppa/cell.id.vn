@@ -96,6 +96,7 @@ fi
 mkdir -p "$STAGING/public" "$STAGING/bin"
 
 # Script quản trị lấy bản mới nhất từ artifact nếu có (để bản deploy sau dùng code mới)
+mkdir -p "$APP_ROOT/bin"
 for f in deploy-release.sh backup-db.sh; do
   [[ -f "$STAGING/bin/$f" ]] && install -m 755 -o root -g root "$STAGING/bin/$f" "$APP_ROOT/bin/$f"
 done

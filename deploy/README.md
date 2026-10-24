@@ -29,7 +29,7 @@ ghi đè bởi deploy.
 | Thành phần | Yêu cầu |
 |---|---|
 | Proxmox | PV E 7.x/8.x, còn chỗ trên storage LVM cho ~16GB |
-| Máy dev | Windows + **PowerShell 7** (`pwsh`), `git`, OpenSSH (`ssh`, `scp` — có sẵn trong Windows) |
+| Máy dev | Windows + PowerShell **5.1 hoặc 7**, `git`, OpenSSH (`ssh`, `scp` — có sẵn trong Windows) |
 | Git | Repo phải **commit sạch** trước khi deploy (deploy lấy code từ `git HEAD`) |
 | Node | Local v24.18.0 (khớp Node 24 cài trong LXC) |
 
@@ -43,23 +43,43 @@ ghi đè bởi deploy.
 ## 1. Tạo LXC (trên node Proxmox)
 
 ```bash
-# trên node Proxmox, user root
+# trên node Proxmox, user root — chạy TƯƠNG TÁC: script sẽ hỏi DHCP hay IP tĩnh,
+# rồi hỏi IP/CIDR, gateway, DNS và xác nhận trước khi tạo.
 bash deploy/proxmox/create-lxc.sh
-# hoặc chọn CTID / tài nguyên:
-CTID=120 CORES=4 MEMORY=4096 DISK_GB=24 bash deploy/proxmox/create-lxc.sh
+
+# IP tĩnh, không hỏi:
+bash deploy/proxmox/create-lxc.sh --ip 192.168.1.50/24 --gw 192.168.1.1 --yes
+
+# IP tĩnh + DNS riêng + VLAN:
+bash deploy/proxmox/create-lxc.sh --ip 192.168.1.50/24 --gw 192.168.1.1 \
+     --dns "1.1.1.1 8.8.8.8" --vlan 20 --yes
+
+# DHCP, không hỏi (dùng cho script tự động):
+bash deploy/proxmox/create-lxc.sh --dhcp --yes
+
+# chọn CTID / tài nguyên (kết hợp được với các tham số trên):
+bash deploy/proxmox/create-lxc.sh --ip 192.168.1.50/24 --gw 192.168.1.1 \
+     --ctid 120 --cores 4 --memory 4096 --disk 24 --yes
 ```
 
-Script làm: tải template Debian 12 → tạo CT unprivileged (`nesting=1`) → start →
-cài `build-essential python3 sqlite3 nginx ufw logrotate` + Node 24 (NodeSource) →
-đặt timezone `Asia/Ho_Chi_Minh` → giới hạn journald 500MB.
-Cuối script in ra **IP của container** (vd `192.168.1.50`) và các bước tiếp theo.
+Tham số đầy đủ: `bash deploy/proxmox/create-lxc.sh --help`.
+
+Script kiểm tra trước khi tạo: định dạng IP/CIDR, gateway **cùng subnet**, DNS,
+VLAN, CTID chưa tồn tại, storage tồn tại, bridge tồn tại; cảnh báo nếu IP đã có
+thiết bị trả lời ping. Sau đó: tải template Debian 12 → tạo CT unprivileged
+(`nesting=1`, `onboot=0`) → start → cài `build-essential python3 sqlite3 nginx ufw
+logrotate` + Node 24 (NodeSource) → timezone `Asia/Ho_Chi_Minh` → giới hạn journald 500MB.
+
+Cuối script in ra **IP của container** (tĩnh hoặc DHCP) và các bước tiếp theo.
 
 Ghi chú:
 - Script cố ý đặt `--onboot 0`; bật sau khi đã kiểm tra app chạy ổn:
   `pct set <CTID> --onboot 1`.
 - Bật backup định kỳ cho container trong GUI: *Datacenter ▸ Backup ▸ Add* (giữ ≥7 bản).
-- Không có `CT_PASSWORD` thì root trong CT không có mật khẩu → vào bằng
+- Không có `--password` thì root trong CT không có mật khẩu → vào bằng
   `pct console <CTID>`, hoặc `pct exec <CTID> -- passwd root`.
+- Mạng đã đặt lúc tạo vẫn đổi được sau: `pct set <CTID> --net0 "name=eth0,bridge=vmbr0,ip=192.168.1.60/24,gw=192.168.1.1"`.
+
 
 ## 2. Cấu hình app server (trong container)
 
@@ -114,6 +134,40 @@ Sau khi deploy xong:
 3. Đổi mật khẩu admin (nếu đang dùng mật khẩu dev).
 4. Kiểm tra PWA trên điện thoại: mở `https://<domain>/m/` → "Thêm vào màn hình chính".
 5. Bật khởi động cùng Proxmox: `pct set <CTID> --onboot 1`.
+
+### Bật NẠP ĐIỂM / payOS cho production (checklist)
+
+Làm đúng thứ tự, mỗi bước đều kiểm chứng được trên giao diện:
+
+1. **Admin ▸ Cài đặt ▸ payOS**: nhập `Client ID`, `API Key`, `Checksum Key`
+   (lấy từ kênh thanh toán trên `my.payos.vn`), bật **"Bật cổng thanh toán payOS"**,
+   **TẮT** "Chế độ test".
+2. Đặt **`public_base_url`** = `https://<domain>` (bắt buộc trên thực tế: payOS cần
+   `returnUrl`/`cancelUrl` tuyệt đối, đúng HTTPS).
+3. Đặt **`payos_webhook_url`** = `https://<domain>/api/payos/webhook` → bấm
+   **"Đăng ký webhook với payOS"**. (Không đăng ký thì đơn vẫn có thể hoàn tất nhờ
+   cơ chế đối soát khi khách còn mở trang, nhưng đơn của khách đã đóng trình duyệt
+   sẽ kẹt "chờ thanh toán".)
+4. Bấm **"Kiểm tra kết nối"** → phải báo OK (credential đúng, tới được payOS).
+5. Bấm **Lưu**, rồi mở **Admin ▸ Nạp điểm**: thẻ **"Trạng thái cổng thanh toán"**
+   phải hiện `Sẵn sàng nhận tiền` + `PAYOS THẬT`. Nếu chưa, thẻ ghi rõ lý do
+   (cổng tắt / thiếu credential nào / webhook chưa có).
+6. Mở `/topup.html` bằng một tài khoản thường: phải thấy danh sách gói + ô nhập
+   số tiền, **không còn banner "Nạp điểm tạm chưa khả dụng"**; không có chip
+   "Chế độ test".
+7. Thử 1 đơn thật giá trị nhỏ nhất (10.000đ): quét QR → trang kết quả phải chuyển
+   "Thanh toán thành công", điểm vào tài khoản, log server có dòng
+   `[payos webhook] đơn #... đã cộng ... điểm`.
+8. Đối soát: **Admin ▸ Nạp điểm** — đơn ở trạng thái `Đã thanh toán`,
+   `amount_paid` = số tiền đã thu; không có đơn `Trả thiếu` ngoài dự kiến.
+
+> **Test mode TUYỆT ĐỐI không bật ở production.** Khi `NODE_ENV=production`, toàn bộ
+> route "giả lập đã trả tiền" bị khoá cứng (403 `production_forbidden`) để một lần
+> để sót công tắc cũng không thể cộng điểm khống.
+>
+> Trước khi deploy, chạy `npm run verify:payments` (offline, không gọi payOS):
+> kiểm tra webhook + chống cộng trùng, chuyển thiếu tiền, đơn trễ hạn, cổng
+> tắt/thiếu credential và khoá giả lập ở production. CI/deploy cũng chạy bước này.
 
 ## 4. Cập nhật phiên bản (workflow hằng ngày)
 
@@ -204,6 +258,9 @@ Sửa `.env` xong phải `systemctl restart cell-tracker`.
 | Deploy fail "Health check THẤT BẠI" | Xem 60 dòng log ngay trên output; app tự quay về bản trước. Thường do migration DB hoặc lỗi cú pháp mới. |
 | Upload file lớn bị 413 | `client_max_body_size` trong Nginx (đang 220m) hoặc giới hạn của app. |
 | Link email / payOS trỏ về `http://...` hoặc IP nội bộ | Thiếu `TRUST_PROXY=1` hoặc chưa đặt `public_base_url` trong Admin. |
+| Trang nạp báo **"Nạp điểm tạm chưa khả dụng"** dù đã bật cổng | Mở **Admin ▸ Nạp điểm ▸ Trạng thái cổng thanh toán**: thẻ này ghi đúng lý do (cổng tắt, thiếu `payos_client_id`/`payos_api_key`/`payos_checksum_key`, webhook…). API `/api/credits/packages` trả `reason` + `gateway.missing` tương ứng. Cổng tắt/thiếu credential thì bật/nhập lại ở Cài đặt ▸ payOS. Trạng thái API không bị cache (`Cache-Control: no-store`) nên không cần xoá cache CDN. |
+| Khách đã chuyển khoản mà đơn vẫn **"Chờ thanh toán"** | Webhook chưa đăng ký hoặc không tới được: bấm **Đăng ký webhook**; kiểm tra `[payos webhook]` trong `journalctl -u cell-tracker`. Trang nạp/trang kết quả giữ kết nối long-poll `/wait` nên **cập nhật ngay khi webhook tới** (~1 giây, không cần F5); đồng thời mỗi ~25 giây vẫn gọi `/sync` để đối soát trực tiếp với payOS khi webhook chưa đăng ký. Nếu đơn chuyển `Trả thiếu`: số tiền nhận < giá trị đơn → **không cộng điểm**, admin đối soát tay. |
+| Đơn nạp của khách trả muộn bị `Hết hạn` | Nếu payOS xác nhận đã thu tiền (webhook/đối soát), hệ thống vẫn cộng điểm và chuyển `Đã thanh toán` — log ghi rõ. Chỉ đơn chưa từng được payOS xác nhận mới giữ `Hết hạn`. |
 | Điện thoại vẫn thấy UI cũ sau deploy | `CACHE_VERSION` trong `public/m/sw.js` chưa đổi. |
 | `EADDRINUSE` khi start | Còn process cũ: `ss -lptn 'sport = :3000'`, hoặc instance thứ 2 — **không được chạy 2 instance** (cron sync/retention và SQLite sẽ tranh nhau). |
 | Certbot fail | DNS chưa trỏ về IP container, hoặc port 80 bị chặn (kiểm tra router/port-forward, `ufw status`). |

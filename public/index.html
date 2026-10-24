@@ -26,51 +26,14 @@
   <script src="/auth-popup.js"></script>
   <script src="/version.js"></script>
   <script async src="/ga.js"></script>
+  <!-- Bảng màu sáng/tối dùng chung cho mọi trang (nguồn DUY NHẤT cho token màu). -->
+  <link rel="stylesheet" href="/theme.css">
   <style>
+    /* Chỉ còn token RIÊNG của trang (bố cục). Mọi token màu lấy từ /theme.css nên
+       giao diện tối đồng bộ với các trang công cụ/admin/credits... */
     :root {
-      --bg-body: #f0f2f5;
-      --bg-surface: rgba(255,255,255,0.97);
-      --bg-surface2: rgba(0,0,0,0.03);
-      /* Nền ĐẶC (opaque) cho các phần tử sticky (header bảng) — --bg-surface là rgba
-         nên nội dung cuộn bên dưới vẫn lộ qua. */
-      --bg-solid: #ffffff;
-      --bg-hover: rgba(0,0,0,0.06);
-      --bg-btn-primary: #4444cc;
-      --bg-btn-success: #22aa44;
-      --bg-btn-danger: #cc3333;
-      --text-primary: #1a1a2e;
-      --text-secondary: #444466;
-      --text-muted: #888899;
-      --text-faint: #aaaabb;
-      --border-color: rgba(0,0,0,0.1);
-      --border-hover: rgba(68,68,204,0.3);
-      --border-focus: #4444cc;
-      --header-bg: rgba(255,255,255,0.95);
-      --shadow: 0 10px 40px rgba(0,0,0,0.1);
-      --map-bg: #d4e3f0;
       --sidebar-width: 340px;
       --sidebar-collapsed: -340px;
-      --transition: 0.3s ease;
-    }
-    [data-theme="dark"] {
-      --bg-body: #111122;
-      --bg-surface: rgba(15,15,40,0.95);
-      --bg-surface2: rgba(255,255,255,0.04);
-      --bg-solid: #14142e;
-      --bg-hover: rgba(255,255,255,0.1);
-      --bg-btn-primary: #4444cc;
-      --bg-btn-success: #22aa44;
-      --bg-btn-danger: #cc3333;
-      --text-primary: #e0e0ff;
-      --text-secondary: #aaaacc;
-      --text-muted: #666688;
-      --text-faint: #555577;
-      --border-color: rgba(255,255,255,0.08);
-      --border-hover: rgba(100,100,255,0.3);
-      --border-focus: #6666ff;
-      --header-bg: rgba(15,15,40,0.92);
-      --shadow: 0 10px 40px rgba(0,0,0,0.5);
-      --map-bg: #1a1a2e;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -246,26 +209,33 @@
     .subscriber-item:hover { background: var(--bg-surface2); border-color: var(--border-hover); }
     .subscriber-item .phone { color: var(--text-primary); }
     .subscriber-item .count { color: var(--text-muted); font-size: 11px; }
-    .subscriber-item .active-indicator { color: #66ff66; font-size: 8px; display: none; }
-    .subscriber-item.active { border-color: var(--border-focus); background: rgba(100,100,255,0.08); }
+    .subscriber-item .active-indicator { color: var(--success); font-size: 8px; display: none; }
+    .subscriber-item.active { border-color: var(--border-focus); background: var(--accent-soft); }
     .subscriber-item.active .active-indicator { display: inline; }
 
     /* Mini table */
     .mini-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
     .mini-table th { color: var(--text-muted); padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .mini-table td { color: var(--text-secondary); padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.03); font-family: monospace; }
+    .mini-table td { color: var(--text-secondary); padding: 4px 6px; border-bottom: 1px solid var(--border-color); font-family: monospace; }
     .mini-table tr:hover td { background: var(--bg-surface2); }
 
     /* Map controls reposition to right — increased margin-top to clear header */
     .leaflet-top.leaflet-right {
       margin-top: 56px;
     }
+    /* ==================================================================
+       CÔNG CỤ TRÊN BẢN ĐỒ — LUÔN GIAO DIỆN SÁNG
+       Bản đồ dùng tile sáng ở CẢ 2 theme (xem --map-bg trong /theme.css),
+       nên thanh công cụ/thước/chú thích phải giữ nền sáng để không "lạc"
+       thành một khối tối nằm trên bản đồ sáng. Không phụ thuộc data-theme.
+       ================================================================== */
+
     /* Đo khoảng cách — nút nằm trong toolbar của leaflet-draw (đồng bộ bộ vẽ) */
     .leaflet-draw-toolbar a.leaflet-draw-measure {
-      background-color: var(--bg-surface);
+      background-color: #fff;
       background-image: none !important;
-      color: var(--text-secondary);
-      border: 1px solid var(--border-color);
+      color: #444;
+      border: 1px solid rgba(0,0,0,0.2);
       border-radius: 4px;
       font-family: 'Font Awesome 6 Free' !important;
       font-weight: 900;
@@ -276,31 +246,27 @@
       background-color: #f4f4f4;
       background-image: none !important;
       color: #222;
-      border-color: var(--border-hover);
+      border-color: rgba(0,0,0,0.34);
     }
     .leaflet-draw-toolbar a.leaflet-draw-measure.active {
-      background-color: #e4e4ee;
+      background-color: #eceafd;
       background-image: none !important;
-      color: var(--bg-btn-primary);
-      border-color: var(--border-focus);
-    }
-    [data-theme="dark"] .leaflet-draw-toolbar a.leaflet-draw-measure:hover,
-    [data-theme="dark"] .leaflet-draw-toolbar a.leaflet-draw-measure:focus {
-      background-color: #f4f4f4; color: #222;
+      color: #4444cc;
+      border-color: #4444cc;
     }
     .leaflet-draw-toolbar a.leaflet-draw-measure::before {
       content: "\f545"; /* fa-ruler */
     }
     /* Đường đo + đỉnh + nhãn khoảng cách */
     .measure-tip {
-      background: var(--bg-surface);
-      color: var(--text-primary);
-      border: 1px solid var(--border-color);
+      background: #fff;
+      color: #1a1a2e;
+      border: 1px solid rgba(0,0,0,0.18);
       border-radius: 6px;
       padding: 3px 7px;
       font-size: 12px;
       font-weight: 700;
-      box-shadow: var(--shadow);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
       white-space: nowrap;
     }
     .measure-tip::before { display: none; }
@@ -319,23 +285,23 @@
       z-index: 1002;
     }
 
-    /* Legend */
+    /* Legend — cũng là công cụ trên bản đồ nên giữ nền sáng ở cả 2 theme. */
     .legend-toggle {
       position: fixed; bottom: 76px; right: 12px;
       z-index: 1000;
     }
     .legend-toggle button {
-      background: var(--bg-surface);
+      background: rgba(255,255,255,0.97);
       backdrop-filter: blur(8px);
-      border: 1px solid var(--border-color);
-      color: var(--text-secondary);
+      border: 1px solid rgba(0,0,0,0.12);
+      color: #44446a;
       padding: 8px 12px;
       border-radius: 8px;
       cursor: pointer;
       font-size: 12px;
       transition: all 0.2s;
     }
-    .legend-toggle button:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .legend-toggle button:hover { background: #fff; color: #1a1a2e; }
 
     .legend-panel {
       position: fixed; bottom: 116px; right: 12px;
@@ -343,30 +309,38 @@
       max-width: 260px;
       max-height: 70vh;
       overflow-y: auto;
-      background: var(--bg-surface);
+      background: rgba(255,255,255,0.97);
       backdrop-filter: blur(12px);
-      border: 1px solid var(--border-color);
+      border: 1px solid rgba(0,0,0,0.12);
       border-radius: 10px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.25);
       z-index: 1000;
       padding: 12px 14px;
       display: none;
     }
     .legend-panel.show { display: block; }
-    .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; color: var(--text-secondary); }
+    .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; color: #44446a; }
     .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
     /* Sub-section thu gọn trong legend (vd: Công nghệ mạng) */
-    .legend-sub { border-top: 1px solid var(--border-color); margin-top: 8px; padding-top: 6px; }
+    .legend-sub { border-top: 1px solid rgba(0,0,0,0.1); margin-top: 8px; padding-top: 6px; }
     .legend-sub-toggle {
       display: flex; align-items: center; gap: 6px; width: 100%;
       background: none; border: none; cursor: pointer; padding: 4px 0;
-      color: var(--text-primary); font-size: 12px; font-weight: 600; text-align: left;
+      color: #1a1a2e; font-size: 12px; font-weight: 600; text-align: left;
     }
-    .legend-sub-toggle:hover { color: var(--bg-btn-primary); }
+    .legend-sub-toggle:hover { color: #4444cc; }
     .legend-sub-toggle i { font-size: 10px; transition: transform 0.2s; }
     .legend-sub.open .legend-sub-toggle i { transform: rotate(90deg); }
     .legend-sub-body { display: none; padding-top: 2px; }
     .legend-sub.open .legend-sub-body { display: block; }
-    .legend-hint { font-size: 10px; color: var(--text-faint); padding: 2px 0 4px; line-height: 1.4; }
+    .legend-hint { font-size: 10px; color: #8a8a99; padding: 2px 0 4px; line-height: 1.4; }
+    /* Khung chú thích luôn sáng → thanh cuộn của nó cũng phải sáng (theme tối vẫn
+       dùng thumb tối, sẽ vô hình trên nền trắng). Áp cho cả danh sách lớp bản đồ. */
+    .legend-panel::-webkit-scrollbar-thumb,
+    .leaflet-control-layers-list::-webkit-scrollbar-thumb,
+    .leaflet-control-layers-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.22); }
+    .legend-panel::-webkit-scrollbar-thumb:hover,
+    .leaflet-control-layers-list::-webkit-scrollbar-thumb:hover { background-color: rgba(0,0,0,0.38); }
 
     /* Toast */
     .toast {
@@ -408,8 +382,8 @@
       border-radius: 6px; font-size: 12px; display: none;
     }
     .cell-lookup-result.show { display: block; }
-    .cell-lookup-result.success { background: rgba(34,170,68,0.1); border: 1px solid rgba(34,170,68,0.3); color: #66dd88; }
-    .cell-lookup-result.error { background: rgba(204,51,51,0.1); border: 1px solid rgba(204,51,51,0.3); color: #ee6666; }
+    .cell-lookup-result.success { background: var(--success-soft); border: 1px solid var(--success-line); color: var(--success); }
+    .cell-lookup-result.error { background: var(--danger-soft); border: 1px solid var(--danger-line); color: var(--danger); }
 
     /* Thanh hành động trên tab "Tra cứu danh sách" (không còn nút nào khi mọi cell đã tra). */
     .cl-topbar { display: flex; gap: 6px; margin-bottom: 8px; }
@@ -429,12 +403,12 @@
     .cls-body { min-width: 0; flex: 1 1 auto; }
     .cls-detail { display: flex; align-items: center; gap: 5px; min-width: 0;
       font-size: 12px; color: var(--text-primary); }
-    .cls-detail > i { color: #22a06b; flex: 0 0 auto; }
+    .cls-detail > i { color: var(--success); flex: 0 0 auto; }
     .cls-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
     .cls-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
     .cls-actions .cls-btn { margin: 0; padding: 4px 7px; font-size: 11.5px; }
     .cls-actions .cls-close { color: var(--text-secondary); }
-    .cls-actions .cls-close:hover { color: #e5484d; border-color: #e5484d; }
+    .cls-actions .cls-close:hover { color: var(--danger); border-color: var(--danger); }
     .cl-records-block {
       border-top: 1px solid var(--border-color); margin: 8px 0 0; padding-top: 8px;
       flex: 1; display: flex; flex-direction: column; min-height: 0;
@@ -465,7 +439,7 @@
       display: none; align-items: center; gap: 6px; padding: 14px 12px;
       font-size: 11.5px; color: var(--text-primary);
     }
-    .cl-up-inline-busy > i { color: #22aa44; }
+    .cl-up-inline-busy > i { color: var(--success); }
     .cl-up-inline-busy > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cl-inline-drop.busy .cl-up-drop-face { display: none; }
     .cl-inline-drop.busy .cl-up-inline-busy { display: flex; }
@@ -488,7 +462,7 @@
     }
     .cl-pick-help:hover {
       color: var(--accent, #3d7ce0); border-color: var(--accent, #3d7ce0);
-      background: rgba(61,124,224,0.12);
+      background: var(--accent-soft);
     }
     /* Chọn mạng: 1 hàng gọn — nhãn + select, select có logo thật của mạng đang chọn.
        <select> native để phủ toàn ô (bấm là mở list); phần hiển thị (logo + tên) là
@@ -590,7 +564,7 @@
       color: var(--text-primary); margin-bottom: 8px;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    .cl-up-file > i { color: #22aa44; }
+    .cl-up-file > i { color: var(--success); }
     .cl-up-stats { display: flex; gap: 6px; margin-bottom: 10px; }
     .cl-up-stat {
       flex: 1 1 0; min-width: 0; text-align: center; padding: 8px 4px;
@@ -598,19 +572,19 @@
     }
     .cl-up-stat b { display: block; font-size: 16px; color: var(--text-primary); line-height: 1.2; }
     .cl-up-stat span { font-size: 10px; color: var(--text-faint); }
-    .cl-up-stat.err b { color: #ee6666; }
-    .cl-up-stat.ok b { color: #22aa44; }
+    .cl-up-stat.err b { color: var(--danger); }
+    .cl-up-stat.ok b { color: var(--success); }
     .cl-up-resolve {
       padding: 9px 10px; border-radius: 8px; font-size: 11.5px; color: var(--text-primary);
-      border: 1px solid rgba(51,102,255,0.35); background: rgba(51,102,255,0.1);
+      border: 1px solid var(--accent-line); background: var(--accent-soft);
     }
     .cl-up-resolve.free {
-      border-color: rgba(34,170,68,0.35); background: rgba(34,170,68,0.1);
+      border-color: var(--success-line); background: var(--success-soft);
     }
     .cl-up-resolve.warn {
-      border-color: rgba(255,136,0,0.4); background: rgba(255,136,0,0.1);
+      border-color: var(--warning-line); background: var(--warning-soft);
     }
-    .cl-up-resolve .cl-up-warn { margin-top: 5px; color: #ff8800; }
+    .cl-up-resolve .cl-up-warn { margin-top: 5px; color: var(--warning); }
     .cl-up-actions { display: flex; gap: 6px; margin-top: 12px; }
     .cl-up-actions .btn { flex: 1; margin: 0; }
 
@@ -625,11 +599,11 @@
     .cl-credit-notice {
       margin: 6px 0; padding: 8px 10px;
       border-radius: 6px; font-size: 11px;
-      border: 1px solid rgba(255,136,0,0.4); background: rgba(255,136,0,0.1);
+      border: 1px solid var(--warning-line); background: var(--warning-soft);
       color: var(--text-primary);
     }
     .cl-credit-notice.ok {
-      border-color: rgba(34,170,68,0.35); background: rgba(34,170,68,0.1);
+      border-color: var(--success-line); background: var(--success-soft);
     }
     .cl-credit-notice a { color: inherit; text-decoration: underline; }
 
@@ -695,7 +669,7 @@
     .cl-tbl thead th.cl-sort-desc .cl-sort-ico { opacity: 1; color: var(--accent, #3d7ce0); }
     .cl-tbl tbody tr { border-bottom: 1px solid var(--border-color); }
     .cl-tbl tbody tr:hover { background: var(--bg-hover); }
-    .cl-tbl tbody tr.cl-row-sel { background: rgba(51,102,255,0.08); }
+    .cl-tbl tbody tr.cl-row-sel { background: var(--accent-soft); }
     .cl-tbl td { padding: 5px 7px; vertical-align: middle; overflow: hidden; }
     .cl-tbl td.cl-tbl-num { text-align: right; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
     .cl-tbl td.cl-tbl-loc { font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -752,7 +726,7 @@
     /* Hàng kẻ sọc cho dễ dò theo hàng (bảng nhiều cột). */
     .cl-tbl tbody tr.cl-row:nth-child(even) { background: rgba(127,127,127,0.05); }
     .cl-tbl tbody tr.cl-row:hover { background: var(--bg-hover); }
-    .cl-tbl tbody tr.cl-row-sel { background: rgba(51,102,255,0.12); }
+    .cl-tbl tbody tr.cl-row-sel { background: var(--accent-soft); }
     /* Dòng chẵn: dải mảnh "sóng" để mắt bám hàng khi bảng rộng. */
     .cl-tbl tbody tr.cl-row:nth-child(even) > td { border-bottom-color: rgba(127,127,127,0.14); }
     .cl-tbl tbody tr.cl-row > td:first-child { padding-left: 30px; position: relative; }
@@ -774,12 +748,12 @@
     .cl-row-busy { display: flex; align-items: center; gap: 4px; width: 100%; }
     .cl-row-busy-bar {
       position: relative; flex: 1 1 auto; height: 3px; min-width: 34px;
-      border-radius: 999px; background: rgba(61,124,224,0.22); overflow: hidden;
+      border-radius: 999px; background: var(--accent-soft); overflow: hidden;
     }
     /* Thanh chạy vô định (không biết trước % của 1 cell) — dải sáng trượt qua lại. */
     .cl-row-busy-bar > i {
       position: absolute; top: 0; left: 0; height: 100%; width: 40%;
-      background: #3d7ce0; border-radius: 999px;
+      background: var(--accent); border-radius: 999px;
       animation: cl-busy-slide 1.1s ease-in-out infinite;
     }
     @keyframes cl-busy-slide {
@@ -787,7 +761,7 @@
       100% { transform: translateX(250%); }
     }
     .cl-row-busy-t {
-      font-size: 9.5px; color: #3d7ce0; font-variant-numeric: tabular-nums;
+      font-size: 9.5px; color: var(--accent); font-variant-numeric: tabular-nums;
       min-width: 26px; text-align: right; flex-shrink: 0;
     }
     /* Thanh tiến trình TỔNG trong dải meta của overlay bảng cell. */
@@ -798,7 +772,7 @@
     }
     .cl-sheet-prog-bar > i {
       display: block; height: 100%; border-radius: 999px;
-      background: linear-gradient(90deg, #3d7ce0, #33bb66);
+      background: linear-gradient(90deg, var(--accent), var(--success));
       transition: width 0.25s ease;
     }
     .cl-sheet-prog-txt {
@@ -807,10 +781,10 @@
     }
     /* Viền trái theo trạng thái (found/miss/unpaid...) — thấy ngay cell nào chưa có. */
     .cl-tbl tbody tr.cl-row { box-shadow: inset 3px 0 0 transparent; }
-    .cl-tbl tbody tr.st-found { box-shadow: inset 3px 0 0 #22aa44; }
-    .cl-tbl tbody tr.st-miss { box-shadow: inset 3px 0 0 #ee6666; }
-    .cl-tbl tbody tr.st-unpaid { box-shadow: inset 3px 0 0 #ff8800; }
-    .cl-tbl tbody tr.st-busy { box-shadow: inset 3px 0 0 #3d7ce0; }
+    .cl-tbl tbody tr.st-found { box-shadow: inset 3px 0 0 var(--success); }
+    .cl-tbl tbody tr.st-miss { box-shadow: inset 3px 0 0 var(--danger); }
+    .cl-tbl tbody tr.st-unpaid { box-shadow: inset 3px 0 0 var(--warning); }
+    .cl-tbl tbody tr.st-busy { box-shadow: inset 3px 0 0 var(--accent); }
     .cl-show-more-wrap { padding: 8px; text-align: center; }
     .cl-show-more {
       padding: 6px 14px; border-radius: 999px; cursor: pointer;
@@ -820,7 +794,7 @@
     .cl-show-more:hover { border-color: var(--accent, #3d7ce0); color: var(--accent, #3d7ce0); }
     /* Nút CTA Tra cứu: to, rõ hơn nút phụ (tránh bấm nhầm/không thấy). */
     .cl-resolve-cta { padding: 9px 16px; font-size: 13px; font-weight: 600; }
-    .cl-up-reuse { color: #22aa44; }
+    .cl-up-reuse { color: var(--success); }
     /* Trạng thái dạng "viên thuốc" cho dễ quét mắt. */
     .cl-row-status {
       display: inline-block; padding: 1px 8px; border-radius: 999px;
@@ -835,23 +809,23 @@
       font-size: 12.5px; color: var(--text-secondary);
     }
     .cl-cfm-row b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
-    .cl-cfm-row.free { color: #22aa44; }
+    .cl-cfm-row.free { color: var(--success); }
     .cl-cfm-row.total { border: 1px solid var(--border-color); }
-    .cl-cfm-row.bad { color: var(--bg-btn-danger, #dd3333); }
+    .cl-cfm-row.bad { color: var(--danger); }
     .cl-cfm-note {
       margin-top: 4px; padding: 7px 10px; border-radius: 6px; font-size: 11.5px;
-      background: rgba(34,170,68,0.1); color: var(--text-secondary);
+      background: var(--success-soft); color: var(--text-secondary);
     }
-    .cl-cfm-note.bad { background: rgba(221,51,51,0.1); color: var(--bg-btn-danger, #dd3333); }
+    .cl-cfm-note.bad { background: var(--danger-soft); color: var(--danger); }
     .cl-cfm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
     .cl-tbl-check { width: 14px; height: 14px; cursor: pointer; }
     /* Trạng thái từng dòng */
     .cl-row-status { white-space: nowrap; font-size: 11px; }
     .cl-row-status.pending { color: var(--text-faint); }
     .cl-row-status.busy { color: var(--accent, #3d7ce0); }
-    .cl-row-status.found { color: #22aa44; }
-    .cl-row-status.miss { color: #ee6666; }
-    .cl-row-status.unpaid { color: #ff8800; }
+    .cl-row-status.found { color: var(--success); }
+    .cl-row-status.miss { color: var(--danger); }
+    .cl-row-status.unpaid { color: var(--warning); }
     /* Cột Trạng thái chỉ hiện ICON cho gọn; chữ trạng thái nằm trong tooltip
        (title) → hover là thấy, không chiếm bề ngang dòng. Bỏ padding/border của
        "viên thuốc" để icon đứng một mình cho thẳng hàng với các cột khác. */
@@ -878,9 +852,9 @@
     .log-card:nth-child(even) { background: color-mix(in srgb, var(--bg-surface2) 55%, var(--bg-surface)); }
     .log-card[onclick] { cursor: pointer; }
     .log-card:hover { border-color: var(--border-focus, var(--accent, #3d7ce0)); }
-    .log-card.st-found { box-shadow: inset 3px 0 0 #22aa44; }
-    .log-card.st-miss { box-shadow: inset 3px 0 0 #ee6666; }
-    .log-card.st-unpaid { box-shadow: inset 3px 0 0 #ff8800; }
+    .log-card.st-found { box-shadow: inset 3px 0 0 var(--success); }
+    .log-card.st-miss { box-shadow: inset 3px 0 0 var(--danger); }
+    .log-card.st-unpaid { box-shadow: inset 3px 0 0 var(--warning); }
     .log-card.st-pending { box-shadow: inset 3px 0 0 var(--border-color); }
     /* Dòng chi tiết của cell trong bản ghi: toạ độ / bán kính / nguồn (đã tra ra),
        "không tìm thấy" (đã tra không ra), "chưa tra" (chưa trả phí). */
@@ -891,9 +865,9 @@
     }
     .log-detail > span { display: inline-flex; align-items: center; white-space: nowrap; }
     .log-detail i { margin-right: 3px; font-size: 9px; opacity: 0.85; }
-    .log-detail span.ok { color: #33bb66; }
-    .log-detail span.miss { color: #ee6666; }
-    .log-detail span.unpaid { color: #ff8800; }
+    .log-detail span.ok { color: var(--success); }
+    .log-detail span.miss { color: var(--danger); }
+    .log-detail span.unpaid { color: var(--warning); }
     .log-detail .log-coords { font-variant-numeric: tabular-nums; }
     .log-detail .log-copy { cursor: pointer; color: var(--text-faint); margin-left: 4px; opacity: 1; }
     .log-detail .log-copy:hover { color: var(--text-primary); }
@@ -913,9 +887,47 @@
     .cell-coord-acts > i:focus-visible {
       outline: 2px solid var(--border-focus); outline-offset: 1px; border-radius: 2px;
     }
-    /* Trong popup bản đồ (nền sáng/tối theo theme) icon phải đọc được. */
+    /* Trong popup bản đồ (popup luôn nền sáng) icon phải đọc được. */
     .leaflet-popup-content .cell-coord-acts > i { color: #666; }
-    .leaflet-popup-content .cell-coord-acts > i:hover { color: #3d7ce0; }
+    .leaflet-popup-content .cell-coord-acts > i:hover { color: #4444cc; }
+    /* ---- Popup thông tin cell trên bản đồ ----
+       Phần đầu (cell/ECI/công nghệ/bán kính/toạ độ) luôn hiện; danh sách bản ghi
+       trùng cell tách vào vùng CUỘN riêng có chiều cao giới hạn — cell có hàng trăm
+       cuộc gọi không làm popup dài quá khung bản đồ. */
+    .leaflet-popup-content .cell-pop { min-width: 0; }
+    .leaflet-popup-content .cell-pop-hd { line-height: 1.45; }
+    .leaflet-popup-content .cell-pop-logs {
+      margin-top: 6px; padding-top: 5px;
+      border-top: 1px solid rgba(0,0,0,0.15);
+      /* 170px ≈ 7 dòng — đủ thấy danh sách mà popup vẫn gọn trên bản đồ. */
+      max-height: 170px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0,0,0,0.28) transparent;
+    }
+    .leaflet-popup-content .cell-pop-logs::-webkit-scrollbar { width: 7px; }
+    .leaflet-popup-content .cell-pop-logs::-webkit-scrollbar-track { background: transparent; }
+    .leaflet-popup-content .cell-pop-logs::-webkit-scrollbar-thumb {
+      background: rgba(0,0,0,0.28); border-radius: 4px;
+    }
+    .leaflet-popup-content .cell-pop-logs::-webkit-scrollbar-thumb:hover {
+      background: rgba(0,0,0,0.45);
+    }
+    .leaflet-popup-content .cell-pop-logs-hd {
+      font-weight: 600; font-size: 11.5px; margin-bottom: 3px;
+      color: #333; position: sticky; top: 0; background: #fff;
+      padding: 1px 0 2px; z-index: 1;
+    }
+    .leaflet-popup-content .cell-pop-log {
+      font-size: 11.5px; line-height: 1.5; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .leaflet-popup-content .cell-pop-act { color: #666; }
+    .leaflet-popup-content .cell-pop-more {
+      font-size: 11px; font-style: italic; color: #666;
+      padding: 3px 0 1px; border-top: 1px dashed rgba(0,0,0,0.12); margin-top: 3px;
+    }
     .log-card-hd {
       display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
       font-size: 11.5px; line-height: 1.4;
@@ -956,7 +968,7 @@
       flex: 0 0 auto; width: 22px; height: 22px; display: inline-flex;
       align-items: center; justify-content: center; padding: 0;
       border: 1px solid var(--accent, #3d7ce0); border-radius: 6px;
-      background: rgba(61,124,224,0.10); color: var(--accent, #3d7ce0);
+      background: var(--accent-soft); color: var(--accent, #3d7ce0);
       cursor: pointer; font-size: 10px; transition: background 0.15s, color 0.15s;
     }
     .log-card-go:hover { background: var(--accent, #3d7ce0); color: #fff; }
@@ -970,16 +982,16 @@
     .log-lookup-bar > i { flex: 0 0 auto; font-size: 10px; }
     .log-lookup-bar > span { flex: 1 1 auto; min-width: 0; }
     .log-lookup-bar.busy {
-      background: rgba(61,124,224,0.12); border-color: rgba(61,124,224,0.45); color: #2c5fb8;
+      background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent);
     }
     .log-lookup-bar.done {
-      background: rgba(46,158,91,0.12); border-color: rgba(46,158,91,0.45); color: #1f7a45;
+      background: var(--success-soft); border-color: var(--success-line); color: var(--success);
     }
     .log-lookup-bar.miss, .log-lookup-bar.fail {
-      background: rgba(217,83,79,0.11); border-color: rgba(217,83,79,0.45); color: #b03a37;
+      background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger);
     }
     .log-lookup-bar.nofunds {
-      background: rgba(217,149,42,0.13); border-color: rgba(217,149,42,0.5); color: #96650f;
+      background: var(--warning-soft); border-color: var(--warning-line); color: var(--warning);
     }
     /* Phiên đang mở (card phiên trong tab Lịch sử) — viền trái theo accent. */
     .hist-session.is-open { border-color: var(--border-focus); box-shadow: inset 3px 0 0 var(--accent, #3d7ce0); }
@@ -1000,8 +1012,8 @@
     /* Card phiên — đủ trường của 1 phiên: tên file, mạng, số bản ghi, tiến độ tra,
        nhãn "còn cell chưa tra". */
     .hist-session {
-      border: 1px solid var(--border-color); border-left: 3px solid #ee9922;
-      border-radius: 8px; padding: 7px 9px; background: rgba(255,136,0,0.09);
+      border: 1px solid var(--border-color); border-left: 3px solid var(--warning);
+      border-radius: 8px; padding: 7px 9px; background: var(--warning-soft);
       display: flex; gap: 8px; align-items: flex-start;
       transition: border-color 0.2s, background 0.2s;
       /* Card là grid item của danh sách → không được tràn/đè card kế tiếp. */
@@ -1017,8 +1029,8 @@
       min-width: 0;
     }
     .hist-session-meta span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; min-width: 0; }
-    .hist-session-meta .ok { color: #33bb66; }
-    .hist-session-meta .miss { color: #ee9922; }
+    .hist-session-meta .ok { color: var(--success); }
+    .hist-session-meta .miss { color: var(--warning); }
     .hist-session-acts { display: flex; gap: 4px; flex-shrink: 0; }
     /* Mục "Tra cứu danh sách (Excel)" trong tab Lịch sử — bấm tiêu đề để thu gọn/mở. */
     .hist-section-hd {
@@ -1037,11 +1049,11 @@
     .hs-filter-chip {
       display: inline-flex; align-items: center; gap: 3px;
       font-size: 9.5px; font-weight: 600; text-transform: none; letter-spacing: 0;
-      color: var(--accent, #3d7ce0); background: rgba(61,124,224,0.12);
-      border: 1px solid rgba(61,124,224,0.4); border-radius: 999px;
+      color: var(--accent, #3d7ce0); background: var(--accent-soft);
+      border: 1px solid var(--accent-line); border-radius: 999px;
       padding: 0 6px; line-height: 15px; cursor: pointer;
     }
-    .hs-filter-chip:hover { background: rgba(61,124,224,0.22); }
+    .hs-filter-chip:hover { background: var(--accent-line); }
     .hs-filter-chip.hidden { display: none; }
     .hs-cal {
       flex-shrink: 0; width: 22px; height: 20px; padding: 0;
@@ -1129,7 +1141,7 @@
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
       overflow-wrap: anywhere;
     }
-    #histBatchList .hist-session-hd i { color: #22aa55; flex-shrink: 0; font-size: 11px; }
+    #histBatchList .hist-session-hd i { color: var(--success); flex-shrink: 0; font-size: 11px; }
     /* Dòng thông tin: thời gian + chip, tự xuống dòng khi hẹp. */
     #histBatchList .hist-session-info {
       display: flex; flex-wrap: wrap; align-items: center;
@@ -1155,7 +1167,7 @@
       color: var(--text-primary); min-width: 0; overflow-wrap: anywhere;
     }
     #histBatchList .hs-stat.found > i, #histBatchList .hs-stat.found .hs-stat-v { color: var(--accent, #3d7ce0); }
-    #histBatchList .hs-stat.pend > i, #histBatchList .hs-stat.pend .hs-stat-v { color: #d9952a; }
+    #histBatchList .hs-stat.pend > i, #histBatchList .hs-stat.pend .hs-stat-v { color: var(--warning); }
     /* Dòng cuối: nhãn trạng thái + thanh tiến độ + %. */
     #histBatchList .hist-session-note {
       display: flex; flex-wrap: wrap; align-items: center;
@@ -1169,8 +1181,8 @@
       border: 1px solid transparent; flex: 0 0 auto;
     }
     #histBatchList .hs-state > i { font-size: 9px; }
-    #histBatchList .hs-state.done { color: #33bb66; background: rgba(51,187,102,0.12); border-color: rgba(51,187,102,0.4); }
-    #histBatchList .hs-state.part { color: #d9952a; background: rgba(217,149,42,0.12); border-color: rgba(217,149,42,0.4); }
+    #histBatchList .hs-state.done { color: var(--success); background: var(--success-soft); border-color: var(--success-line); }
+    #histBatchList .hs-state.part { color: var(--warning); background: var(--warning-soft); border-color: var(--warning-line); }
     /* Thanh tiến độ nằm cùng hàng nhãn: giãn hết chỗ, % bám sau. */
     #histBatchList .hist-session-prog {
       display: inline-flex; align-items: center; gap: 5px;
@@ -1213,10 +1225,10 @@
     }
     /* Thanh tiến độ tra cell: đã tra / tổng cell của file. */
     .hist-prog {
-      height: 4px; border-radius: 999px; background: rgba(0,0,0,0.12);
+      height: 4px; border-radius: 999px; background: var(--border-color);
       margin-top: 5px; overflow: hidden;
     }
-    .hist-prog > i { display: block; height: 100%; background: #33bb66; border-radius: 999px; }
+    .hist-prog > i { display: block; height: 100%; background: var(--success); border-radius: 999px; }
     /* Thanh tiến độ trong card phiên: co giãn hết bề rộng còn lại, nhãn % bám sau. */
     .hist-session-bar {
       position: relative; flex: 1 1 auto;
@@ -1227,7 +1239,7 @@
     }
     .hist-session-bar > span {
       display: block; height: 100%; border-radius: 999px;
-      background: linear-gradient(90deg, #33bb66, #2ea35c);
+      background: var(--success);
       transition: width 0.3s ease;
     }
     /* Nhãn "n/t · x%" — nhỏ, chỉ để đọc nhanh tiến độ. */
@@ -1239,11 +1251,11 @@
     /* Nhãn cảnh báo "còn N cell chưa tra" (không đủ điểm / bỏ dở) — bấm để mở lại. */
     .hist-pending-badge {
       display: inline-flex; align-items: center; gap: 4px; margin-top: 4px;
-      font-size: 10.5px; font-weight: 600; color: var(--warning, #d9952a);
-      background: rgba(217,149,42,0.12); border: 1px solid rgba(217,149,42,0.45);
+      font-size: 10.5px; font-weight: 600; color: var(--warning);
+      background: var(--warning-soft); border: 1px solid var(--warning-line);
       padding: 1px 7px; border-radius: 999px; cursor: pointer;
     }
-    .hist-pending-badge:hover { background: rgba(217,149,42,0.22); }
+    .hist-pending-badge:hover { border-color: var(--warning); }
     .hidden { display: none !important; }
     .hist-list {
       font-size: 12px; flex: 1; min-height: 0; overflow-y: auto;
@@ -1304,14 +1316,15 @@
     }
     .hist-toolbar input[type="date"]:focus { border-color: var(--border-focus); }
     .hist-toolbar input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.65; }
-    [data-theme="dark"] .hist-toolbar input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); }
+    /* Không cần đảo màu icon lịch: theme.css đặt `color-scheme` theo theme nên
+       trình duyệt tự vẽ icon sáng/tối phù hợp (đảo thêm sẽ thành icon tối trên nền tối). */
     .hist-date-clear { flex: 0 0 auto; padding: 5px 8px; }
     .hist-pager { display: flex; align-items: center; gap: 6px; }
     .hist-pager span { flex: 1; text-align: center; font-size: 11px; color: var(--text-muted); }
     /* Card 1 lượt tra đơn lẻ: mã cell + toạ độ / "Không tìm thấy" + badge RAT. */
     .hist-card {
-      border: 1px solid var(--border-color); border-left: 3px solid #6666ee;
-      border-radius: 8px; padding: 7px 9px; background: rgba(68,68,204,0.10);
+      border: 1px solid var(--border-color); border-left: 3px solid var(--accent);
+      border-radius: 8px; padding: 7px 9px; background: var(--accent-soft);
       transition: border-color 0.2s, background 0.2s;
       display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
     }
@@ -1326,14 +1339,14 @@
     }
     .hist-meta i { margin-right: 3px; }
     .hist-meta span { white-space: nowrap; }
-    .hist-meta span.ok { color: #33bb66; }
-    .hist-meta span.miss { color: #ee9922; }
+    .hist-meta span.ok { color: var(--success); }
+    .hist-meta span.miss { color: var(--warning); }
     .hist-del {
       background: none; border: none; color: var(--text-faint); cursor: pointer;
       font-size: 12px; padding: 2px 4px; border-radius: 4px; transition: all 0.2s;
       flex-shrink: 0;
     }
-    .hist-del:hover { color: #ee6666; background: rgba(204,51,51,0.1); }
+    .hist-del:hover { color: var(--danger); background: var(--danger-soft); }
     /* Cụm nút bên phải thẻ (Tra lại + Xoá) — dọc, không cho co lại. */
     .hist-card-acts {
       display: flex; align-items: center; gap: 2px; flex: 0 0 auto;
@@ -1344,7 +1357,7 @@
       font-size: 12px; padding: 2px 4px; border-radius: 4px; transition: all 0.2s;
       flex-shrink: 0;
     }
-    .hist-retry:hover { color: #3d7ce0; background: rgba(61,124,224,0.12); }
+    .hist-retry:hover { color: var(--accent); background: var(--accent-soft); }
     .hist-retry:disabled { opacity: 0.6; cursor: progress; }
     /* Thanh trạng thái của lần "Tra lại" — nằm dưới toàn bộ thân thẻ. */
     .hist-retry-bar {
@@ -1355,23 +1368,23 @@
     .hist-retry-bar > i { flex: 0 0 auto; font-size: 10px; }
     .hist-retry-bar > span { flex: 1 1 auto; min-width: 0; }
     .hist-retry-bar.busy {
-      background: rgba(61,124,224,0.12); border-color: rgba(61,124,224,0.45); color: #2c5fb8;
+      background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent);
     }
     .hist-retry-bar.done {
-      background: rgba(46,158,91,0.12); border-color: rgba(46,158,91,0.45); color: #1f7a45;
+      background: var(--success-soft); border-color: var(--success-line); color: var(--success);
     }
     .hist-retry-bar.miss, .hist-retry-bar.fail {
-      background: rgba(217,83,79,0.11); border-color: rgba(217,83,79,0.45); color: #b03a37;
+      background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger);
     }
     .hist-retry-bar.nofunds {
-      background: rgba(217,149,42,0.13); border-color: rgba(217,149,42,0.5); color: #96650f;
+      background: var(--warning-soft); border-color: var(--warning-line); color: var(--warning);
     }
     .hist-empty { text-align: center; color: var(--text-faint); padding: 16px 0; }
     .hist-cell {
       font-family: ui-monospace, monospace; font-weight: 600; color: var(--text-primary);
       font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    .hist-coords { font-family: ui-monospace, monospace; color: #33bb66; font-size: 11px; margin-top: 3px; }
+    .hist-coords { font-family: ui-monospace, monospace; color: var(--success); font-size: 11px; margin-top: 3px; }
     .hist-coords.miss { color: var(--text-faint); font-family: inherit; }
     /* Nguồn dữ liệu: chỉ icon, tên nguồn nằm trong tooltip */
     .hist-source {
@@ -1379,8 +1392,8 @@
       font-size: 10px; background: var(--bg-surface2); border: 1px solid var(--border-color);
       color: var(--text-secondary);
     }
-    .hist-source.local { color: #3366ff; border-color: rgba(51,102,255,0.4); }
-    .hist-source.online { color: #22aa44; border-color: rgba(34,170,68,0.4); }
+    .hist-source.local { color: var(--accent); border-color: var(--accent-line); }
+    .hist-source.online { color: var(--success); border-color: var(--success-line); }
     /* RAT badge (2G/3G/4G/5G/NB...): màu nền đặt inline theo RADIO_STYLE */
     .hist-radio-badge {
       display: inline-block; padding: 1px 6px; border-radius: 10px;
@@ -1451,7 +1464,7 @@
     .cf-ico {
       flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px;
       display: inline-flex; align-items: center; justify-content: center;
-      background: rgba(229,72,77,0.16); color: #e5484d; font-size: 12px;
+      background: var(--danger-soft); color: var(--danger); font-size: 12px;
     }
     .cf-x {
       flex: 0 0 auto; width: 24px; height: 24px; padding: 0;
@@ -1472,7 +1485,7 @@
     .cf-warn[hidden] { display: none; }
     .cf-warn > i { flex: 0 0 auto; margin-top: 2px; font-size: 11px; }
     .cf-warn ul { margin: 0; padding-left: 14px; display: flex; flex-direction: column; gap: 3px; }
-    .cf-danger { color: #f07275; background: rgba(229,72,77,0.1); border-color: rgba(229,72,77,0.34); }
+    .cf-danger { color: var(--danger); background: var(--danger-soft); border-color: var(--danger-line); }
     .cf-info { color: var(--text-secondary); background: var(--bg-surface2); border-color: var(--border-color); }
     .cf-info > i { color: var(--accent, #3d7ce0); }
     /* Chi tiết đối tượng sẽ xoá (tên file, số cell, thời gian...). */
@@ -1489,13 +1502,15 @@
       background: var(--bg-surface2);
     }
     .cf-ft .btn { margin: 0; min-width: 84px; justify-content: center; }
-    .btn.btn-danger { background: #d94045; border-color: #d94045; color: #fff; }
-    .btn.btn-danger:hover { background: #e5484d; border-color: #e5484d; }
+    /* Nút xoá trong popup xác nhận: dùng đúng token đỏ của theme (không tự đặt
+       một mã đỏ riêng như trước → đồng bộ với .btn-danger ở mọi nơi). */
+    .btn.btn-danger { background: var(--bg-btn-danger); border-color: var(--bg-btn-danger); color: #fff; }
+    .btn.btn-danger:hover { filter: brightness(1.15); }
 
     /* My data table in modal */
     .my-data-table { width: 100%; border-collapse: collapse; font-size: 11px; }
     .my-data-table th { color: var(--text-muted); padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 9px; text-transform: uppercase; }
-    .my-data-table td { color: var(--text-secondary); padding: 4px 6px; border-bottom: 1px solid rgba(0,0,0,0.03); font-family: monospace; }
+    .my-data-table td { color: var(--text-secondary); padding: 4px 6px; border-bottom: 1px solid var(--border-color); font-family: monospace; }
     .my-data-table tr:hover td { background: var(--bg-surface2); }
 
     /* =====================================================
@@ -1576,12 +1591,12 @@
     }
     .cl-status-chips .cl-chip b {
       font-weight: 700; font-size: 11px; min-width: 14px; text-align: center;
-      padding: 1px 4px; border-radius: 999px; background: rgba(0,0,0,0.12);
+      padding: 1px 4px; border-radius: 999px; background: rgba(127,127,127,0.22);
     }
     .cl-status-chips .cl-chip.active b { background: rgba(255,255,255,0.25); }
-    .cl-status-chips .cl-chip-found:not(.active) { color: var(--success, #2e9e5b); border-color: rgba(46,158,91,0.45); }
-    .cl-status-chips .cl-chip-miss:not(.active) { color: var(--danger, #d9534f); border-color: rgba(217,83,79,0.45); }
-    .cl-status-chips .cl-chip-unpaid:not(.active) { color: var(--warning, #d9952a); border-color: rgba(217,149,42,0.45); }
+    .cl-status-chips .cl-chip-found:not(.active) { color: var(--success); border-color: var(--success-line); }
+    .cl-status-chips .cl-chip-miss:not(.active) { color: var(--danger); border-color: var(--danger-line); }
+    .cl-status-chips .cl-chip-unpaid:not(.active) { color: var(--warning); border-color: var(--warning-line); }
     /* Bộ lọc trạng thái trong PANEL của tab "Tra cứu danh sách": đồng bộ nhịp với
        .cl-filter-chips (cùng chiều cao 30px, cùng gap 4px, cùng bo góc 6px, cùng
        dàn đều flex:1) để 2 hàng chip xếp khít như một khối lọc duy nhất. Nhãn dài
@@ -1598,13 +1613,13 @@
     #clRecordStatusChips .cl-chip b {
       flex: 0 0 auto; font-weight: 700; font-size: 10.5px; min-width: 15px;
       text-align: center; padding: 1px 3px; border-radius: 999px;
-      background: rgba(0,0,0,0.10); font-variant-numeric: tabular-nums;
+      background: rgba(127,127,127,0.22); font-variant-numeric: tabular-nums;
     }
     #clRecordStatusChips .cl-chip.active b { background: rgba(255,255,255,0.28); }
     /* Giữ đúng bảng màu trạng thái của overlay bảng cell. */
-    #clRecordStatusChips .cl-chip-found:not(.active) { color: var(--success, #2e9e5b); border-color: rgba(46,158,91,0.45); }
-    #clRecordStatusChips .cl-chip-miss:not(.active) { color: var(--danger, #d9534f); border-color: rgba(217,83,79,0.45); }
-    #clRecordStatusChips .cl-chip-unpaid:not(.active) { color: var(--warning, #d9952a); border-color: rgba(217,149,42,0.45); }
+    #clRecordStatusChips .cl-chip-found:not(.active) { color: var(--success); border-color: var(--success-line); }
+    #clRecordStatusChips .cl-chip-miss:not(.active) { color: var(--danger); border-color: var(--danger-line); }
+    #clRecordStatusChips .cl-chip-unpaid:not(.active) { color: var(--warning); border-color: var(--warning-line); }
     /* Màn hẹp: bỏ nhãn chữ, chỉ còn icon + số (title vẫn giữ mô tả đầy đủ). */
     @media (max-width: 420px) {
       #clRecordStatusChips .cl-chip span { display: none; }
@@ -1628,13 +1643,13 @@
       background: var(--bg-hover);
     }
     /* Chấm báo đang lọc ngày — cùng vị trí/kích thước với mũi tên .cl-chip-dir. */
-    .cl-chip-date .cl-date-dot { font-size: 6px; opacity: 1; color: #e5484d; }
+    .cl-chip-date .cl-date-dot { font-size: 6px; opacity: 1; color: var(--danger); }
     .cl-chip-date.active .cl-date-dot { color: #fff; }
     /* Dòng hiện khoảng ngày đang lọc (chỉ hiện khi có lọc) + nút bỏ lọc. */
     .cl-date-active {
       display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
       padding: 0 4px 0 8px; height: 28px; border-radius: 6px;
-      border: 1px solid var(--border-focus, #3d7ce0); background: rgba(61,124,224,0.08);
+      border: 1px solid var(--accent-line); background: var(--accent-soft);
       color: var(--text-primary); font-size: 11.5px;
     }
     .cl-date-active > i { flex: 0 0 auto; font-size: 11px; color: var(--accent, #3d7ce0); }
@@ -1647,7 +1662,7 @@
       justify-content: center; border: 0; background: transparent;
       color: var(--text-muted); border-radius: 4px; cursor: pointer; font-size: 10px; padding: 0;
     }
-    .cl-date-clear:hover { color: #e5484d; background: rgba(229,72,77,0.12); }
+    .cl-date-clear:hover { color: var(--danger); background: var(--danger-soft); }
     /* Popup lịch — neo vào .cl-filter-panel, canh theo JS (set ở toggleClDatePicker)
        để luôn nằm ngay dưới hàng chip, không phụ thuộc padding của panel. */
     .cl-filter-panel { position: relative; }
@@ -1683,7 +1698,7 @@
     .cl-cal-day:hover { background: var(--bg-hover); }
     .cl-cal-day.other { color: var(--text-faint); opacity: 0.55; }
     /* Ngày đầu/cuối khoảng + ngày đang chọn giữa chừng. */
-    .cl-cal-day.in-range { background: rgba(61,124,224,0.14); border-radius: 0; }
+    .cl-cal-day.in-range { background: var(--accent-soft); border-radius: 0; }
     .cl-cal-day.range-start, .cl-cal-day.range-end {
       background: var(--accent, #3d7ce0); color: #fff; font-weight: 600;
     }
@@ -1746,9 +1761,9 @@
       border: 1px solid var(--border-color); border-radius: 7px;
     }
     .cl-list-summary b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
-    .cl-list-summary .cls-ok { color: #33bb66; }
-    .cl-list-summary .cls-miss { color: #ee6666; }
-    .cl-list-summary .cls-unpaid { color: #ff8800; }
+    .cl-list-summary .cls-ok { color: var(--success); }
+    .cl-list-summary .cls-miss { color: var(--danger); }
+    .cl-list-summary .cls-unpaid { color: var(--warning); }
     .cl-list-summary .cls-name {
       min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       color: var(--text-secondary); font-weight: 600; max-width: 45%;
@@ -1844,9 +1859,9 @@
       font-size: 10px; color: var(--text-faint); opacity: 0.85;
     }
     /* Số lượt thử chỉ dành cho khách. */
-    .panel-foot .guest-only { display: none; font-size: 10.5px; font-weight: 600; color: #c98a1e; }
+    .panel-foot .guest-only { display: none; font-size: 10.5px; font-weight: 600; color: var(--warning); }
     body.guest-mode .panel-foot .guest-only { display: inline; }
-    .panel-foot .guest-only.exhausted { color: #e04444; }
+    .panel-foot .guest-only.exhausted { color: var(--danger); }
 
     /* Khối tra cứu của khách (tab Tra cứu): gọn, chỉ ô nhập mã cell. */
     .guest-hint {
@@ -1854,7 +1869,7 @@
       background: var(--bg-surface2); border: 1px solid var(--border-color);
       border-radius: 8px; padding: 8px 10px; margin-bottom: 10px;
     }
-    .guest-hint i { color: #c98a1e; margin-right: 4px; }
+    .guest-hint i { color: var(--warning); margin-right: 4px; }
     .guest-hint b { color: var(--text-primary); }
     /* Chú thích màu theo công nghệ mạng (đồng bộ RADIO_STYLE trong app.js). */
     .guest-radio-legend {
@@ -1913,11 +1928,11 @@
       display: flex; align-items: center; gap: 8px;
       padding: 6px 8px; margin: 6px 0;
       font-size: 11px; line-height: 1.4;
-      border: 1px solid rgba(79,124,255,0.45);
-      background: rgba(79,124,255,0.10);
+      border: 1px solid var(--accent-line);
+      background: var(--accent-soft);
       border-radius: 8px; color: var(--text-secondary);
     }
-    .call-session-banner i { color: #4f7cff; }
+    .call-session-banner i { color: var(--accent); }
     .call-session-banner span { flex: 1; }
 
     /* ===== Thanh tổng kết nhanh tab Xem rút list ===== */
@@ -1928,8 +1943,8 @@
       background: var(--bg-surface2); border: 1px solid var(--border-color);
     }
     .call-log-summary b { color: var(--text-primary); }
-    .call-log-summary .cls-ok { color: #22aa44; }
-    .call-log-summary .cls-miss { color: #dd8800; }
+    .call-log-summary .cls-ok { color: var(--success); }
+    .call-log-summary .cls-miss { color: var(--warning); }
 
     /* Dòng kết quả tra cứu click được → có phản hồi hover */
     #cellList > div[onclick]:hover { background: var(--bg-hover); }

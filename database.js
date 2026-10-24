@@ -180,6 +180,12 @@ db.serialize(() => {
   db.run(`ALTER TABLE payment_orders ADD COLUMN expires_at DATETIME`, (err) => {
     if (err && !err.message.includes('duplicate column')) console.error('payment_orders.expires_at column:', err.message);
   });
+  // Số tiền payOS báo ĐÃ THU (webhook `data.amount` / API `amountPaid`). Giữ riêng
+  // để đối soát: đơn có thể UNDERPAID (chuyển thiếu) — khi đó KHÔNG cộng điểm và
+  // admin cần thấy chênh lệch, thay vì chỉ có raw_webhook JSON.
+  db.run(`ALTER TABLE payment_orders ADD COLUMN amount_paid INTEGER`, (err) => {
+    if (err && !err.message.includes('duplicate column')) console.error('payment_orders.amount_paid column:', err.message);
+  });
 
   // ==========================================================================
   // Email + kích hoạt tài khoản.

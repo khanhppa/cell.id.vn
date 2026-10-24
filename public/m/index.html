@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5">
-  <meta name="theme-color" content="#1a6cf0">
+  <meta name="theme-color" content="#111122">
   <meta name="color-scheme" content="dark light">
   <!-- Chặn trang khi website đang bảo trì (admin vẫn đi qua). Script chặn render. -->
   <script src="/site-status.js"></script>
@@ -229,8 +229,13 @@
 
   <header class="topbar">
     <div class="topbar-main">
-      <div class="topbar-hello" id="topHello">Xin chào</div>
-      <div class="topbar-title" id="topTitle">Tra cứu cell</div>
+      <!-- Logo website: bản chữ trắng cho theme tối, bản chữ xanh cho theme sáng
+           (đổi bằng CSS theo html[data-theme], ảnh chỉ tải đúng bản đang dùng). -->
+      <span class="topbar-logo" role="img" aria-label="Cell.id.vn"></span>
+      <div class="topbar-text">
+        <div class="topbar-hello" id="topHello">Xin chào</div>
+        <div class="topbar-title" id="topTitle">Tra cứu cell</div>
+      </div>
     </div>
     <button type="button" class="credit-pill" id="topCredit" onclick="mTab('account')" title="Số dư điểm">
       <i class="fas fa-gem"></i><span id="topCreditTxt">—</span>

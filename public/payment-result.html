@@ -12,30 +12,10 @@
 <link rel="icon" type="image/png" sizes="256x256" href="/img/favicon.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<!-- Bảng màu sáng/tối dùng chung (nguồn DUY NHẤT cho token màu của mọi trang). -->
+<link rel="stylesheet" href="/theme.css">
 <style>
-  :root {
-    --bg-page: #f4f6fb; --bg-card: #ffffff; --border-color: #e2e6ef;
-    --text-primary: #1c2333; --text-secondary: #5a6478; --text-faint: #98a1b5;
-    --accent: #4f7cff; --ok: #1f9e5a; --danger: #e04444; --warn: #c98a1e;
-    --bg-hover: rgba(0,0,0,0.05);
-    /* Biến navbar chung (auth.js) — thiếu là navbar rơi vào fallback màu sáng. */
-    --bg-surface: #ffffff;
-    --bg-surface2: #eef1f7;
-    --bg-btn-primary: #4f7cff;
-    --border-focus: #4f7cff;
-    --header-bg: #ffffff;
-  }
-  [data-theme="dark"] {
-    --bg-page: #14171f; --bg-card: #1c2029; --border-color: #2b3140;
-    --text-primary: #e7ebf3; --text-secondary: #a4adc0; --text-faint: #6d7689;
-    --accent: #6b93ff; --ok: #45c07d; --danger: #ff6b6b; --warn: #e0ab4a;
-    --bg-hover: rgba(255,255,255,0.07);
-    --bg-surface: #1c2029;
-    --bg-surface2: #232833;
-    --bg-btn-primary: #6b93ff;
-    --border-focus: #6b93ff;
-    --header-bg: #1c2029;
-  }
+  /* Token màu lấy từ /theme.css → đồng bộ với trang chủ/navbar/công cụ. */
   * { box-sizing: border-box; }
   body {
     margin: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -50,9 +30,9 @@
     width: 68px; height: 68px; border-radius: 50%; margin: 0 auto 14px;
     display: flex; align-items: center; justify-content: center; font-size: 30px;
   }
-  .res-icon.paid { background: rgba(31,158,90,.14); color: var(--ok); }
-  .res-icon.pending { background: rgba(255,170,60,.16); color: var(--warn); }
-  .res-icon.fail { background: rgba(224,68,68,.13); color: var(--danger); }
+  .res-icon.paid { background: var(--success-soft); color: var(--ok); }
+  .res-icon.pending { background: var(--warning-soft); color: var(--warn); }
+  .res-icon.fail { background: var(--danger-soft); color: var(--danger); }
   .res-title { font-size: 20px; font-weight: 800; margin: 0 0 6px; }
   .res-sub { color: var(--text-secondary); font-size: 13px; line-height: 1.6; margin: 0; }
   .rows { text-align: left; margin: 20px 0 0; border-top: 1px solid var(--border-color); }
@@ -67,10 +47,10 @@
   .bal-num { font-size: 30px; font-weight: 800; color: var(--ok); line-height: 1; }
   .bal-label { color: var(--text-secondary); font-size: 12.5px; }
   .status-badge { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 11.5px; white-space: nowrap; }
-  .status-PENDING { background: rgba(255,170,60,.16); color: var(--warn); border: 1px solid rgba(255,170,60,.4); }
-  .status-PAID { background: rgba(31,158,90,.14); color: var(--ok); border: 1px solid rgba(31,158,90,.35); }
+  .status-PENDING { background: var(--warning-soft); color: var(--warn); border: 1px solid var(--warning-line); }
+  .status-PAID { background: var(--success-soft); color: var(--ok); border: 1px solid var(--success-line); }
   .status-CANCELLED, .status-EXPIRED, .status-FAILED, .status-UNDERPAID {
-    background: rgba(224,68,68,.12); color: var(--danger); border: 1px solid rgba(224,68,68,.32);
+    background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line);
   }
   .btn {
     border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);
@@ -78,7 +58,7 @@
     text-decoration: none; display: inline-flex; align-items: center; gap: 7px;
   }
   .btn:hover { background: var(--bg-hover); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn.primary { background: var(--bg-btn-primary); border-color: var(--bg-btn-primary); color: #fff; font-weight: 600; }
   .btn.primary:hover { filter: brightness(1.08); }
   .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 22px; }
   .muted { color: var(--text-faint); }
@@ -117,7 +97,7 @@
       <div class="actions">
         <a class="btn" href="topup.html"><i class="fas fa-wallet"></i> Nạp đơn khác</a>
         <a class="btn primary" href="credits.html"><i class="fas fa-gem"></i> Về trang điểm</a>
-        <button class="btn" id="retryBtn" hidden onclick="loadResult()"><i class="fas fa-rotate"></i> Kiểm tra lại</button>
+        <button class="btn" id="retryBtn" hidden onclick="loadResult(true)"><i class="fas fa-rotate"></i> Kiểm tra lại</button>
         <a class="btn" id="detailBtn" href="topup.html"><i class="fas fa-receipt"></i> Xem chi tiết đơn</a>
       </div>
     </div>
@@ -135,16 +115,19 @@
 // Điểm CHỈ được cộng bởi webhook /api/payos/webhook (đã verify chữ ký) — trang
 // này không tự cộng, chỉ đọc trạng thái đơn và hiển thị.
 // ============================================================================
-const POLL_MS = 4000;          // nhịp kiểm tra khi đơn còn PENDING
-const POLL_TIMEOUT_MS = 90000; // ngừng tự kiểm tra sau 90s, để user bấm tay
+const POLL_TIMEOUT_MS = 90000; // ngừng tự cập nhật sau 90s, để user bấm tay "Kiểm tra lại"
+const WAIT_FALLBACK_MS = 4000; // nhịp hỏi khi server không hỗ trợ /wait (bản cũ)
+const WAIT_RETRY_MS = 1500;    // nghỉ khi lỗi mạng
 
 const STATUS_TEXT = {
   PENDING: 'Chờ thanh toán', PAID: 'Đã thanh toán', CANCELLED: 'Đã huỷ',
   EXPIRED: 'Hết hạn', UNDERPAID: 'Trả thiếu', FAILED: 'Thất bại'
 };
 
-let pollTimer = null;
+let pollToken = null;    // token vòng long-poll
 let pollDeadline = 0;
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function fmtVnd(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; }
 
@@ -165,15 +148,84 @@ function cancelParam() {
   return new URLSearchParams(location.search).get('status') === 'cancel';
 }
 
-function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+function stopPoll() { pollToken = null; }
 
-function startPoll() {
+/** Long-poll trạng thái đơn; tự huỷ nếu treo quá lâu (server trả sau ~25s). */
+async function fetchOrderWait(code) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 35000);
+  try {
+    return await Auth.fetch('/api/credits/topup/' + code + '/wait', { signal: ctl.signal });
+  } finally { clearTimeout(t); }
+}
+
+/**
+ * Cập nhật TỨC THÌ: server giữ kết nối và trả về ngay khi webhook payOS đổi trạng
+ * thái đơn. Định kỳ (mỗi lượt chờ ~25s) vẫn gọi /sync để đối soát trực tiếp với
+ * payOS khi webhook chưa đăng ký. Server cũ (404) → lùi về hỏi mỗi 4 giây.
+ */
+function startPoll(code) {
   stopPoll();
   pollDeadline = Date.now() + POLL_TIMEOUT_MS;
-  pollTimer = setInterval(() => {
-    if (Date.now() > pollDeadline) stopPoll();
-    else loadResult();
-  }, POLL_MS);
+  const token = {};
+  pollToken = token;
+  const alive = () => pollToken === token;
+
+  (async () => {
+    let waitSupported = true;
+    while (alive() && Date.now() <= pollDeadline) {
+      let d = null;
+      try {
+        if (waitSupported) {
+          const r = await fetchOrderWait(code);
+          if (r.status === 404 || r.status === 405) {
+            waitSupported = false;
+          } else if (r.status === 429) {
+            const j = await r.json().catch(() => ({}));
+            await sleep((Number(j && j.retry_after) || 3) * 1000);
+            continue;
+          } else if (r.ok) {
+            d = await r.json();
+          }
+        }
+        if (!waitSupported) {
+          d = await fetchOrder(code);
+          if (!alive()) return;
+          await sleep(WAIT_FALLBACK_MS);
+        }
+      } catch (e) {
+        if (!alive()) return;
+        await sleep(WAIT_RETRY_MS);
+        continue;
+      }
+      if (!alive()) return;
+
+      if (d && d.status) {
+        render({
+          order_code: code, status: d.status, amount_vnd: d.amount_vnd,
+          credits: d.credits, paid_at: d.paid_at
+        });
+        if (d.status !== 'PENDING') return;
+      }
+
+      // Vẫn PENDING → nhờ server hỏi thẳng payOS rồi mở lượt chờ kế tiếp.
+      if (waitSupported) {
+        const s = await syncOrder(code);
+        if (!alive()) return;
+        if (s && s.status && s.status !== 'PENDING') {
+          const fresh = await fetchOrder(code);
+          if (fresh && alive()) {
+            render({
+              order_code: code, status: fresh.status, amount_vnd: fresh.amount_vnd,
+              credits: fresh.credits, paid_at: fresh.paid_at
+            });
+          }
+          return;
+        }
+      }
+    }
+    stopPoll();   // hết 90s → giữ trạng thái hiện tại, user bấm "Kiểm tra lại"
+  })();
 }
 /** Đổ dữ liệu 1 đơn lên UI. */
 function render(o) {
@@ -196,7 +248,7 @@ function render(o) {
     icon.className = 'res-icon pending';
     icon.innerHTML = '<i class="fas fa-clock"></i>';
     title.textContent = cancelParam() ? 'Đang kiểm tra lại đơn' : 'Đang chờ thanh toán';
-    sub.textContent = 'Hệ thống chưa nhận được xác nhận từ payOS. Trang tự kiểm tra lại mỗi 4 giây.';
+    sub.textContent = 'Hệ thống chưa nhận được xác nhận từ payOS. Trang cập nhật NGAY khi payOS xác nhận (thường 1–5 giây).';
     hint.textContent = 'Nếu bạn đã chuyển khoản, đợi thêm ít phút rồi bấm "Kiểm tra lại" — đôi khi ngân hàng báo muộn.';
   } else {
     const isCancel = st === 'CANCELLED';
@@ -223,7 +275,7 @@ function render(o) {
   document.getElementById('retryBtn').hidden = st !== 'PENDING';
 
   if (st === 'PAID') { stopPoll(); loadBalance(); }
-  else if (st === 'PENDING') { if (!pollTimer) startPoll(); }
+  else if (st === 'PENDING') { if (!pollToken) startPoll(o.order_code); }
   else stopPoll();
 }
 
@@ -236,7 +288,41 @@ async function loadBalance() {
   } catch (e) { /* số dư là thông tin phụ, lỗi thì thôi */ }
 }
 
-async function loadResult() {
+/** Đọc 1 đơn của chính user. Lỗi → hiện #fatal và trả null. */
+async function fetchOrder(code) {
+  const r = await Auth.fetch('/api/credits/topup/' + code);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    document.getElementById('loading').hidden = true;
+    document.getElementById('fatal').hidden = false;
+    document.getElementById('fatal').textContent = d.error || 'Không đọc được thông tin đơn nạp.';
+    stopPoll();
+    return null;
+  }
+  document.getElementById('fatal').hidden = true;
+  return d;
+}
+
+/**
+ * Nhờ server đối soát trạng thái với payOS — đường dự phòng khi webhook chưa được
+ * đăng ký hoặc chưa gọi tới. Điểm vẫn chỉ được cộng phía server sau khi payOS
+ * xác nhận PAID; trang này KHÔNG tự cộng.
+ * Lỗi 429/5xx đều bỏ qua im lặng để không làm nhiễu trang kết quả.
+ */
+async function syncOrder(code) {
+  try {
+    const r = await Auth.fetch('/api/credits/topup/' + code + '/sync', { method: 'POST' });
+    if (!r.ok) return null;
+    return await r.json().catch(() => null);
+  } catch (e) { return null; }
+}
+
+/**
+ * Đọc trạng thái 1 lần rồi hiển thị. Có `forceSync` (nút "Kiểm tra lại") thì nhờ
+ * server đối soát payOS ngay; còn lại việc cập nhật tức thì do vòng long-poll
+ * trong `startPoll()` đảm nhiệm.
+ */
+async function loadResult(forceSync) {
   const code = orderCode();
   if (code === null) {
     document.getElementById('loading').hidden = true;
@@ -245,17 +331,14 @@ async function loadResult() {
     return;
   }
   try {
-    const r = await Auth.fetch('/api/credits/topup/' + code);
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      // 404/403 → không phải đơn của user này hoặc đơn không tồn tại.
-      document.getElementById('loading').hidden = true;
-      document.getElementById('fatal').hidden = false;
-      document.getElementById('fatal').textContent = d.error || 'Không đọc được thông tin đơn nạp.';
-      stopPoll();
-      return;
+    let d = await fetchOrder(code);
+    if (!d) return;
+    if (d.status === 'PENDING' && forceSync) {
+      const s = await syncOrder(code);
+      if (s && s.status && s.status !== 'PENDING') {
+        d = (await fetchOrder(code)) || d;
+      }
     }
-    document.getElementById('fatal').hidden = true;
     render({
       order_code: code, status: d.status, amount_vnd: d.amount_vnd, credits: d.credits,
       paid_at: d.paid_at
@@ -275,12 +358,13 @@ document.addEventListener('DOMContentLoaded', () => {
     else location.href = 'index.html';
     return;
   }
-  loadResult();
+  // Đối soát payOS ngay lần đầu (webhook có thể tới chậm hơn redirect).
+  loadResult(true);
 });
 
-// Tab hiện lại → kiểm tra ngay, khỏi chờ nhịp poll kế tiếp.
+// Tab hiện lại → đối soát payOS ngay; vòng long-poll (nếu đang mở) vẫn tự cập nhật.
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && !document.getElementById('result').hidden) loadResult();
+  if (!document.hidden && !document.getElementById('result').hidden) loadResult(true);
 });
 </script>
 </body>

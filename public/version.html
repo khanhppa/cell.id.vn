@@ -12,24 +12,10 @@
 <link rel="icon" type="image/png" sizes="256x256" href="/img/favicon.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<!-- Bảng màu sáng/tối dùng chung (nguồn DUY NHẤT cho token màu của mọi trang). -->
+<link rel="stylesheet" href="/theme.css">
 <style>
-  :root {
-    --bg-page: #f4f6fb; --bg-card: #ffffff; --border-color: #e2e6ef;
-    --text-primary: #1c2333; --text-secondary: #5a6478; --text-faint: #98a1b5;
-    --accent: #4f7cff; --ok: #1f9e5a; --danger: #e04444;
-    --bg-hover: rgba(0,0,0,0.05); --bg-surface2: #eef1f7;
-    /* Biến dùng bởi navbar chung (auth.js) — thiếu thì navbar không theo dark mode. */
-    --bg-surface: #ffffff; --bg-btn-primary: #4f7cff;
-    --border-focus: #4f7cff; --header-bg: #ffffff;
-  }
-  [data-theme="dark"] {
-    --bg-page: #14171f; --bg-card: #1c2029; --border-color: #2b3140;
-    --text-primary: #e7ebf3; --text-secondary: #a4adc0; --text-faint: #6d7689;
-    --accent: #6b93ff; --ok: #45c07d; --danger: #ff6b6b;
-    --bg-hover: rgba(255,255,255,0.07); --bg-surface2: #232833;
-    --bg-surface: #1c2029; --bg-btn-primary: #6b93ff;
-    --border-focus: #6b93ff; --header-bg: #1c2029;
-  }
+  /* Token màu lấy từ /theme.css → đồng bộ với trang chủ/navbar/công cụ. */
   * { box-sizing: border-box; }
   body {
     margin: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;

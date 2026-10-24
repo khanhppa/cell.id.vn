@@ -6,6 +6,136 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
 
 ## [Unreleased]
 
+### Fixed — nạp điểm / thanh toán payOS (chuẩn bị production)
+- **NGUYÊN NHÂN CHÍNH của "Nạp điểm tạm chưa khả dụng" dù đã bật cổng**: thuộc tính
+  HTML `hidden` bị CSS của trang ghi đè. `[hidden] { display: none }` của trình duyệt
+  là style UA, còn `.banner { display: flex }`, `.btn { display: inline-flex }`,
+  `.countdown { display: inline-flex }` là style TÁC GIẢ → thắng UA. Hệ quả: banner
+  `#topupUnavailable` (và nút "Giả lập đã trả tiền", đồng hồ đếm ngược, dòng số dư ở
+  trang kết quả) **luôn hiện** dù JS đã đặt `.hidden = true` — API trả
+  `available:true` mà khách vẫn thấy banner. Thêm `[hidden] { display: none !important }`
+  vào `public/theme.css` (giống `public/m/app.css`) để MỌI trang ẩn đúng. Đã xác minh
+  bằng Chrome headless: cùng markup, trước khi vá `display:flex`, sau khi vá `none`.
+- **Banner nêu đúng lý do chưa khả dụng**: `/api/credits/packages` trả thêm
+  `reason`, `reasons[]`, `gateway.missing`; trang nạp in đúng lý do (cổng đang tắt /
+  thiếu `payos_client_id`·`payos_api_key`·`payos_checksum_key`) kèm link cấu hình cho
+  admin. API đặt `Cache-Control: no-store` để trạng thái không bị trình duyệt/CDN giữ bản cũ.
+- **Cờ bật/tắt payOS đọc "khoan dung"**: `payos_enabled`/`payos_test_mode` được trim và
+  chấp nhận `1/true/on/yes` thay vì so khớp cứng `'1'` — một dấu cách thừa trong bảng
+  `settings` từng làm cổng bị coi là TẮT dù admin thấy công tắc đang bật.
+- **Chuyển THIẾU tiền không còn được cộng đủ điểm**: webhook/đối soát so `data.amount`
+  với giá trị đơn; nhỏ hơn → đơn `UNDERPAID` + ghi `amount_paid`, **không cộng điểm**
+  (trước đây cộng đủ credits của gói = thất thoát tiền thật).
+- **Đơn đã hết hạn/huỷ phía mình nhưng payOS xác nhận đã thu tiền → vẫn cộng điểm**
+  (`allowLate` chỉ bật cho nguồn đã verify: webhook chữ ký hợp lệ hoặc đối soát API
+  bằng credential server). Trước đây khách trả muộn bị kẹt `EXPIRED` và mất tiền.
+- **Chống cộng trùng khi webhook và `/sync` chạy song song**: bắt `DUPLICATE_TX` của
+  unique index ledger → coi như đã cộng và vẫn đánh dấu `PAID` (trước đây đơn có thể
+  kẹt `PENDING` dù điểm đã vào).
+- **Trang kết quả thanh toán tự đối soát**: `/payment-result.html` gọi
+  `POST /api/credits/topup/:code/sync` định kỳ (~8s) — đơn vẫn hoàn tất khi webhook
+  chưa được đăng ký hoặc chưa gọi tới; trước đây trang chỉ đọc DB và quay mãi.
+- **Đơn `PENDING` quá hạn được dọn toàn cục** (cron 10 phút/lần + 1 lần lúc khởi động)
+  thay vì chỉ khi chủ đơn mở lại trang.
+- **Giả lập thanh toán bị khoá cứng ở production**: 2 route `mock-paid` trả 403
+  `production_forbidden` khi `NODE_ENV=production`, kể cả khi để sót `payos_test_mode=1`.
+- **Khởi động server log trạng thái payOS** (không chứa secret): tắt/thiếu credential/
+  test mode ở production/chưa có URL webhook — phát hiện ngay trong `journalctl`.
+- **Trang nạp tự làm mới trạng thái cổng** khi quay lại tab (`focus`/`visibilitychange`)
+  và khi tạo đơn bị từ chối vì cổng tắt — không cần F5.
+
+### Added — nạp điểm: QR VietQR gốc, kiểm tra thanh toán, tải/chia sẻ QR
+- **QR luôn là mã VietQR GỐC của payOS**: `payos.buildQrImage()` chỉ dựng ảnh khi chuỗi
+  trả về đúng payload EMVCo/VietQR (bắt đầu `000201`) và mã hoá **nguyên văn** chuỗi đó
+  — không sửa/không tự sinh mã khác, nên app ngân hàng hiểu y như QR payOS cấp. URL
+  checkout (test mode) hoặc chuỗi lạ → không vẽ QR, client dùng nút mở trang payOS.
+- **Nút "Kiểm tra thanh toán"** ngay trên màn hình QR (bước 3, trang `/topup.html`):
+  chủ động gọi `/sync` đối soát payOS khi khách đã quét mã thành công mà hệ thống chưa
+  cập nhật (webhook chậm/chưa đăng ký). App di động đổi nút "Tôi đã chuyển khoản…"
+  thành **"Kiểm tra thanh toán"** và hiện trạng thái "Đang kiểm tra…" khi bấm.
+- **Tải mã QR / Chia sẻ** (ảnh VietQR): có ở app di động (`/m/`) và trang nạp desktop.
+  Chia sẻ dùng Web Share API kèm file ảnh (Zalo/Messenger/Telegram…); trình duyệt không
+  hỗ trợ thì tải ảnh `vietqr-<mã đơn>.png`; iOS/Safari chặn tải data-URL → mở ảnh để
+  người dùng nhấn giữ "Lưu vào Ảnh".
+- **Tăng chiều cao nút** (trước đây "dẹt", khó bấm): `.btn` ở trang nạp có
+  `min-height: 40px` (46px trên màn hình ≤640px); nút đóng trang nạp ở app di động
+  tăng 36×36 → **42×42**. Hai nút tải/chia sẻ QR cao 44–46px.
+- `public/m/sw.js`: `CACHE_VERSION` → `cell-m-v17` để PWA nhận app.js/app.css mới.
+- `npm run verify:payments` thêm 4 kiểm tra cho ảnh QR (VietQR hợp lệ → PNG; URL/chuỗi
+  lạ/rỗng → null) — tổng **68 kiểm tra**.
+
+### Added — nạp điểm: cập nhật TỨC THÌ khi khách trả tiền
+- **Long-poll `GET /api/credits/topup/:orderCode/wait`**: server giữ kết nối và đánh
+  thức client NGAY khi webhook payOS (hoặc đối soát, huỷ, hết hạn) đổi trạng thái đơn
+  → màn hình chuyển "Nạp điểm thành công" trong ~1 giây thay vì 10–20 giây như trước.
+  Event bus trong `topup.js` phát sự kiện sau mỗi UPDATE trạng thái (kèm sự kiện `bulk`
+  khi job dọn đơn hết hạn chạy hàng loạt).
+- **Không cần đổi cấu hình Nginx/Cloudflare**: chọn long-poll thay vì SSE/WebSocket —
+  proxy buffer vẫn trả về đúng lúc response kết thúc; timeout 25 giây nằm dưới
+  `proxy_read_timeout` (60s) và giới hạn của Cloudflare (100s). Giới hạn 5 kết nối
+  chờ/user, tự gỡ listener khi đóng tab (không rò rỉ bộ nhớ).
+- Trang nạp (`topup.html`) và trang kết quả (`payment-result.html`) dùng long-poll,
+  **tự lùi** về hỏi mỗi 3–4 giây nếu server cũ (404/405) hoặc mạng lỗi; vẫn gọi
+  `/sync` mỗi lượt chờ để đối soát payOS khi webhook chưa đăng ký.
+- Bỏ câu "tự cập nhật trong ~15 giây" — nay ghi đúng: "cập nhật NGAY khi payOS xác
+  nhận (thường 1–5 giây)".
+- `npm run verify:payments` thêm 9 kiểm tra cho `/wait`: phản hồi < 3 giây khi webhook
+  tới trong lúc đang chờ, trả ngay với đơn đã kết thúc, 403 (người khác) và 404.
+
+### Added — chẩn đoán & kiểm thử thanh toán
+- **`GET /api/admin/payos/status`** + thẻ **"Trạng thái cổng thanh toán"** ở
+  Admin ▸ Nạp điểm: bật/tắt, TEST MODE / PAYOS THẬT, đủ credential, URL webhook hiệu
+  lực, `public_base_url`, cảnh báo (test mode ở production, webhook không HTTPS, chưa
+  đặt URL công khai), số đơn theo trạng thái + lần thu gần nhất, nút sửa nhanh.
+- **`npm run verify:payments`** (`bin/verify-payments.js`): 68 kiểm tra offline, không
+  gọi payOS — chữ ký webhook, cộng đúng 1 lần, retry, trả thiếu → thu đủ, đơn trễ hạn,
+  cổng tắt/thiếu credential, chặn giả lập ở production, long-poll cập nhật tức thì,
+  ảnh QR chỉ dựng từ VietQR gốc. CI và `deploy.ps1` chạy bước này trước khi đóng gói.
+- **`amount_paid`** trên `payment_orders` (migration tự động) để đối soát số tiền thực thu.
+- **`deploy/README.md`**: checklist bật nạp điểm/payOS cho production + 3 mục sự cố mới.
+
+### Added — công cụ Đổi eNB ID ↔ ECI: hướng dẫn & chuyển đổi chính xác
+- **Nút `?` trên `/tools/ebn-eci.html`** (đầu trang, mỗi thẻ và thẻ mẹo) mở hướng dẫn đầy đủ: nguyên lý
+  28 bit (eNB 20 bit + Sector 8 bit), công thức hai chiều, giới hạn giá trị, ví dụ, cách dùng và
+  **toàn bộ 9 trường hợp khi không có Sector** — ECI → tách Sector chính xác; eNB thiếu Sector → chỉ ra
+  dải 256 ECI; giá trị nhỏ nhập nhằng eNB/ECI; Sector > 255; ECI + Sector; vượt 28 bit; không phải LTE;
+  giá trị 0; Sector không nguyên.
+- **Chuyển đổi chặt hơn**: phân biệt "bỏ trống Sector" với "Sector = 0" (trước đây mặc định 0 và báo
+  thành công), validate Sector 0–255 thay vì `& 0xFF`, chặn eNB > 1.048.575 / ECI > 268.435.455,
+  nhận dấu phân cách/nhãn/hex, từ chối số khoa học; sửa mốc phân loại 1.048.576 (là ECI của eNB 4096).
+- **Gợi ý ngay trên giao diện**: chip Sector 0/1/2/3/13 + "Không rõ", ví dụ bấm được
+  (662079 + 13 ↔ 169492237; 662091 + 0 ↔ 169495296), thẻ "Làm sao để chuyển đổi chính xác?",
+  nhãn **Chính xác / Ước tính** trên kết quả và nút copy từng giá trị.
+- **`cell-id.js` + `public/app.js`**: `classifyCellId` dùng đúng mốc eNB tối đa 1.048.575; giá trị
+  1.048.576 là ECI (eNB 4096, Sector 0), không còn bị coi là eNB ngắn.
+
+### Changed — giao diện tối đồng bộ toàn site
+- **`public/theme.css` — nguồn DUY NHẤT cho bảng màu**: mọi trang public bỏ palette
+  riêng (`#111122` / slate `#0f172a` / `#1c2029` / `#0d1117`…) và nạp chung token
+  (nền/chữ/viền/nút/nhấn/trạng thái) trước `<style>` của trang. Nền tối dùng một họ
+  màu duy nhất (`#111122` → card `#14142e`), nhấn indigo: `#4444cc` (sáng) /
+  `#6e6ef7` (tối) — hết cảnh mỗi trang một màu, đặc biệt ở nhóm trang **Công cụ**.
+- **Công cụ trên bản đồ LUÔN giao diện sáng**: bản đồ dùng tile sáng ở cả 2 theme nên
+  nút **Thước** (đo khoảng cách), nhãn khoảng cách, khung **Chú thích** và thanh cuộn
+  của khung chú thích giữ nền sáng; nền bản đồ cũng sáng (`--map-bg`) thay vì tối.
+  Áp dụng cả bản di động `/m/` (chip chọn lớp nền, nút điều khiển, attribution).
+- **Thanh cuộn (scrollbar) theo theme**: thay thanh cuộn mặc định bằng thumb bo tròn
+  dùng token (`--scrollbar-*`) + `color-scheme` — danh sách dài trong panel (tab
+  **Lịch sử tra cứu**, bảng cell, modal, trang điều khoản…) không còn vệt sáng trên
+  nền tối; icon lịch của `input[type=date]` tự đúng màu (bỏ `filter: invert`).
+- **Màu trạng thái dùng token** (`--success/--danger/--warning` + `-soft/-line`) thay
+  các mã màu rời rạc: thanh trạng thái tra/lookup, badge RAT-phiên, chip lọc, hàng
+  chọn, nút xoá, badge credit/guest ở navbar (đọc được ở cả 2 theme).
+- **Navbar/menu dùng chung** (`auth.js`): dropdown Công cụ/người dùng dùng nền đặc +
+  bóng theo theme; badge điểm/guest đổi sang token ngữ nghĩa.
+- **Bản di động `/m/`** đổi sang cùng họ màu (nền `#111122`, nhấn indigo), gồm
+  `manifest.webmanifest` + `theme-color` + trang offline.
+- **`theme.css` luôn revalidate** (`server.js`): tránh trình duyệt/CDN giữ bản cũ làm
+  cả site lệch màu.
+- **`npm run check:theme`** (`scripts/verify-theme.js`): chặn hồi quy — mọi trang phải
+  nạp theme.css trước `<style>`, không tự khai báo lại token, không dùng token thiếu,
+  đủ bộ token bắt buộc, mọi token sáng đều có bản tối.
+
 ### Removed — dọn repo trước khi lên production
 - **Toàn bộ test/harness thủ công ở gốc repo** (31 file `_*.js`) và `tests/` (5 file).
   Đã chạy baseline trước khi xoá: `_authtest.js` 99/99, `_payos.test.js` 103/103,
@@ -88,6 +218,16 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
   route lỗi giữa chừng.
 
 ### Added
+- **Logo website ở topbar `/m/`**: `.topbar-main` có logo thương hiệu đặt trước lời chào và
+  tiêu đề tab, **dùng đúng ảnh logo của website** — `logo-white.png` cho theme tối và
+  `logo.png` cho theme sáng, đổi bằng CSS theo `html[data-theme]` (chỉ tải đúng một tệp,
+  không cần JS). Vì logo gốc 1063×450 (172 KB) quá nặng cho một khung 76×32 px, thêm
+  [`scripts/make-logo-assets.js`](scripts/make-logo-assets.js) sinh bản nhỏ 3x
+  (`public/m/img/logo-topbar-{dark,light}.png`, 3,3 KB và 7,9 KB) và đưa cả hai vào precache
+  của service worker; chạy lại script khi logo gốc thay đổi. Phần chữ (lời chào + tiêu đề)
+  bọc trong `.topbar-text` co giãn nên tên người dùng dài bị cắt "…" thay vì đẩy credit pill
+  ra ngoài; topbar giữ nguyên chiều cao 54px.
+  `CACHE_VERSION` `cell-m-v14` → `cell-m-v15` → `cell-m-v16`.
 - **Bật/đóng website (chế độ bảo trì)**: tab **Cấu hình → Website** cho phép admin bật/tắt
   truy cập và nhập thông báo bảo trì (để trống = thông báo mặc định). Khi đóng, mọi trang
   của website (desktop + mobile) chuyển tới `/maintenance.html` có nội dung thông báo
@@ -115,8 +255,8 @@ phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
   hạ quyền admin cuối cùng. Số dư điểm vẫn chỉ đổi qua ledger (nút "Nạp điểm").
 
 ### Changed
-- **Trang thông báo bảo trì** (`/maintenance.html`): bỏ nút Đăng nhập, chỉ còn nút "Thử lại";
-  quản trị viên tự mở `/login.html` khi cần đăng nhập.
+- **Trang thông báo bảo trì** (`/maintenance.html`): bỏ nút Đăng nhập và dòng nhắc quản trị
+  viên ở chân trang, chỉ còn nút "Thử lại"; quản trị viên tự mở `/login.html` khi cần đăng nhập.
 - **Trang đăng nhập `/login.html`**: bỏ khối "Mẹo" và 2 nút mở popup đăng nhập/đăng ký;
   trang chỉ còn form đăng nhập/đăng ký trực tiếp.
 

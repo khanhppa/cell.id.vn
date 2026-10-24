@@ -30,6 +30,9 @@ command -v node >/dev/null || die "chưa có node — cài bằng deploy/proxmox
 NODE_BIN="$(command -v node)"
 NODE_MAJOR="$(node -v | sed 's/^v\([0-9]*\).*/\1/')"
 [[ "$NODE_MAJOR" -ge 22 ]] || die "cần Node >= 22 (đang có $(node -v))"
+command -v visudo >/dev/null || die "thiếu sudo/visudo (cần cho GitHub Actions runner) — chạy: apt-get install -y sudo"
+command -v nginx >/dev/null || die "chưa có nginx — apt-get install -y nginx"
+command -v sqlite3 >/dev/null || die "chưa có sqlite3 — apt-get install -y sqlite3"
 
 # ---- 1. User hệ thống + cây thư mục ---------------------------------------
 say "User hệ thống '$APP_USER' + cây thư mục $APP_ROOT"
@@ -212,12 +215,23 @@ systemctl enable nginx >/dev/null
 systemctl restart nginx
 
 # ---- 7. Firewall ---------------------------------------------------------
-say "ufw: cho SSH + HTTP/HTTPS, chặn phần còn lại"
-ufw allow 22/tcp >/dev/null
-ufw allow 80/tcp >/dev/null
-ufw allow 443/tcp >/dev/null
-ufw --force enable >/dev/null
-ufw status verbose | sed 's/^/    /'
+# ufw trong LXC unprivileged có thể KHÔNG khởi tạo được iptables (tuỳ kernel/host
+# cấm NET_ADMIN). Đây không phải lỗi chí mạng → cảnh báo và đi tiếp, tránh làm
+# hỏng cả quá trình bootstrap sau khi systemd/nginx đã cấu hình xong.
+say "ufw: cho SSH + HTTP/HTTPS (bỏ qua nếu LXC không cho phép iptables)"
+if command -v ufw >/dev/null 2>&1; then
+  if ufw allow 22/tcp >/dev/null 2>&1 \
+     && ufw allow 80/tcp >/dev/null 2>&1 \
+     && ufw allow 443/tcp >/dev/null 2>&1 \
+     && ufw --force enable >/dev/null 2>&1; then
+    ufw status verbose | sed 's/^/    /' || true
+  else
+    warn "ufw không bật được trong LXC này — hãy giới hạn cổng ở Proxmox firewall/router."
+    warn "Bỏ qua ufw, tiếp tục cấu hình app."
+  fi
+else
+  warn "không có ufw — bỏ qua (giới hạn cổng ở Proxmox firewall/router)."
+fi
 
 # ---- 8. Cron: backup DB hằng ngày ---------------------------------------
 say "Cron backup DB (03:20 hằng ngày, giữ 14 bản)"

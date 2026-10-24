@@ -17,54 +17,21 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="/auth.js"></script>
   <script src="/version.js"></script>
+  <!-- Bảng màu sáng/tối dùng chung cho mọi trang (nguồn DUY NHẤT cho token màu). -->
+  <link rel="stylesheet" href="/theme.css">
   <style>
-    :root {
-      --bg-body: #f0f2f5;
-      --bg-surface: rgba(255,255,255,0.97);
-      --bg-surface2: rgba(0,0,0,0.03);
-      --bg-hover: rgba(0,0,0,0.06);
-      --bg-btn-primary: #4444cc;
-      --bg-btn-success: #22aa44;
-      --bg-btn-danger: #cc3333;
-      --text-primary: #1a1a2e;
-      --text-secondary: #444466;
-      --text-muted: #888899;
-      --text-faint: #aaaabb;
-      --border-color: rgba(0,0,0,0.1);
-      --border-hover: rgba(68,68,204,0.3);
-      --border-focus: #4444cc;
-      --header-bg: rgba(255,255,255,0.95);
-      --shadow: 0 10px 40px rgba(0,0,0,0.1);
-      --transition: 0.3s ease;
-    }
-    [data-theme="dark"] {
-      --bg-body: #111122;
-      --bg-surface: rgba(15,15,40,0.95);
-      --bg-surface2: rgba(255,255,255,0.04);
-      --bg-hover: rgba(255,255,255,0.1);
-      --bg-btn-primary: #4444cc;
-      --bg-btn-success: #22aa44;
-      --bg-btn-danger: #cc3333;
-      --text-primary: #e0e0ff;
-      --text-secondary: #aaaacc;
-      --text-muted: #666688;
-      --text-faint: #555577;
-      --border-color: rgba(255,255,255,0.08);
-      --border-hover: rgba(100,100,255,0.3);
-      --border-focus: #6666ff;
-      --header-bg: rgba(15,15,40,0.92);
-      --shadow: 0 10px 40px rgba(0,0,0,0.5);
-    }
+    /* Mọi token màu lấy từ /theme.css → admin đồng bộ màu với trang chủ + công cụ. */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg-body); color: var(--text-primary); transition: background var(--transition), color var(--transition); }
     .nav-badge {
-      background: rgba(255,100,100,0.2);
-      color: #ff6666;
+      background: var(--danger-soft);
+      color: var(--danger);
       padding: 3px 10px;
       border-radius: 20px;
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 1px;
+      border: 1px solid var(--danger-line);
     }
     .navbar-right .user-info { color: var(--text-muted, #8888aa); font-size: 13px; }
     .btn {
@@ -79,11 +46,11 @@
     }
     .btn:hover { background: var(--bg-hover); color: var(--text-primary); }
     .btn-primary { background: var(--bg-btn-primary); border-color: var(--bg-btn-primary); color: white; }
-    .btn-primary:hover { background: #5555dd; }
+    .btn-primary:hover { filter: brightness(1.15); }
     .btn-danger { background: var(--bg-btn-danger); border-color: var(--bg-btn-danger); color: white; }
-    .btn-danger:hover { background: #dd4444; }
+    .btn-danger:hover { filter: brightness(1.15); }
     .btn-success { background: var(--bg-btn-success); border-color: var(--bg-btn-success); color: white; }
-    .btn-success:hover { background: #33bb55; }
+    .btn-success:hover { filter: brightness(1.15); }
     .btn-sm { padding: 5px 10px; font-size: 12px; }
     body { margin: 0; }
     .container { display: flex; gap: 0; height: calc(100vh - 48px); margin-top: 48px; }
@@ -106,13 +73,13 @@
       border-left: 3px solid transparent;
     }
     .sidebar-item:hover { color: var(--text-secondary); background: var(--bg-hover); }
-    .sidebar-item.active { color: var(--text-primary); background: rgba(100,100,255,0.1); border-left-color: var(--border-focus); }
+    .sidebar-item.active { color: var(--text-primary); background: var(--accent-soft); border-left-color: var(--border-focus); }
     .sidebar-item i { width: 18px; text-align: center; }
     /* Caret gập/mở của nhóm có menu con */
     .sidebar-caret { margin-left: auto; font-size: 11px; transition: transform 0.2s; }
     .sidebar-item.active .sidebar-caret { transform: rotate(180deg); }
     /* Menu con: chỉ hiện khi nhóm cha đang mở */
-    .sidebar-sub { display: none; background: rgba(0,0,0,0.18); }
+    .sidebar-sub { display: none; background: var(--bg-hover); }
     .sidebar-sub.open { display: block; }
     .sidebar-sub-item {
       padding: 10px 20px 10px 46px; font-size: 13px;
@@ -121,7 +88,7 @@
       border-left: 3px solid transparent; transition: all 0.2s;
     }
     .sidebar-sub-item:hover { color: var(--text-secondary); background: var(--bg-hover); }
-    .sidebar-sub-item.active { color: var(--text-primary); background: rgba(100,100,255,0.08); border-left-color: var(--border-focus); }
+    .sidebar-sub-item.active { color: var(--text-primary); background: var(--accent-soft); border-left-color: var(--border-focus); }
     .sidebar-sub-item i { width: 16px; text-align: center; font-size: 12px; }
     .content {
       flex: 1;
@@ -161,10 +128,12 @@
       font-size: 11px;
       font-weight: 600;
     }
-    .badge-active { background: rgba(50,255,50,0.15); color: #66ff66; }
-    .badge-pending { background: rgba(255,200,50,0.15); color: #ffcc44; }
-    .badge-admin { background: rgba(255,50,50,0.15); color: #ff6666; }
-    .badge-user { background: rgba(50,150,255,0.15); color: #6699ff; }
+    /* Badge trạng thái — dùng token ngữ nghĩa để đọc được ở cả 2 theme
+       (trước đây là màu neon chỉ hợp nền tối, trên nền sáng gần như vô hình). */
+    .badge-active { background: var(--success-soft); color: var(--success); }
+    .badge-pending { background: var(--warning-soft); color: var(--warning); }
+    .badge-admin { background: var(--danger-soft); color: var(--danger); }
+    .badge-user { background: var(--accent-soft); color: var(--accent); }
     .filter-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
     .filter-bar input, .filter-bar select {
       padding: 8px 12px;
@@ -185,7 +154,7 @@
       transition: all 0.3s;
       margin-bottom: 16px;
     }
-    .upload-zone:hover, .upload-zone.dragover { border-color: var(--border-focus); background: rgba(100,100,255,0.05); }
+    .upload-zone:hover, .upload-zone.dragover { border-color: var(--border-focus); background: var(--accent-soft); }
     .upload-zone i { font-size: 48px; color: var(--border-focus); margin-bottom: 12px; }
     .upload-zone p { color: var(--text-muted); font-size: 14px; }
     .progress-bar {
@@ -199,7 +168,7 @@
     }
     .progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #4444cc, #6666ff);
+      background: linear-gradient(90deg, var(--bg-btn-primary), var(--accent));
       border-radius: 10px;
       transition: width 0.3s;
       width: 0%;
@@ -212,8 +181,8 @@
     }
     .progress-info { color: var(--text-muted); font-size: 13px; margin-top: 8px; display: none; }
     .upload-result { display: none; padding: 12px; border-radius: 8px; margin-top: 12px; font-size: 13px; }
-    .upload-result.success { display: block; background: rgba(50,255,50,0.1); color: #66ff66; border: 1px solid rgba(50,255,50,0.2); }
-    .upload-result.error { display: block; background: rgba(255,50,50,0.1); color: #ff6666; border: 1px solid rgba(255,50,50,0.2); }
+    .upload-result.success { display: block; background: var(--success-soft); color: var(--success); border: 1px solid var(--success-line); }
+    .upload-result.error { display: block; background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line); }
     .search-table-wrap { max-height: 400px; overflow-y: auto; }
     /* IP / dữ liệu máy đọc trong bảng (nhật ký tra cứu IP, nguồn dữ liệu). */
     .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
@@ -260,7 +229,7 @@
     .cf-hd .cf-ico {
       width: 30px; height: 30px; border-radius: 8px; flex: 0 0 auto;
       display: flex; align-items: center; justify-content: center;
-      background: rgba(255,200,50,0.15); color: #ffcc44; font-size: 14px;
+      background: var(--warning-soft); color: var(--warning); font-size: 14px;
     }
     .cf-hd > span:nth-child(2) { flex: 1 1 auto; min-width: 0; }
     .cf-x {
@@ -274,9 +243,9 @@
       display: flex; gap: 8px; align-items: flex-start; font-size: 12px;
       line-height: 1.55; padding: 10px 12px; border-radius: 8px; margin-top: 8px;
     }
-    .cf-warn { background: rgba(255,200,50,0.12); color: #e0b048; }
-    .cf-warn.cf-danger { background: rgba(255,80,80,0.12); color: #ff7b7b; }
-    .cf-info { background: rgba(61,124,224,0.12); color: #7aa8ef; }
+    .cf-warn { background: var(--warning-soft); color: var(--warning); }
+    .cf-warn.cf-danger { background: var(--danger-soft); color: var(--danger); }
+    .cf-info { background: var(--accent-soft); color: var(--accent); }
     .cf-warn i, .cf-info i { margin-top: 2px; flex: 0 0 auto; }
     .cf-ft {
       display: flex; gap: 8px; justify-content: flex-end; padding: 12px 16px;
@@ -371,11 +340,11 @@
     .kpi-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
     .kpi-icon {
       width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center;
-      background:rgba(68,68,204,0.12); color:var(--border-focus); font-size:13px;
+      background:var(--accent-soft); color:var(--accent); font-size:13px;
     }
     .kpi-delta { font-size:11.5px; font-weight:700; padding:2px 7px; border-radius:999px; background:var(--bg-surface2); color:var(--text-muted); white-space:nowrap; }
-    .kpi-delta.up { color:#2f9e5f; background:rgba(47,158,95,0.12); }
-    .kpi-delta.down { color:#d64545; background:rgba(214,69,69,0.12); }
+    .kpi-delta.up { color:var(--success); background:var(--success-soft); }
+    .kpi-delta.down { color:var(--danger); background:var(--danger-soft); }
     .kpi-delta.flat { color:var(--text-muted); }
     .kpi-num { font-size:26px; font-weight:800; letter-spacing:-0.5px; margin-top:10px; line-height:1.15; }
     .kpi-label { font-size:12.5px; color:var(--text-secondary); margin-top:2px; }
@@ -388,7 +357,7 @@
     .empty-state { text-align:center; padding:26px 14px; color:var(--text-muted); font-size:13px; }
     .empty-state i { font-size:26px; margin-bottom:8px; display:block; opacity:.6; }
     .dash-error {
-      border:1px solid rgba(214,69,69,0.35); background:rgba(214,69,69,0.08); color:#d64545;
+      border:1px solid var(--danger-line); background:var(--danger-soft); color:var(--danger);
       border-radius:10px; padding:12px 14px; font-size:12.5px; line-height:1.6; margin-bottom:12px;
     }
     .dash-error b { display:block; margin-bottom:2px; }
@@ -397,7 +366,7 @@
     .breakdown-row .br-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary); }
     .breakdown-row .br-val { color:var(--text-primary); font-weight:600; white-space:nowrap; }
     .breakdown-bar { grid-column:1 / -1; height:6px; border-radius:999px; background:var(--bg-hover); overflow:hidden; }
-    .breakdown-bar > span { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg, #4444cc, #6f7bff); }
+    .breakdown-bar > span { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg, var(--bg-btn-primary), var(--accent)); }
     .breakdown-empty { color:var(--text-muted); font-size:12.5px; padding:8px 0; }
     .donut-wrap { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
     .donut { width:120px; height:120px; border-radius:50%; flex:0 0 auto; position:relative; }
@@ -446,7 +415,7 @@
         flex: 0 0 auto; white-space: nowrap; padding: 10px 14px;
         border-left: 0; border-bottom: 3px solid transparent;
       }
-      .sidebar-item.active { border-left-color: transparent; border-bottom-color: var(--border-focus); background: rgba(100,100,255,0.08); }
+      .sidebar-item.active { border-left-color: transparent; border-bottom-color: var(--border-focus); background: var(--accent-soft); }
       .sidebar-caret { display: none; }
       .sidebar-sub { flex-basis: 100%; min-width: 0; background: transparent; }
       .sidebar-sub.open { display: flex; flex-wrap: wrap; border-top: 1px solid var(--border-color); }
@@ -561,10 +530,10 @@
         </div>
 
         <!-- Trạng thái bảo trì: hiện khi website đang đóng, để admin mở lại nhanh. -->
-        <div class="card" id="dashSiteBanner" style="display:none;border-color:rgba(224,68,68,.45);background:rgba(224,68,68,.06);margin-bottom:18px">
+        <div class="card" id="dashSiteBanner" style="display:none;border-color:var(--danger-line);background:var(--danger-soft);margin-bottom:18px">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
             <div style="min-width:0">
-              <b style="color:#e04444"><i class="fas fa-power-off"></i> Website đang ĐÓNG (bảo trì)</b>
+              <b style="color:var(--danger)"><i class="fas fa-power-off"></i> Website đang ĐÓNG (bảo trì)</b>
               <div class="hint" id="dashSiteBannerMsg" style="margin-top:4px">Người dùng đang thấy thông báo bảo trì. Chỉ admin truy cập được.</div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -788,7 +757,7 @@
               <b>server-to-server</b>. Tài liệu đầy đủ nằm ở <code>/API.md</code> trong mã nguồn.
             </div>
             <div id="apiDocsBody">
-              <div class="hint" style="margin-bottom:14px;padding:10px 12px;border-radius:8px;background:rgba(61,124,224,.12)">
+              <div class="hint" style="margin-bottom:14px;padding:10px 12px;border-radius:8px;background:var(--accent-soft)">
                 <b>Khoá API là cổng kết nối, không gắn tài khoản.</b> Mỗi ứng dụng ngoài giữ 1 khoá
                 để chứng minh được cấp phép và chịu hạn mức. Muốn tra cứu, ứng dụng phải cho người
                 dùng <b>đăng nhập</b> (lấy JWT) rồi gửi kèm khoá — điểm sẽ trừ vào tài khoản đăng nhập.
@@ -1181,6 +1150,15 @@ Retry-After: 42        (chỉ khi 429)</code></pre>
       <div id="section-payments" class="section">
         <h3>Nạp điểm qua payOS</h3>
 
+        <!-- Trạng thái cổng thanh toán: vì sao trang nạp báo "chưa khả dụng",
+             cổng đang bật/tắt, test mode, credential, URL webhook. -->
+        <div class="card" id="payGatewayCard">
+          <h4><i class="fas fa-plug"></i> Trạng thái cổng thanh toán</h4>
+          <div id="payGatewayBody" class="loading">
+            <i class="fas fa-spinner fa-spin"></i> Đang kiểm tra…
+          </div>
+        </div>
+
         <div class="stats-grid" id="payStats">
           <div class="stat-card"><div class="num" id="payRevenue">0</div><div class="label">Doanh thu (VND)</div></div>
           <div class="stat-card"><div class="num" id="payCreditsGranted">0</div><div class="label">Điểm đã cấp</div></div>
@@ -1286,7 +1264,7 @@ Retry-After: 42        (chỉ khi 429)</code></pre>
           <div class="filter-bar" style="align-items:center">
             <span class="muted-text" style="font-size:12px">Đã chọn: <b id="cdbSelCount">0</b></span>
             <button class="btn btn-danger btn-sm" id="cdbBulkDeleteBtn" onclick="cdbBulkDelete()" disabled><i class="fas fa-trash"></i> Xoá đã chọn</button>
-            <span id="cdbWarn" class="muted-text" style="font-size:12px;color:#e6a700"></span>
+            <span id="cdbWarn" class="muted-text" style="font-size:12px;color:var(--warning)"></span>
           </div>
           <div class="table-wrap" style="overflow:auto;max-height:50vh">
             <table>
@@ -1328,8 +1306,8 @@ Retry-After: 42        (chỉ khi 429)</code></pre>
           <div class="upload-result" id="bulkResult"></div>
           <div class="bulk-preview" id="bulkPreview"></div>
         </div>
-        <div class="card" style="max-width:720px;border-color:rgba(255,60,60,0.35);margin-top:16px">
-          <h4 style="color:#ff5555"><i class="fas fa-exclamation-triangle"></i> Nguy hiểm</h4>
+        <div class="card" style="max-width:720px;border-color:var(--danger-line);margin-top:16px">
+          <h4 style="color:var(--danger)"><i class="fas fa-exclamation-triangle"></i> Nguy hiểm</h4>
           <p class="muted-text" style="font-size:13px">
             Xóa <b>toàn bộ</b> cell ID trong cơ sở dữ liệu để tải lên bộ cellid mới.
             Hành động này <b>không thể hoàn tác</b>.
@@ -1382,7 +1360,7 @@ Retry-After: 42        (chỉ khi 429)</code></pre>
         </div>
 
         <div class="card" style="max-width:860px;display:none" id="clfOutputCard">
-          <h4><i class="fas fa-check-circle" style="color:#4ade80"></i> Kết quả</h4>
+          <h4><i class="fas fa-check-circle" style="color:var(--success)"></i> Kết quả</h4>
           <div id="clfStats" class="muted-text" style="font-size:13px"></div>
           <div style="margin-top:12px">
             <button class="btn btn-success" id="clfDownloadBtn"><i class="fas fa-download"></i> Tải file kết quả</button>
@@ -1476,7 +1454,7 @@ Retry-After: 42        (chỉ khi 429)</code></pre>
         <div class="card">
           <h4><i class="fas fa-sync-alt"></i> Đồng bộ tự động (OpenCellID VN)</h4>
           <p class="muted-text" style="font-size:12px">Tự động tải và thêm cell mới từ OpenCellID theo lịch cron. Mặc định chạy 03:00 hằng ngày, MCC 452 (Việt Nam). Chỉ thêm cell mới, không ghi đè dữ liệu cũ.</p>
-          <div class="card" id="syncFormCard" style="display:none; background:rgba(255,255,255,0.03)">
+          <div class="card" id="syncFormCard" style="display:none; background:var(--bg-surface2)">
             <h4><span id="syncFormTitle">Thêm lịch đồng bộ</span></h4>
             <div class="online-row">
               <div class="form-group"><label>Nguồn</label>
@@ -1814,7 +1792,7 @@ Retry-After: 42        (chỉ khi 429)</code></pre>
     <div class="modal" style="max-width:560px">
       <h3><span id="userModalTitle">Thêm người dùng</span></h3>
       <input type="hidden" id="userEditId">
-      <div class="form-group"><label>Username <span style="color:#d64545">*</span></label><input type="text" id="userFormUsername" maxlength="32" autocomplete="off"></div>
+      <div class="form-group"><label>Username <span style="color:var(--danger)">*</span></label><input type="text" id="userFormUsername" maxlength="32" autocomplete="off"></div>
       <div class="form-group">
         <label>Email</label>
         <input type="email" id="userFormEmail" autocomplete="off" placeholder="user@example.com">
@@ -1880,7 +1858,7 @@ Retry-After: 42        (chỉ khi 429)</code></pre>
   <div class="modal-overlay" id="cdbEditModal">
     <div class="modal" style="max-width:720px">
       <h3>Sửa cell <span id="cdbEditId"></span></h3>
-      <div id="cdbEditWarn" class="hint" style="display:none;color:#e6a700"></div>
+      <div id="cdbEditWarn" class="hint" style="display:none;color:var(--warning)"></div>
       <input type="hidden" id="cdbEditRowId">
       <div class="online-row">
         <div class="form-group"><label>MCC *</label><input type="text" id="cdbEditMcc"></div>

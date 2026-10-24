@@ -107,13 +107,23 @@ GitHub ▸ repo ▸ *Settings ▸ Actions ▸ Runners ▸ New self-hosted runner
 chọn **Linux / x64** → copy dòng lệnh có `--token XXXXX`.
 Token **hết hạn sau khoảng 1 giờ** và **không được commit**.
 
-### 3.2 Chạy script cài (đã có trong repo)
+### 3.2 Chạy script cài
+
+> **Lưu ý đường dẫn**: artifact deploy **không chứa** thư mục `deploy/`
+> (xem `.gitattributes`) — nên `/opt/cell-tracker/current/deploy/ci/...` sẽ **không tồn tại**.
+> Hãy chép 1–2 file cần thiết từ máy dev sang `/tmp` của container:
 
 ```bash
-# trong LXC, từ bản clone repo (hoặc scp thư mục deploy/ci vào /tmp)
-cd /opt/cell-tracker/current
-sudo RUNNER_TOKEN=<token-vừa-copy> bash deploy/ci/install-runner.sh
+# trên MÁY DEV (từ gốc repo)
+scp deploy/ci/install-runner.sh deploy/ci/sudoers-celltracker root@<IP-LXC>:/tmp/
+
+# trong LXC
+cd /tmp
+sudo RUNNER_TOKEN=<token-vừa-copy> bash /tmp/install-runner.sh
 ```
+
+Chỉ cần `install-runner.sh` cũng đủ: nếu không thấy `sudoers-celltracker` cạnh nó,
+script tự sinh nội dung sudoers tối thiểu (mục 4). Chép kèm file mẫu thì dễ chỉnh sửa hơn.
 
 Script làm gì:
 
@@ -136,6 +146,12 @@ sudo -u ghrunner sudo -n -l          # phải thấy đúng 3 nhóm lệnh
 
 GitHub ▸ *Settings ▸ Actions ▸ Runners*: runner hiện **Idle**, label `celltracker-lxc`.
 
+> Workflow `deploy.yml` yêu cầu **đúng label `celltracker-lxc`**
+> (`runs-on: [self-hosted, celltracker-lxc]`). Nếu label khác, job sẽ **Queued** mãi.
+> Sau khi runner online, nếu còn run cũ đang Queued: mở run đó ▸ **Cancel**, rồi
+> **Re-run** (hoặc push commit mới) để deploy bản mới nhất.
+
+
 ### 3.3 Nếu không dùng script (cài tay)
 
 ```bash
@@ -155,14 +171,19 @@ sudo ./svc.sh install ghrunner && sudo ./svc.sh start
 
 ## 4. Quyền sudo tối thiểu
 
-File mẫu: [`deploy/ci/sudoers-celltracker`](ci/sudoers-celltracker).
+`install-runner.sh` **đã tự cài** file này (mục 3.2) — phần dưới chỉ dùng khi muốn
+cài/chỉnh tay. File mẫu: [`deploy/ci/sudoers-celltracker`](ci/sudoers-celltracker).
 
 ```bash
-sudo sed 's/__RUNNER_USER__/ghrunner/g' deploy/ci/sudoers-celltracker \
-  | sudo tee /etc/sudoers.d/celltracker-ci >/dev/null
-sudo chmod 440 /etc/sudoers.d/celltracker-ci
-sudo visudo -cf /etc/sudoers.d/celltracker-ci
+# cách 1: từ máy dev, chép mẫu sang rồi cài trong LXC
+scp deploy/ci/sudoers-celltracker root@<IP-LXC>:/tmp/
+ssh root@<IP-LXC> 'sed "s/__RUNNER_USER__/ghrunner/g" /tmp/sudoers-celltracker \
+  | install -m 440 /dev/stdin /etc/sudoers.d/celltracker-ci && visudo -cf /etc/sudoers.d/celltracker-ci'
 ```
+
+> Đừng chạy `sed deploy/ci/...` **bên trong** `/opt/cell-tracker/current`:
+> thư mục `deploy/` không có trong artifact. Chạy lệnh đó ở máy dev (gốc repo)
+> hoặc dùng đường dẫn `/tmp` như trên.
 
 Cho phép **đúng** 3 nhóm:
 
@@ -212,7 +233,7 @@ sha256sum release-*.tar.gz
 `.github/`, `README.md`, `API.md`, `.env*`, log, `uploads/`, `dist/`. Upload bằng
 `actions/upload-artifact@v4` (giữ 14 ngày).
 
-**Job `deploy`** (`runs-on: [self-hosted, linux, celltracker-lxc]`, `environment: production`):
+**Job `deploy`** (`runs-on: [self-hosted, celltracker-lxc]`, `environment: production`):
 
 1. `download-artifact` → `$RUNNER_TEMP/release/`
 2. `install -m 640` artifact vào `/opt/cell-tracker/incoming/` (thuộc `ghrunner`)

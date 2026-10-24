@@ -32,10 +32,13 @@ const DEFAULT_BASE_URL = 'https://api-merchant.payos.vn';
 async function buildQrImage(qrCode) {
   const payload = (qrCode || '').trim();
   if (!payload) return null;
-  // Chỉ nhận chuỗi VietQR. Test mode trả URL nội bộ (`/topup.html?order=..&mock=1`)
-  // thay vì chuỗi QR → cả URL tuyệt đối lẫn đường dẫn tương đối đều KHÔNG phải
-  // nội dung QR, bỏ qua (client hiện nút mở trang payOS thay thế).
-  if (/^https?:\/\//i.test(payload) || payload.startsWith('/')) return null;
+  // Chỉ nhận chuỗi VietQR/EMVCo do payOS trả về. Payload EMVCo luôn bắt đầu bằng
+  // tag "00" + độ dài "02" + giá trị "01" → "000201". Nhờ vậy:
+  //   • ảnh QR luôn mang ĐÚNG nội dung VietQR gốc của payOS (không sửa 1 ký tự nào
+  //     — mã hoá lại nguyên chuỗi, nên app ngân hàng hiểu y như QR gốc);
+  //   • không bao giờ vẽ một "mã QR" từ URL/chuỗi lạ (test mode trả link nội bộ,
+  //     hoặc payOS đổi định dạng) → client dùng nút mở trang payOS thay thế.
+  if (!payload.startsWith('000201')) return null;
   try {
     return await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 1, width: 320 });
   } catch (e) {
@@ -56,6 +59,20 @@ function getSetting(key, dflt) {
   });
 }
 
+/**
+ * Chuẩn hoá setting nhị phân → boolean.
+ *
+ * Vì sao KHÔNG dùng `value === '1'`: giá trị trong bảng settings có thể do nhiều
+ * đường ghi (API settings, seed, sửa tay bằng sqlite3, bản nâng cấp cũ). Một dấu
+ * cách thừa (`'1 '`) hoặc `'true'` từng làm cổng nạp bị coi là ĐANG TẮT dù admin
+ * thấy công tắc đang bật — đúng triệu chứng "đã bật nhưng vẫn báo chưa khả dụng".
+ * Trim + chấp nhận các cách viết truthy phổ biến để trạng thái luôn khớp ý admin.
+ */
+function asBool(value) {
+  const s = String(value == null ? '' : value).trim().toLowerCase();
+  return s === '1' || s === 'true' || s === 'on' || s === 'yes';
+}
+
 /** Đọc toàn bộ config payOS từ settings (không lộ secret ra ngoài route public). */
 async function getConfig() {
   const [enabled, clientId, apiKey, checksumKey, baseUrl, webhookUrl, testMode, base] = await Promise.all([
@@ -69,8 +86,8 @@ async function getConfig() {
     getSetting('public_base_url', '')
   ]);
   return {
-    enabled: enabled === '1',
-    testMode: testMode === '1',
+    enabled: asBool(enabled),
+    testMode: asBool(testMode),
     clientId: String(clientId || '').trim(),
     apiKey: String(apiKey || '').trim(),
     checksumKey: String(checksumKey || '').trim(),
@@ -80,10 +97,42 @@ async function getConfig() {
   };
 }
 
+/** Danh sách credential còn thiếu (tên setting) — dùng cho thông báo lỗi cụ thể. */
+function missingCredentials(cfg) {
+  const missing = [];
+  if (!cfg.clientId) missing.push('payos_client_id');
+  if (!cfg.apiKey) missing.push('payos_api_key');
+  if (!cfg.checksumKey) missing.push('payos_checksum_key');
+  return missing;
+}
+
 /** Đã bật cổng VÀ có đủ 3 credential chưa. */
 async function isConfigured() {
   const c = await getConfig();
-  return c.enabled && !!(c.clientId && c.apiKey && c.checksumKey);
+  return c.enabled && missingCredentials(c).length === 0;
+}
+
+/**
+ * Trạng thái cổng thanh toán để CHẨN ĐOÁN (admin) và để API công khai trả lý do
+ * "vì sao chưa nạp được". Không chứa secret.
+ *
+ * @returns {Promise<{enabled:boolean, test_mode:boolean, configured:boolean,
+ *   has_credentials:boolean, missing:string[], base_url:string,
+ *   webhook_url:string|null, public_base_url:string|null}>}
+ */
+async function getStatus() {
+  const c = await getConfig();
+  const missing = missingCredentials(c);
+  return {
+    enabled: c.enabled,
+    test_mode: c.testMode,
+    configured: c.enabled && missing.length === 0,
+    has_credentials: missing.length === 0,
+    missing,
+    base_url: c.baseUrl,
+    webhook_url: c.webhookUrl || null,
+    public_base_url: c.publicBaseUrl || null
+  };
 }
 
 /**
@@ -163,9 +212,14 @@ function buildDescription(orderCode) {
  */
 async function createPaymentLink({ orderCode, amount, description, returnUrl, cancelUrl, buyerName }) {
   const cfg = await getConfig();
-  if (!cfg.enabled) return { ok: false, reason: 'disabled', message: 'Cổng thanh toán đang tắt' };
-  if (!(cfg.clientId && cfg.apiKey && cfg.checksumKey)) {
-    return { ok: false, reason: 'not_configured', message: 'Chưa cấu hình payOS' };
+  if (!cfg.enabled) return { ok: false, reason: 'gateway_disabled', message: 'Cổng thanh toán đang tắt' };
+  const missing = missingCredentials(cfg);
+  if (missing.length) {
+    return {
+      ok: false,
+      reason: 'missing_credentials',
+      message: 'Chưa cấu hình payOS: thiếu ' + missing.join(', ')
+    };
   }
 
   // Test mode: không gọi mạng. Trả link nội bộ để admin/user tự "trả tiền".
@@ -297,9 +351,12 @@ function mapError(e) {
 
 module.exports = {
   DEFAULT_BASE_URL,
+  asBool,
   getSetting,
   getConfig,
   isConfigured,
+  missingCredentials,
+  getStatus,
   resolveBaseUrl,
   resolveWebhookUrl,
   getVndPerCredit,

@@ -1,4 +1,4 @@
-#requires -Version 7.0
+#requires -Version 5.1
 <#
 .SYNOPSIS
     Dong goi (zip tu git) va deploy cell-tracker len LXC tren Proxmox.
@@ -12,7 +12,8 @@
       4. scp zip + bin/deploy-release.sh len LXC, roi SSH chay deploy-release.sh
          (cai deps, chuyen symlink, restart systemd, health check, tu rollback neu loi).
 
-    VI DU (PowerShell 7 - lenh `pwsh`):
+    VI DU (chay duoc voi Windows PowerShell 5.1 hoac PowerShell 7):
+      powershell -ExecutionPolicy Bypass -File .\deploy\deploy.ps1 -Target root@192.168.1.50
       pwsh ./deploy/deploy.ps1 -Target root@192.168.1.50
       pwsh ./deploy/deploy.ps1 -Target root@192.168.1.50 -SkipTests
       pwsh ./deploy/deploy.ps1 -Target root@192.168.1.50 -AllowDirty
@@ -117,6 +118,13 @@ try {
         & npm run smoke
         if ($LASTEXITCODE -ne 0) { throw "npm run smoke that bai (exit $LASTEXITCODE) - dung deploy." }
         Ok "smoke OK"
+
+        # Kiem thu luong nap diem/thanh toan (offline: webhook, chong cong trung,
+        # tra thieu, don tre han, chan gia lap o production).
+        Step "Verify payments (npm run verify:payments)"
+        & npm run verify:payments
+        if ($LASTEXITCODE -ne 0) { throw "npm run verify:payments that bai (exit $LASTEXITCODE) - dung deploy." }
+        Ok "verify payments OK"
     }
 
     # ---------- 2. dong goi ------------------------------------------------

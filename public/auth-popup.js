@@ -192,9 +192,10 @@
       '.ap-msg{margin-top:10px;font-size:12.5px;line-height:1.5;min-height:16px}',
       // Rỗng thì không chiếm chỗ -> bớt ~26px chiều cao mỗi lần render.
       '.ap-msg:empty{display:none}',
-      '.ap-msg.err{color:#e5484d}.ap-msg.ok{color:#1f9e5a}.ap-msg.info{color:var(--text-secondary,#667)}',
-      '.ap-dev{margin-top:10px;padding:10px;border-radius:9px;background:rgba(120,180,255,.12);',
-      'border:1px dashed rgba(80,140,220,.5);font-size:12px;word-break:break-all}',
+      // Màu thông báo dùng token trạng thái của theme (đọc được trên cả nền sáng/tối).
+      '.ap-msg.err{color:var(--danger,#e5484d)}.ap-msg.ok{color:var(--success,#1f9e5a)}.ap-msg.info{color:var(--text-secondary,#667)}',
+      '.ap-dev{margin-top:10px;padding:10px;border-radius:9px;background:var(--accent-soft,rgba(120,180,255,.12));',
+      'border:1px dashed var(--accent-line,rgba(80,140,220,.5));font-size:12px;word-break:break-all}',
       '.ap-copy{margin-top:6px;font-size:11.5px;padding:4px 9px;border-radius:6px;cursor:pointer;',
       'border:1px solid var(--border-color,rgba(0,0,0,.16));background:transparent;color:inherit}',
       // View "điều khoản" trong popup: nội dung nạp từ /terms.html, tự ăn màu theme

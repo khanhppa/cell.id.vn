@@ -52,6 +52,9 @@ jobs:
       - name: Smoke test (boot server + /healthz + static)
         run: npm run smoke
 
+      - name: "Verify payments (offline: webhook, idempotency, underpaid, production guard)"
+        run: npm run verify:payments
+
       - name: Verify deploy artifact is clean
         run: |
           set -euo pipefail

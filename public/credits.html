@@ -12,31 +12,10 @@
 <link rel="icon" type="image/png" sizes="256x256" href="/img/favicon.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<!-- Bảng màu sáng/tối dùng chung (nguồn DUY NHẤT cho token màu của mọi trang). -->
+<link rel="stylesheet" href="/theme.css">
 <style>
-  :root {
-    --bg-page: #f4f6fb; --bg-card: #ffffff; --border-color: #e2e6ef;
-    --text-primary: #1c2333; --text-secondary: #5a6478; --text-faint: #98a1b5;
-    --accent: #4f7cff; --ok: #1f9e5a; --danger: #e04444;
-    --bg-hover: rgba(0,0,0,0.05);
-    /* Biến dùng bởi navbar chung (auth.js). Thiếu các biến này navbar rơi vào
-       fallback hardcode màu sáng → không đổi theo dark mode. */
-    --bg-surface: #ffffff;
-    --bg-surface2: #eef1f7;
-    --bg-btn-primary: #4f7cff;
-    --border-focus: #4f7cff;
-    --header-bg: #ffffff;
-  }
-  [data-theme="dark"] {
-    --bg-page: #14171f; --bg-card: #1c2029; --border-color: #2b3140;
-    --text-primary: #e7ebf3; --text-secondary: #a4adc0; --text-faint: #6d7689;
-    --accent: #6b93ff; --ok: #45c07d; --danger: #ff6b6b;
-    --bg-hover: rgba(255,255,255,0.07);
-    --bg-surface: #1c2029;
-    --bg-surface2: #232833;
-    --bg-btn-primary: #6b93ff;
-    --border-focus: #6b93ff;
-    --header-bg: #1c2029;
-  }
+  /* Token màu lấy từ /theme.css → trang này đồng bộ với trang chủ/navbar/công cụ. */
   * { box-sizing: border-box; }
   body {
     margin: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -56,7 +35,7 @@
   .balance-meta { color: var(--text-secondary); font-size: 12.5px; line-height: 1.7; }
   .badge-off {
     display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px;
-    background: rgba(255,170,60,0.16); color: #c98a1e; border: 1px solid rgba(255,170,60,0.4);
+    background: var(--warning-soft); color: var(--warning); border: 1px solid var(--warning-line);
   }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--border-color); }
@@ -129,23 +108,24 @@
   }
   .banner i { margin-top: 2px; }
   .banner-warn {
-    background: rgba(255,170,60,0.14); color: #b47d13;
-    border: 1px solid rgba(255,170,60,0.4);
+    background: var(--warning-soft); color: var(--warning);
+    border: 1px solid var(--warning-line);
   }
-  [data-theme="dark"] .banner-warn { color: #e0ab4a; }
   .banner-ok {
-    background: rgba(31,158,90,0.12); color: var(--ok);
-    border: 1px solid rgba(31,158,90,0.35);
+    background: var(--success-soft); color: var(--ok);
+    border: 1px solid var(--success-line);
   }
   /* Nút mở trang nạp điểm riêng (topup.html) — đứng cạnh nút Làm mới. */
   .balance-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-  /* Nổi bật, dễ thấy; <a> nên phải tự bỏ underline mặc định của trình duyệt. */
+  /* Nổi bật, dễ thấy; <a> nên phải tự bỏ underline mặc định của trình duyệt.
+     Nền dùng --bg-btn-success (xanh ĐẬM) để chữ trắng đủ tương phản ở cả 2 theme;
+     --ok (xanh sáng) chỉ dùng cho chữ/số. */
   .btn-topup {
-    background: var(--ok); border-color: var(--ok); color: #fff; font-weight: 700;
-    box-shadow: 0 2px 8px rgba(31, 158, 90, .28);
+    background: var(--bg-btn-success); border-color: var(--bg-btn-success); color: #fff; font-weight: 700;
+    box-shadow: 0 2px 8px var(--success-line);
   }
   .btn-topup:hover, .btn-topup:focus, .btn-topup:active {
-    background: var(--ok); border-color: var(--ok); color: #fff;
+    background: var(--bg-btn-success); border-color: var(--bg-btn-success); color: #fff;
     text-decoration: none; filter: brightness(1.08);
   }
   .copy-btn {
@@ -160,16 +140,16 @@
     display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
     padding: 2px 8px; border-radius: 10px; background: var(--bg-hover); color: var(--text-secondary);
   }
-  .countdown.late { background: rgba(224,68,68,.14); color: var(--danger); }
+  .countdown.late { background: var(--danger-soft); color: var(--danger); }
   .quick-amt { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
   .quick-amt .btn { padding: 4px 10px; font-size: 12px; }
   .status-badge {
     display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; white-space: nowrap;
   }
-  .status-PENDING { background: rgba(255,170,60,.16); color: #c98a1e; border: 1px solid rgba(255,170,60,.4); }
-  .status-PAID { background: rgba(31,158,90,.14); color: var(--ok); border: 1px solid rgba(31,158,90,.35); }
+  .status-PENDING { background: var(--warning-soft); color: var(--warning); border: 1px solid var(--warning-line); }
+  .status-PAID { background: var(--success-soft); color: var(--ok); border: 1px solid var(--success-line); }
   .status-CANCELLED, .status-EXPIRED, .status-FAILED, .status-UNDERPAID {
-    background: rgba(224,68,68,.12); color: var(--danger); border: 1px solid rgba(224,68,68,.32);
+    background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line);
   }
   .btn-mini { padding: 3px 9px; font-size: 12px; }
   .link-btn {

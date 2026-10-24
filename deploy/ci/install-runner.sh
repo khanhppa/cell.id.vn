@@ -21,6 +21,7 @@ RUNNER_LABELS="${RUNNER_LABELS:-celltracker-lxc}"
 RUNNER_NAME="${RUNNER_NAME:-$(hostname -s)-lxc}"
 RUNNER_TOKEN="${RUNNER_TOKEN:-}"
 APP_ROOT="${APP_ROOT:-/opt/cell-tracker}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 say()  { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m[warn] %s\033[0m\n' "$*" >&2; }
@@ -86,15 +87,35 @@ say "Cài service systemd cho runner"
 systemctl --no-pager --full status "actions.runner.*" | sed 's/^/    /' | head -n 12 || true
 
 # ---- 5. sudoers ------------------------------------------------------------
-SUDOERS_SRC="$(dirname "$0")/sudoers-celltracker"
-if [[ -f "$SUDOERS_SRC" ]]; then
-  say "Cài sudoers (quyền tối thiểu cho deploy)"
-  sed "s/__RUNNER_USER__/$RUNNER_USER/g" "$SUDOERS_SRC" > /etc/sudoers.d/celltracker-ci
-  chmod 440 /etc/sudoers.d/celltracker-ci
-  visudo -cf /etc/sudoers.d/celltracker-ci
+# Ưu tiên file mẫu cạnh script (khi chạy từ repo). Nếu script được copy lẻ vào /tmp
+# (artifact deploy KHÔNG chứa deploy/), tự sinh đúng nội dung tối thiểu — nhờ vậy
+# cài runner vẫn chạy được chỉ với 1 file.
+SUDOERS_TMP="$(mktemp)"
+if [[ -f "$SCRIPT_DIR/sudoers-celltracker" ]]; then
+  say "Cài sudoers từ $SCRIPT_DIR/sudoers-celltracker"
+  sed "s/__RUNNER_USER__/$RUNNER_USER/g" "$SCRIPT_DIR/sudoers-celltracker" > "$SUDOERS_TMP"
 else
-  warn "Không thấy $SUDOERS_SRC — tự cài /etc/sudoers.d/celltracker-ci theo deploy/ci/sudoers-celltracker"
+  warn "Không thấy sudoers-celltracker cạnh script — dùng nội dung mặc định"
+  cat > "$SUDOERS_TMP" <<SUDOERS
+Defaults:$RUNNER_USER !requiretty
+Defaults:$RUNNER_USER secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+$RUNNER_USER ALL=(root) NOPASSWD: /opt/cell-tracker/bin/deploy-release.sh *
+$RUNNER_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart cell-tracker, \\
+                                  /usr/bin/systemctl is-active cell-tracker, \\
+                                  /usr/bin/systemctl reset-failed cell-tracker, \\
+                                  /usr/bin/systemctl status cell-tracker, \\
+                                  /bin/systemctl restart cell-tracker, \\
+                                  /bin/systemctl is-active cell-tracker, \\
+                                  /bin/systemctl reset-failed cell-tracker, \\
+                                  /bin/systemctl status cell-tracker
+$RUNNER_USER ALL=(root) NOPASSWD: /usr/bin/journalctl -u cell-tracker *, \\
+                                  /bin/journalctl -u cell-tracker *
+SUDOERS
 fi
+install -m 440 -o root -g root "$SUDOERS_TMP" /etc/sudoers.d/celltracker-ci
+rm -f "$SUDOERS_TMP"
+visudo -cf /etc/sudoers.d/celltracker-ci
 
 # ---- 6. kiểm tra -----------------------------------------------------------
 say "Kiểm tra quyền"

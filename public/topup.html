@@ -12,31 +12,10 @@
 <link rel="icon" type="image/png" sizes="256x256" href="/img/favicon.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<!-- Bảng màu sáng/tối dùng chung (nguồn DUY NHẤT cho token màu của mọi trang). -->
+<link rel="stylesheet" href="/theme.css">
 <style>
-  :root {
-    --bg-page: #f4f6fb; --bg-card: #ffffff; --border-color: #e2e6ef;
-    --text-primary: #1c2333; --text-secondary: #5a6478; --text-faint: #98a1b5;
-    --accent: #4f7cff; --ok: #1f9e5a; --danger: #e04444;
-    --bg-hover: rgba(0,0,0,0.05);
-    /* Biến dùng bởi navbar chung (auth.js). Thiếu các biến này navbar rơi vào
-       fallback hardcode màu sáng → không đổi theo dark mode. */
-    --bg-surface: #ffffff;
-    --bg-surface2: #eef1f7;
-    --bg-btn-primary: #4f7cff;
-    --border-focus: #4f7cff;
-    --header-bg: #ffffff;
-  }
-  [data-theme="dark"] {
-    --bg-page: #14171f; --bg-card: #1c2029; --border-color: #2b3140;
-    --text-primary: #e7ebf3; --text-secondary: #a4adc0; --text-faint: #6d7689;
-    --accent: #6b93ff; --ok: #45c07d; --danger: #ff6b6b;
-    --bg-hover: rgba(255,255,255,0.07);
-    --bg-surface: #1c2029;
-    --bg-surface2: #232833;
-    --bg-btn-primary: #6b93ff;
-    --border-focus: #6b93ff;
-    --header-bg: #1c2029;
-  }
+  /* Token màu lấy từ /theme.css → đồng bộ với trang chủ/navbar/công cụ. */
   * { box-sizing: border-box; }
   body {
     margin: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -52,12 +31,19 @@
   }
   .btn {
     border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);
-    border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; font-family: inherit;
-    display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+    border-radius: 8px; padding: 8px 16px; font-size: 13px; cursor: pointer; font-family: inherit;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none;
+    /* Chiều cao tối thiểu: nút từng bị "dẹt" (padding 7px, ~33px) — khó bấm trên
+       điện thoại và lệch so với ô nhập liệu cao ~38px bên cạnh. */
+    min-height: 40px; line-height: 1.2;
+  }
+  /* Mobile: vùng chạm tối thiểu 44–46px theo khuyến nghị accessibility. */
+  @media (max-width: 640px) {
+    .btn { min-height: 46px; font-size: 14px; }
   }
   .btn:hover { background: var(--bg-hover); }
   .btn:disabled { opacity: .5; cursor: default; }
-  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn-primary { background: var(--bg-btn-primary); border-color: var(--bg-btn-primary); color: #fff; font-weight: 600; }
   .btn-primary:hover { filter: brightness(1.08); }
   .error { color: var(--danger); font-size: 13px; }
   .success { color: var(--ok); font-size: 13px; }
@@ -95,13 +81,12 @@
   }
   .banner i { margin-top: 2px; }
   .banner-warn {
-    background: rgba(255,170,60,0.14); color: #b47d13;
-    border: 1px solid rgba(255,170,60,0.4);
+    background: var(--warning-soft); color: var(--warning);
+    border: 1px solid var(--warning-line);
   }
-  [data-theme="dark"] .banner-warn { color: #e0ab4a; }
   .banner-ok {
-    background: rgba(31,158,90,0.12); color: var(--ok);
-    border: 1px solid rgba(31,158,90,0.35);
+    background: var(--success-soft); color: var(--ok);
+    border: 1px solid var(--success-line);
   }
   .copy-btn {
     border: none; background: transparent; color: var(--text-faint); cursor: pointer;
@@ -114,7 +99,7 @@
     display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
     padding: 2px 8px; border-radius: 10px; background: var(--bg-hover); color: var(--text-secondary);
   }
-  .countdown.late { background: rgba(224,68,68,.14); color: var(--danger); }
+  .countdown.late { background: var(--danger-soft); color: var(--danger); }
   .quick-amt { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
   .quick-amt .btn { padding: 4px 10px; font-size: 12px; }
   /* Thanh tiến trình wizard 4 bước:
@@ -137,7 +122,7 @@
   .wz-label { margin-top: 6px; font-size: 11.5px; color: var(--text-faint); text-align: center; }
   .wz-step.active .wz-dot { background: var(--accent); border-color: var(--accent); color: #fff; }
   .wz-step.active .wz-label { color: var(--accent); font-weight: 600; }
-  .wz-step.done .wz-dot { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .wz-step.done .wz-dot { background: var(--bg-btn-success); border-color: var(--bg-btn-success); color: #fff; }
   .wz-step.done .wz-label { color: var(--ok); }
   /* Đường nối giữa 2 mốc — vẽ bằng ::after trên mốc (trừ mốc cuối). */
   .wz-step:not(:last-child)::after {
@@ -182,8 +167,8 @@
     margin-left: auto; font-size: 11.5px; padding: 3px 9px; border-radius: 10px;
     background: var(--bg-hover); color: var(--text-secondary); white-space: nowrap;
   }
-  .pay-chip.ok { background: rgba(31,158,90,.14); color: var(--ok); font-weight: 600; }
-  .pay-chip.fail { background: rgba(224,68,68,.12); color: var(--danger); }
+  .pay-chip.ok { background: var(--success-soft); color: var(--ok); font-weight: 600; }
+  .pay-chip.fail { background: var(--danger-soft); color: var(--danger); }
   .pay-trust {
     display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11.5px;
     color: var(--text-faint); padding: 8px 10px; margin-bottom: 14px;
@@ -224,24 +209,30 @@
   .qr-panel-head i { color: var(--accent); }
   .qr-panel-badge {
     margin-top: 10px; font-size: 11.5px; padding: 4px 8px; border-radius: 8px;
-    background: rgba(255,170,60,.16); color: #c98a1e; display: inline-block;
+    background: var(--warning-soft); color: var(--warning); display: inline-block;
   }
-  .qr-panel-badge.ok { background: rgba(31,158,90,.14); color: var(--ok); }
-  .qr-panel-badge.fail { background: rgba(224,68,68,.12); color: var(--danger); }
+  .qr-panel-badge.ok { background: var(--success-soft); color: var(--ok); }
+  .qr-panel-badge.fail { background: var(--danger-soft); color: var(--danger); }
+  /* Tải / chia sẻ ảnh QR VietQR (dùng được cả trên điện thoại). */
+  .qr-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .qr-actions .btn { flex: 1 1 0; min-width: 0; }
+  .qr-actions[hidden] { display: none; }
   .pay-fallback { display: flex; flex-direction: column; gap: 10px; align-items: center; }
   .pay-fallback[hidden] { display: none; }
   .banner {
     display: flex; align-items: flex-start; gap: 8px; font-size: 12px; text-align: left;
     padding: 8px 10px; border-radius: 8px; line-height: 1.45;
   }
-  .banner-warn { background: rgba(255,170,60,.14); color: #c98a1e; border: 1px solid rgba(255,170,60,.35); }
+  .banner-warn { background: var(--warning-soft); color: var(--warning); border: 1px solid var(--warning-line); }
   .pay-live {
     margin-top: 12px; font-size: 12.5px; color: var(--text-secondary);
     display: flex; align-items: center; gap: 7px;
   }
   .pay-live.ok { color: var(--ok); font-weight: 600; }
   .pay-live.fail { color: var(--danger); }
-  .btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+  /* Nút hành động phá huỷ dùng --bg-btn-danger (đỏ đậm) để chữ trắng luôn đủ
+     tương phản; --danger (đỏ sáng) chỉ dùng cho CHỮ/viền trạng thái. */
+  .btn-danger { background: var(--bg-btn-danger); border-color: var(--bg-btn-danger); color: #fff; font-weight: 600; }
   .btn-danger:hover { filter: brightness(1.08); }
   .cancel-body { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
   .cancel-warn { margin: 0; line-height: 1.55; color: var(--text-secondary); }
@@ -250,19 +241,19 @@
   .status-badge {
     display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; white-space: nowrap;
   }
-  .status-PENDING { background: rgba(255,170,60,.16); color: #c98a1e; border: 1px solid rgba(255,170,60,.4); }
-  .status-PAID { background: rgba(31,158,90,.14); color: var(--ok); border: 1px solid rgba(31,158,90,.35); }
+  .status-PENDING { background: var(--warning-soft); color: var(--warning); border: 1px solid var(--warning-line); }
+  .status-PAID { background: var(--success-soft); color: var(--ok); border: 1px solid var(--success-line); }
   .status-CANCELLED, .status-EXPIRED, .status-FAILED, .status-UNDERPAID {
-    background: rgba(224,68,68,.12); color: var(--danger); border: 1px solid rgba(224,68,68,.32);
+    background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line);
   }
   /* Bước 5: kết quả nạp điểm tại chỗ. */
   .res-icon {
     width: 66px; height: 66px; border-radius: 50%; margin: 0 auto 14px;
     display: flex; align-items: center; justify-content: center; font-size: 28px;
   }
-  .res-icon.paid { background: rgba(31,158,90,.14); color: var(--ok); }
-  .res-icon.pending { background: rgba(255,170,60,.16); color: #c98a1e; }
-  .res-icon.fail { background: rgba(224,68,68,.13); color: var(--danger); }
+  .res-icon.paid { background: var(--success-soft); color: var(--ok); }
+  .res-icon.pending { background: var(--warning-soft); color: var(--warning); }
+  .res-icon.fail { background: var(--danger-soft); color: var(--danger); }
   .res-title { font-size: 19px; font-weight: 800; margin: 0 0 6px; text-align: center; }
   .res-sub { color: var(--text-secondary); font-size: 13px; line-height: 1.6; margin: 0; text-align: center; }
   .res-bal { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; }
@@ -283,10 +274,12 @@
   }
   .pay-modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 14px; }
   .pay-modal-head b { flex: 1; }
-  .pay-modal-head i { color: #c98a1e; }
+  .pay-modal-head i { color: var(--warning); }
   .pay-modal-x {
+    /* Nút X đóng dialog: 40×40 để bấm trúng trên điện thoại (trước đây ~28px). */
     border: none; background: none; color: var(--text-faint); cursor: pointer;
-    font-size: 15px; padding: 4px 6px; border-radius: 6px;
+    width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 16px; padding: 0; border-radius: 8px;
   }
   .pay-modal-x:hover { background: var(--bg-hover); color: var(--text-primary); }
   .pay-modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
@@ -311,10 +304,23 @@
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         <b style="font-size:14px"><i class="fas fa-gift"></i> Gói nạp</b>
         <span class="muted" id="topupRate" style="font-size:12px"></span>
+        <span id="topupTestChip" hidden
+              style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--warning-soft);color:var(--warning);border:1px solid var(--warning-line);white-space:nowrap">
+          <i class="fas fa-vial"></i> Chế độ test
+        </span>
       </div>
+      <!-- Banner hiện ĐÚNG lý do cổng nạp chưa dùng được (tắt / thiếu credential),
+           thay vì câu chung "chưa khả dụng" khiến admin không biết sửa ở đâu. -->
       <div id="topupUnavailable" class="banner banner-warn" hidden>
         <i class="fas fa-triangle-exclamation"></i>
-        <span>Nạp điểm tạm chưa khả dụng — vui lòng liên hệ admin để bật cổng thanh toán.</span>
+        <span>
+          <b>Nạp điểm tạm chưa khả dụng.</b>
+          <span id="topupUnavailableMsg">Vui lòng liên hệ admin để bật cổng thanh toán.</span>
+          <a id="topupAdminLink" href="/admin.html" hidden
+             style="font-weight:600;text-decoration:underline;white-space:nowrap">
+            Mở Admin ▸ Cài đặt ▸ payOS
+          </a>
+        </span>
       </div>
       <div id="pkgGrid" class="pkg-grid"></div>
 
@@ -417,9 +423,14 @@
 
         <div class="qr-col" id="payQrBox">
           <div class="qr-panel">
-            <div class="qr-panel-head"><i class="fas fa-qrcode"></i> Quét bằng app ngân hàng</div>
-            <img id="payQr" alt="QR thanh toán">
+            <div class="qr-panel-head"><i class="fas fa-qrcode"></i> Quét mã VietQR của payOS</div>
+            <img id="payQr" alt="Mã QR VietQR thanh toán do payOS cấp">
             <div class="qr-panel-badge" id="payQrBadge"><i class="fas fa-hourglass-half"></i> Chưa nhận thanh toán</div>
+          </div>
+          <!-- Tải / chia sẻ đúng ảnh VietQR gốc (data-URL server dựng từ chuỗi payOS). -->
+          <div class="qr-actions" id="payQrActions" hidden>
+            <button class="btn" type="button" onclick="downloadQr()"><i class="fas fa-download"></i> Tải mã QR</button>
+            <button class="btn" type="button" onclick="shareQr()"><i class="fas fa-share-nodes"></i> Chia sẻ</button>
           </div>
           <div class="pay-fallback" id="payFallback" hidden>
             <div class="banner banner-warn"><i class="fas fa-triangle-exclamation"></i>
@@ -434,6 +445,7 @@
 
       <div class="wz-actions">
         <button class="btn" id="payBackBtn" onclick="payBack()"><i class="fas fa-arrow-left"></i> Quay lại</button>
+        <button class="btn" id="payCheckBtn" onclick="checkPaymentNow()"><i class="fas fa-rotate"></i> Kiểm tra thanh toán</button>
         <button class="btn btn-danger" id="payCancelBtn" onclick="openCancelConfirm()"><i class="fas fa-ban"></i> Hủy đơn</button>
         <button class="btn" id="payMockBtn" hidden onclick="mockPaid()"><i class="fas fa-flask"></i> Giả lập đã trả tiền (test)</button>
       </div>
@@ -507,8 +519,8 @@ const ORDER_KEY = 'ct_topup_order';     // sessionStorage: khôi phục đơn sa
 
 let wzStep = 1;
 let topupCfg = null;    // { available, vnd_per_credit, min_vnd, max_vnd, packages }
-let payPoll = null;     // setInterval id khi đang chờ thanh toán
-let payPollTicks = 0;   // số nhịp poll đã qua — dùng để chèn nhịp đối soát payOS
+let payPoll = null;     // token vòng long-poll khi đang chờ thanh toán
+let payPollTicks = 0;   // số lượt chờ đã qua — dùng để chèn nhịp đối soát payOS
 let activeOrder = null; // đơn đang xem
 let cdTimer = null;
 let orderPaid = false;  // đơn hiện tại đã PAID → khoá thanh bước
@@ -577,6 +589,78 @@ function fallbackCopy(value) {
     document.body.removeChild(ta);
     return ok;
   } catch (e) { return false; }
+}
+
+// ============================================================================
+// Mã QR thanh toán — TẢI VỀ MÁY / CHIA SẺ
+// ----------------------------------------------------------------------------
+// Ảnh QR ở đây là data-URL PNG do server dựng từ CHÍNH chuỗi VietQR payOS trả về
+// (payos.buildQrImage). Tải/chia sẻ nguyên ảnh đó ⇒ nội dung y hệt mã gốc: cùng
+// số tiền + nội dung chuyển khoản, app ngân hàng quét được.
+// ============================================================================
+/** data-URL ảnh QR của đơn đang mở (rỗng nếu không có). */
+function qrDataUrl() {
+  const src = activeOrder && activeOrder.qr_image;
+  return /^data:image\//i.test(src || '') ? src : '';
+}
+
+/** Tên file gợi nhớ: vietqr-<mã đơn>.png */
+function qrFileName() {
+  const code = (activeOrder && activeOrder.order_code) || 'don-nap';
+  return `vietqr-${code}.png`;
+}
+
+/** Tải ảnh QR về máy. iOS/Safari không tải được data-URL → mở ảnh để nhấn giữ lưu. */
+async function downloadQr() {
+  const src = qrDataUrl();
+  if (!src) { showMsg('payMsg', 'Chưa có mã QR để tải.', true); return; }
+  try {
+    const blob = await (await fetch(src)).blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = qrFileName();
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    showMsg('payMsg', 'Đã tải mã QR về máy.', false);
+  } catch (e) {
+    // Đường dự phòng cho trình duyệt chặn download data-URL (thường là iOS).
+    const w = window.open('', '_blank');
+    if (w) {
+      w.document.write(
+        '<title>VietQR</title><body style="margin:0;background:#fff;display:flex;' +
+        'align-items:center;justify-content:center;min-height:100vh">' +
+        '<img src="' + src + '" alt="VietQR" style="max-width:100%"></body>'
+      );
+      w.document.close();
+    }
+    showMsg('payMsg', 'Nhấn giữ ảnh vừa mở để lưu vào thư viện ảnh.', false);
+  }
+}
+
+/** Chia sẻ ảnh QR qua khay chia sẻ của hệ điều hành (Zalo/Messenger/…) nếu có. */
+async function shareQr() {
+  const src = qrDataUrl();
+  if (!src) { showMsg('payMsg', 'Chưa có mã QR để chia sẻ.', true); return; }
+  const o = activeOrder || {};
+  const title = 'Mã QR thanh toán đơn #' + (o.order_code || '');
+  const text = 'Quét mã VietQR để chuyển ' + fmtVnd(o.amount_vnd) + ' cho đơn #' + o.order_code + '.';
+  try {
+    const blob = await (await fetch(src)).blob();
+    const file = new File([blob], qrFileName(), { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title, text });
+      return;
+    }
+    if (navigator.share) { await navigator.share({ title, text }); return; }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;   // người dùng bấm huỷ khay chia sẻ
+  }
+  // Trình duyệt không hỗ trợ chia sẻ → tải ảnh về máy.
+  await downloadQr();
 }
 
 // ============================================================================
@@ -649,7 +733,24 @@ async function loadPackages() {
   card.hidden = false;
 
   const avail = !!topupCfg.available;
-  document.getElementById('topupUnavailable').hidden = avail;
+  const banner = document.getElementById('topupUnavailable');
+  const bannerMsg = document.getElementById('topupUnavailableMsg');
+  const adminLink = document.getElementById('topupAdminLink');
+  banner.hidden = avail;
+  if (!avail && bannerMsg) {
+    // Server trả LÝ DO cụ thể (gateway_disabled / missing_credentials). Hiện đúng
+    // lý do đó thay vì câu chung — admin biết ngay phải bật cổng hay nhập credential.
+    const first = (topupCfg.reasons && topupCfg.reasons[0]) || null;
+    bannerMsg.textContent = first && first.message
+      ? first.message
+      : 'Vui lòng liên hệ admin để bật cổng thanh toán.';
+  }
+  if (adminLink) {
+    // Chỉ admin mới thấy lối đi thẳng tới trang cấu hình.
+    adminLink.hidden = !(typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin());
+  }
+  const testChip = document.getElementById('topupTestChip');
+  if (testChip) testChip.hidden = !topupCfg.test_mode;
   document.getElementById('pkgGrid').classList.toggle('is-disabled', !avail);
   const customVnd = document.getElementById('customVnd');
   const customBtn = document.getElementById('customBtn');
@@ -741,12 +842,20 @@ async function createOrder(packageId) {
       body: JSON.stringify({ package_id: packageId })
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.error || 'Không tạo được đơn nạp');
+    if (!r.ok) {
+      const err = new Error(d.error || 'Không tạo được đơn nạp');
+      err.reason = d.reason;
+      throw err;
+    }
     activeOrder = d;          // bước 2–3 cần đơn này (và để huỷ khi Quay lại)
     rememberOrder(d);
     fillConfirmStep(d);
     wzGotoStep(2);
-  } catch (e) { showMsg('topupMsg', e.message, true); }
+  } catch (e) {
+    showMsg('topupMsg', e.message, true);
+    // Cổng vừa bị tắt / thiếu cấu hình → nạp lại trạng thái để banner hiện đúng lý do.
+    if (e.reason === 'gateway_disabled' || e.reason === 'missing_credentials') loadPackages();
+  }
   finally { setPkgLoading(packageId, false); }
 }
 
@@ -763,12 +872,19 @@ async function createCustomOrder() {
       body: JSON.stringify({ amount_vnd: Math.round(v) })
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.error || 'Không tạo được đơn nạp');
+    if (!r.ok) {
+      const err = new Error(d.error || 'Không tạo được đơn nạp');
+      err.reason = d.reason;
+      throw err;
+    }
     activeOrder = d;          // bước 2–3 cần đơn này (và để huỷ khi Quay lại)
     rememberOrder(d);
     fillConfirmStep(d);
     wzGotoStep(2);
-  } catch (e) { showMsg('customMsg', e.message, true); }
+  } catch (e) {
+    showMsg('customMsg', e.message, true);
+    if (e.reason === 'gateway_disabled' || e.reason === 'missing_credentials') loadPackages();
+  }
   finally { btn.disabled = false; }
 }
 
@@ -836,6 +952,9 @@ function showPayCard(d) {
   if (hasQr) { qr.src = d.qr_image; qr.parentElement.hidden = false; }
   else { qr.removeAttribute('src'); qr.parentElement.hidden = true; }
   renderPayFallback(d, hasQr);
+  // Chỉ hiện nút tải/chia sẻ khi thực sự có ảnh QR VietQR.
+  const qrActions = document.getElementById('payQrActions');
+  if (qrActions) qrActions.hidden = !hasQr;
   document.getElementById('payMockBtn').hidden = !d.test_mode;
   setPayStatus('PENDING');
   closeCancelConfirm();
@@ -872,10 +991,10 @@ const PAY_STATUS_TEXT = {
 
 // Nội dung dải "đang chờ" dưới card, đổi theo trạng thái đơn.
 const PAY_LIVE_TEXT = {
-  PENDING: 'Đang chờ xác nhận thanh toán… Quét xong mã, hệ thống tự cập nhật trong ~15 giây.',
+  PENDING: 'Đang chờ xác nhận thanh toán… Quét xong, hệ thống cập nhật NGAY khi payOS xác nhận (thường 1–5 giây).',
   PAID: 'Đã nhận thanh toán — điểm đang được cộng.',
   CANCELLED: 'Đơn đã huỷ. Không có khoản tiền nào bị trừ.',
-  EXPIRED: 'Đơn đã hết hạn. Hãy quay lại tạo đơn mới.',
+  EXPIRED: 'Đơn đã hết hạn. Nếu bạn vừa chuyển tiền, hệ thống vẫn kiểm tra thêm 2 phút.',
   UNDERPAID: 'Số tiền chuyển đến thiếu so với đơn — liên hệ admin để xử lý.',
   FAILED: 'Thanh toán không thành công. Bạn có thể tạo đơn mới.'
 };
@@ -953,6 +1072,10 @@ function startCountdown(expiresAt) {
       stopCountdown();
       setPayStatus('EXPIRED');
       stopPolling();
+      // Vẫn theo dõi thêm 2 phút: khách có thể chuyển tiền sát giờ và payOS xác
+      // nhận muộn — server vẫn cộng điểm (allowLate), UI phải bắt kịp để không
+      // hiện "Hết hạn" trong khi tiền đã vào.
+      startLateWatch(activeOrder && activeOrder.order_code);
       return;
     }
     box.classList.remove('late');
@@ -976,44 +1099,93 @@ function stopCountdown() {
 }
 
 // ============================================================================
-// Poll trạng thái đơn (mỗi 4 giây) → PAID thì sang bước 4
-// Mỗi SYNC_EVERY nhịp, nếu vẫn PENDING thì gọi thêm /sync để server đối soát
-// với payOS: webhook payOS có thể chưa được đăng ký / URL chưa public → nếu
-// chỉ đọc DB thì đơn kẹt "chờ thanh toán" dù khách đã trả tiền.
+// Cập nhật TỨC THÌ khi khách thanh toán (long-poll) → PAID thì sang bước 4
+// ----------------------------------------------------------------------------
+// Server giữ 1 kết nối `/wait`: ngay khi webhook payOS (hoặc đối soát, huỷ, hết
+// hạn) đổi trạng thái đơn, response trả về → UI cập nhật trong ~1 giây thay vì
+// chờ nhịp poll 4–20 giây như trước.
+//
+// Vẫn có 2 đường dự phòng, không bao giờ "kẹt chờ":
+//   • `/wait` hết 25s mà chưa có gì → gọi `/sync` để server hỏi thẳng payOS
+//     (webhook có thể chưa đăng ký / chưa tới) rồi chờ tiếp.
+//   • Server cũ chưa có `/wait` (404/405) → tự lùi về hỏi trạng thái mỗi 3 giây.
 // ============================================================================
-const SYNC_EVERY = 5;   // 5 nhịp x 4s = ~20s đối soát payOS một lần
+const WAIT_FALLBACK_MS = 3000;    // nhịp hỏi khi server không hỗ trợ /wait
+const WAIT_RETRY_MS = 1500;       // nghỉ khi lỗi mạng để không spam
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Gọi long-poll; tự huỷ nếu treo quá lâu (server thường trả sau ~25s). */
+async function fetchOrderWait(orderCode) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 35000);
+  try {
+    return await Auth.fetch('/api/credits/topup/' + orderCode + '/wait', { signal: ctl.signal });
+  } finally { clearTimeout(t); }
+}
 
 function startPolling(orderCode) {
   stopPolling();
   payPollTicks = 0;
-  // Tab ẩn vẫn giữ interval (chỉ bỏ qua việc gọi mạng) để khi khách quay lại
-  // là có nhịp ngay, không phải chờ tới sự kiện visibilitychange.
-  payPoll = setInterval(async () => {
-    if (document.hidden) return;
-    payPollTicks++;
-    try {
-      const r = await Auth.fetch('/api/credits/topup/' + orderCode);
-      if (!r.ok) return;
-      const d = await r.json();
-      setPayStatus(d.status);
-      if (d.status === 'PAID') {
-        stopPolling();
-        stopCountdown();
-        orderPaid = true;
-        showResult({
-          order_code: orderCode, status: 'PAID', amount_vnd: d.amount_vnd, credits: d.credits
-        });
-        return;
+  const token = {};
+  payPoll = token;                    // dùng làm cờ "còn đang chờ" (stopPolling xoá)
+  const alive = () => payPoll === token;
+
+  (async () => {
+    let waitSupported = true;
+    while (alive()) {
+      let d = null;
+      try {
+        if (waitSupported) {
+          const r = await fetchOrderWait(orderCode);
+          if (r.status === 404 || r.status === 405) {
+            waitSupported = false;      // server cũ → chuyển sang hỏi định kỳ
+          } else if (r.status === 429) {
+            const j = await r.json().catch(() => ({}));
+            await sleep((Number(j && j.retry_after) || 3) * 1000);
+            continue;
+          } else if (r.ok) {
+            d = await r.json();
+          }
+        }
+        if (!waitSupported) {
+          const r = await Auth.fetch('/api/credits/topup/' + orderCode);
+          if (r.ok) d = await r.json();
+          await sleep(WAIT_FALLBACK_MS);
+        }
+      } catch (e) {
+        if (!alive()) return;
+        await sleep(WAIT_RETRY_MS);
+        continue;
       }
-      if (['CANCELLED', 'EXPIRED', 'UNDERPAID', 'FAILED'].includes(d.status)) {
-        stopPolling();
-        if (d.status === 'EXPIRED') stopCountdown();
-        return;
+      if (!alive()) return;
+
+      if (d && d.status) {
+        setPayStatus(d.status);
+        if (d.status === 'PAID') {
+          stopPolling();
+          stopCountdown();
+          orderPaid = true;
+          showResult({
+            order_code: orderCode, status: 'PAID', amount_vnd: d.amount_vnd, credits: d.credits
+          });
+          return;
+        }
+        if (['CANCELLED', 'EXPIRED', 'UNDERPAID', 'FAILED'].includes(d.status)) {
+          stopPolling();
+          if (d.status === 'EXPIRED') stopCountdown();
+          return;
+        }
       }
-      // Vẫn PENDING → định kỳ nhờ server hỏi thẳng payOS (fallback webhook).
-      if (payPollTicks % SYNC_EVERY === 0) await syncOrderStatus(orderCode);
-    } catch (e) { /* im lặng, thử lại vòng sau */ }
-  }, 4000);
+
+      // Vẫn PENDING sau 1 lượt chờ → nhờ server đối soát payOS (fallback webhook)
+      // rồi mở lượt chờ kế tiếp. /sync tự chuyển UI nếu đơn đã PAID.
+      if (waitSupported) {
+        payPollTicks++;
+        await syncOrderStatus(orderCode);
+        if (!alive()) return;
+      }
+    }
+  })();
 }
 
 /**
@@ -1039,20 +1211,95 @@ async function syncOrderStatus(orderCode) {
   } catch (e) { return null; }
 }
 
-function stopPolling() {
-  if (payPoll) { clearInterval(payPoll); payPoll = null; }
-  payPollTicks = 0;
+/**
+ * Nút "Kiểm tra thanh toán": chủ động đối soát với payOS NGAY, dùng khi khách đã
+ * quét mã thành công mà màn hình chưa kịp cập nhật (webhook chậm/chưa đăng ký).
+ * Điểm vẫn chỉ được cộng phía server sau khi payOS xác nhận PAID.
+ */
+async function checkPaymentNow() {
+  if (!activeOrder || !activeOrder.order_code) {
+    showMsg('payMsg', 'Chưa có đơn nạp hợp lệ.', true);
+    return;
+  }
+  const btn = document.getElementById('payCheckBtn');
+  if (btn) btn.disabled = true;
+  showMsg('payMsg', 'Đang kiểm tra thanh toán với payOS…', false);
+  try {
+    const d = await syncOrderStatus(activeOrder.order_code);
+    if (d && d.status === 'PAID') return;   // syncOrderStatus đã chuyển sang màn kết quả
+    if (d && d.status && d.status !== 'PENDING') {
+      setPayStatus(d.status);
+      showMsg('payMsg', 'Đơn đang ở trạng thái: ' + (PAY_STATUS_TEXT[d.status] || d.status) + '.', true);
+      return;
+    }
+    showMsg('payMsg', 'Chưa thấy thanh toán. Nếu bạn vừa chuyển khoản, đợi thêm ít phút rồi bấm lại.', true);
+  } catch (e) {
+    showMsg('payMsg', e.message || 'Không kiểm tra được thanh toán.', true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
-// Tab hiện lại → kiểm tra đơn ngay, thay vì chờ tới nhịp poll kế tiếp.
+function stopPolling() {
+  payPoll = null;      // vòng lặp long-poll tự dừng ở lần kiểm tra `alive()` kế tiếp
+  payPollTicks = 0;
+  stopLateWatch();
+}
+
+// ============================================================================
+// Theo dõi "trả muộn" sau khi đơn hết hạn (2 phút)
+// ----------------------------------------------------------------------------
+// Link payOS hết hạn sau 15 phút, nhưng khách có thể chuyển tiền sát giờ và ngân
+// hàng/payOS xác nhận muộn hơn. Server đã cộng điểm cho trường hợp này (allowLate)
+// nên UI phải tiếp tục quan sát một lúc, tránh hiện "Hết hạn" trong khi tiền đã vào.
+// ============================================================================
+const LATE_WATCH_MS = 120000;
+let lateWatchToken = null;
+
+function stopLateWatch() { lateWatchToken = null; }
+
+function startLateWatch(orderCode) {
+  if (!orderCode) return;
+  stopLateWatch();
+  const token = {};
+  lateWatchToken = token;
+  const deadline = Date.now() + LATE_WATCH_MS;
+  (async () => {
+    while (lateWatchToken === token && Date.now() < deadline) {
+      await sleep(3000);
+      if (lateWatchToken !== token) return;
+      try {
+        const r = await Auth.fetch('/api/credits/topup/' + orderCode);
+        if (!r.ok) continue;
+        const d = await r.json();
+        if (d.status === 'PAID') {
+          stopLateWatch();
+          orderPaid = true;
+          stopCountdown();
+          showResult({
+            order_code: orderCode, status: 'PAID',
+            amount_vnd: d.amount_vnd, credits: d.credits
+          });
+          return;
+        }
+        if (d.status !== 'PENDING' && d.status !== 'EXPIRED') {
+          stopLateWatch();
+          setPayStatus(d.status);
+          return;
+        }
+      } catch (e) { /* mạng lỗi → thử lại nhịp sau */ }
+    }
+    stopLateWatch();
+  })();
+}
+
+// Tab hiện lại → đối soát payOS ngay (quay lại từ app ngân hàng là lúc dễ đã trả
+// tiền nhất). KHÔNG khởi động lại vòng chờ: kết nối long-poll vẫn đang mở.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
-  if (activeOrder && activeOrder.order_code) {
-    startPolling(activeOrder.order_code);
-    // Quay lại tab sau khi quét QR ở app ngân hàng là lúc dễ đã trả tiền nhất
-    // → đối soát ngay, không đợi đủ 5 nhịp.
-    syncOrderStatus(activeOrder.order_code);
-  }
+  if (!activeOrder || !activeOrder.order_code) return;
+  if (wzStep !== 3) return;
+  if (payPoll) syncOrderStatus(activeOrder.order_code);
 });
 
 // ============================================================================
@@ -1281,6 +1528,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (Number.isFinite(wantStep) && wantStep >= 1 && wantStep <= 3) wzGotoStep(wantStep);
     else renderWizard(1);
   });
+
+  // Admin vừa bật cổng trong tab khác → quay lại tab này là trạng thái tự cập nhật,
+  // không cần F5. Trước đây banner "chưa khả dụng" đứng nguyên dù cổng đã bật.
+  const refreshAvailability = () => {
+    if (document.hidden) return;
+    if (wzStep !== 1 || activeOrder) return;   // đang trong luồng thanh toán → không đụng
+    loadPackages();
+  };
+  document.addEventListener('visibilitychange', refreshAvailability);
+  window.addEventListener('focus', refreshAvailability);
 });
 </script>
 </body>

@@ -75,6 +75,37 @@ const I18N = {
     'map.satellite': 'Satellite',
     'map.dark': 'Dark',
     'map.terrain': 'Terrain',
+    // Nút điều khiển trên bản đồ (leaflet-locate + toolbar leaflet-draw + nút đo)
+    'map.myLocation': 'My location',
+    'map.yourLocation': 'Your location',
+    'map.outsideBounds': 'Outside map bounds',
+    'map.locateFailed': 'Cannot determine location: {err}',
+    'map.geoUnsupported': 'Browser does not support geolocation',
+    'map.geoNotHttps': 'Geolocation requires HTTPS or localhost',
+    'map.measured': 'Measured: {d}',
+    'map.measureTitle': 'Measure distance (click points, double-click to finish)',
+    'map.drawMarker': 'Draw a marker',
+    'map.drawPolygon': 'Draw a polygon',
+    'map.drawRectangle': 'Draw a rectangle',
+    'map.drawPolyline': 'Draw a polyline',
+    'map.editLayers': 'Edit layers',
+    'map.deleteLayers': 'Delete layers',
+    'map.save': 'Save',
+    'map.cancel': 'Cancel',
+    'map.clearAll': 'Clear all',
+    'map.startOver': 'Start over',
+    'map.editDisabled': 'No layers to edit',
+    'map.deleteDisabled': 'No layers to delete',
+    'map.finishDrawing': 'Finish drawing',
+    'map.deleteLastPoint': 'Delete last point',
+    'map.tipMarker': 'Click map to place marker.',
+    'map.tipPolygonStart': 'Click to start drawing shape.',
+    'map.tipPolygonCont': 'Click to continue drawing shape.',
+    'map.tipPolygonEnd': 'Click first point to close this shape.',
+    'map.tipRect': 'Click and drag to draw rectangle.',
+    'map.tipEdit': 'Drag handles or markers to edit features.',
+    'map.tipRemove': 'Click on a feature to remove.',
+    'map.moreLogs': '{n} more records (see the table below)',
     'hist.title': 'Lookup History',
     'hist.allModes': 'All',
     'hist.modeSingle': 'Single',
@@ -398,6 +429,37 @@ const I18N = {
     'map.satellite': 'Vệ tinh',
     'map.dark': 'Tối',
     'map.terrain': 'Địa hình',
+    // Nút điều khiển trên bản đồ (leaflet-locate + toolbar leaflet-draw + nút đo)
+    'map.myLocation': 'Vị trí của tôi',
+    'map.yourLocation': 'Vị trí của bạn',
+    'map.outsideBounds': 'Ngoài phạm vi bản đồ',
+    'map.locateFailed': 'Không thể xác định vị trí: {err}',
+    'map.geoUnsupported': 'Trình duyệt không hỗ trợ định vị',
+    'map.geoNotHttps': 'Định vị cần HTTPS hoặc localhost',
+    'map.measured': 'Đo được: {d}',
+    'map.measureTitle': 'Đo khoảng cách (bấm điểm, bấm đúp để kết thúc)',
+    'map.drawMarker': 'Vẽ điểm đánh dấu',
+    'map.drawPolygon': 'Vẽ đa giác',
+    'map.drawRectangle': 'Vẽ hình chữ nhật',
+    'map.drawPolyline': 'Vẽ đường thẳng',
+    'map.editLayers': 'Sửa hình vẽ',
+    'map.deleteLayers': 'Xoá hình vẽ',
+    'map.save': 'Lưu',
+    'map.cancel': 'Huỷ',
+    'map.clearAll': 'Xoá tất cả',
+    'map.startOver': 'Vẽ lại',
+    'map.editDisabled': 'Không có hình nào để sửa',
+    'map.deleteDisabled': 'Không có hình nào để xoá',
+    'map.finishDrawing': 'Hoàn tất hình vẽ',
+    'map.deleteLastPoint': 'Xoá điểm vừa vẽ',
+    'map.tipMarker': 'Bấm lên bản đồ để đặt điểm đánh dấu.',
+    'map.tipPolygonStart': 'Bấm để bắt đầu vẽ hình.',
+    'map.tipPolygonCont': 'Bấm để vẽ tiếp.',
+    'map.tipPolygonEnd': 'Bấm vào điểm đầu để khép kín hình.',
+    'map.tipRect': 'Bấm và kéo để vẽ hình chữ nhật.',
+    'map.tipEdit': 'Kéo tay nắm hoặc điểm đánh dấu để sửa hình.',
+    'map.tipRemove': 'Bấm vào hình để xoá.',
+    'map.moreLogs': '… còn {n} bản ghi nữa (xem bảng bên dưới)',
     'hist.title': 'Lịch sử tra cứu',
     'hist.allModes': 'Tất cả',
     'hist.modeSingle': 'Đơn lẻ',
@@ -657,7 +719,8 @@ function t(key) {
 // ECI = (eNB ID << 8) | sector ; eNB = ECI >> 8 ; sector = ECI & 0xFF
 // ============================================
 const ECI_MAX = 0xFFFFFFF;
-const SHORT_THRESHOLD = 0x100000; // 2^20 = max eNB ID + 1
+const ENB_MAX = 0xFFFFF;             // 2^20 - 1 = 1,048,575
+const SHORT_THRESHOLD = ENB_MAX + 1; // 2^20 = 1,048,576 = ECI nhỏ nhất vượt eNB
 function enbToEci(enbId, sector) {
   const enb = parseInt(enbId, 10);
   const sec = parseInt(sector, 10) || 0;
@@ -672,7 +735,8 @@ function eciToEnb(eci) {
 function classifyCellId(value) {
   const n = parseInt(value, 10);
   if (isNaN(n)) return 'short';
-  return n > SHORT_THRESHOLD && n <= ECI_MAX ? 'long' : 'short';
+  // >= (không phải >): 1,048,576 = 2^20 vượt eNB ID tối đa → là ECI.
+  return n >= SHORT_THRESHOLD && n <= ECI_MAX ? 'long' : 'short';
 }
 function parseCellId(value, sectorHint) {
   const n = parseInt(value, 10);
@@ -697,7 +761,7 @@ function formatCellId(cellid, enbHint, sectorHint) {
 
 // Tiêu đề popup cell: MCC-MNC-LAC/TAC-CELLID.
 // CELLID hiển thị "short" (eNB/short ID) hay "long" (ECI) tùy dữ liệu mạng:
-// theo classifyCellId — short khi <= 2^20, long khi 2^20 < id <= 2^28. Cả hai in raw id.
+// theo classifyCellId — short khi < 2^20 (0…1.048.575), long khi 2^20 ≤ id ≤ 2^28. Cả hai in raw id.
 // Trả về cả dataKind để chỗ gọi biết đang short hay long.
 function cellPopupTitle(mcc, mnc, lac, cellid) {
   const id = (cellid === undefined || cellid === null || cellid === '') ? '' : String(cellid);
@@ -792,6 +856,67 @@ function applyI18n() {
   const lt = document.getElementById('langToggle');
   if (lt) lt.textContent = currentLang === 'vi' ? 'VI' : 'EN';
   if (typeof syncClDateButtons === 'function') syncClDateButtons();
+  if (typeof applyMapButtonI18n === 'function') applyMapButtonI18n();
+}
+
+// Nút điều khiển trên bản đồ được TẠO MỘT LẦN lúc nạp trang (leaflet-locate,
+// leaflet-draw, nút đo) nên đổi ngôn ngữ không tự cập nhật. Hàm này vẽ lại
+// title/aria-label + bảng chữ của leaflet-draw theo currentLang.
+function applyMapButtonI18n() {
+  if (typeof L === 'undefined') return;
+  // Bảng chữ leaflet-draw (plugin mặc định tiếng Anh cứng, không có cơ chế i18n).
+  if (typeof L.drawLocal !== 'undefined') {
+    const d = L.drawLocal.draw;
+    const e = L.drawLocal.edit;
+    d.toolbar.actions.title = t('map.cancel');
+    d.toolbar.actions.text = t('map.cancel');
+    d.toolbar.finish.title = t('map.finishDrawing');
+    d.toolbar.finish.text = t('map.save');
+    d.toolbar.undo.title = t('map.deleteLastPoint');
+    d.toolbar.undo.text = t('map.deleteLastPoint');
+    d.toolbar.buttons.marker = t('map.drawMarker');
+    d.toolbar.buttons.polygon = t('map.drawPolygon');
+    d.toolbar.buttons.rectangle = t('map.drawRectangle');
+    d.toolbar.buttons.polyline = t('map.drawPolyline');
+    if (d.handlers.marker) d.handlers.marker.tooltip.start = t('map.tipMarker');
+    if (d.handlers.rectangle) d.handlers.rectangle.tooltip.start = t('map.tipRect');
+    if (d.handlers.polygon) {
+      d.handlers.polygon.tooltip.start = t('map.tipPolygonStart');
+      d.handlers.polygon.tooltip.cont = t('map.tipPolygonCont');
+      d.handlers.polygon.tooltip.end = t('map.tipPolygonEnd');
+    }
+    e.toolbar.buttons.edit = t('map.editLayers');
+    e.toolbar.buttons.editDisabled = t('map.editDisabled');
+    e.toolbar.buttons.remove = t('map.deleteLayers');
+    e.toolbar.buttons.removeDisabled = t('map.deleteDisabled');
+    e.toolbar.actions.save.title = t('map.save');
+    e.toolbar.actions.save.text = t('map.save');
+    e.toolbar.actions.cancel.title = t('map.cancel');
+    e.toolbar.actions.cancel.text = t('map.cancel');
+    e.toolbar.actions.clearAll.title = t('map.clearAll');
+    e.toolbar.actions.clearAll.text = t('map.clearAll');
+    if (e.handlers.edit) e.handlers.edit.tooltip.text = t('map.tipEdit');
+    if (e.handlers.remove) e.handlers.remove.tooltip.text = t('map.tipRemove');
+  }
+  // Nút đã render trong DOM — plugin giữ title cũ tới khi tạo lại toolbar.
+  const set = (sel, text) => {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    el.title = text;
+    el.setAttribute('aria-label', text);
+  };
+  set('.leaflet-control-locate a', t('map.myLocation'));
+  set('.leaflet-control-custom', t('map.myLocation'));
+  set('.leaflet-draw-measure', t('map.measureTitle'));
+  set('.leaflet-draw-draw-marker', t('map.drawMarker'));
+  set('.leaflet-draw-draw-polygon', t('map.drawPolygon'));
+  set('.leaflet-draw-draw-rectangle', t('map.drawRectangle'));
+  set('.leaflet-draw-draw-polyline', t('map.drawPolyline'));
+  // Nút edit/remove bị disable thì plugin dùng chuỗi "...Disabled" làm title.
+  const canEdit = document.querySelectorAll('.leaflet-draw-edit-edit.leaflet-disabled').length === 0;
+  const canRemove = document.querySelectorAll('.leaflet-draw-edit-remove.leaflet-disabled').length === 0;
+  set('.leaflet-draw-edit-edit', canEdit ? t('map.editLayers') : t('map.editDisabled'));
+  set('.leaflet-draw-edit-remove', canRemove ? t('map.deleteLayers') : t('map.deleteDisabled'));
 }
 
 function toggleLang() {
@@ -1251,11 +1376,11 @@ try {
         fillOpacity: 0.05
       },
       strings: {
-        title: 'Vị trí của tôi',
+        title: t('map.myLocation'),
         metersUnit: 'm',
         feetUnit: 'ft',
-        popup: 'Vị trí của bạn',
-        outsideMapBoundsMsg: 'Ngoài phạm vi bản đồ'
+        popup: t('map.yourLocation'),
+        outsideMapBoundsMsg: t('map.outsideBounds')
       },
       locateOptions: {
         enableHighAccuracy: true,
@@ -1285,7 +1410,8 @@ if (!locationControl) {
       btn.style.display = 'flex';
       btn.style.alignItems = 'center';
       btn.style.justifyContent = 'center';
-      btn.title = 'Vị trí của tôi';
+      btn.title = t('map.myLocation');
+      btn.setAttribute('aria-label', t('map.myLocation'));
       btn.onclick = function() {
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(function(pos) {
@@ -1300,12 +1426,12 @@ if (!locationControl) {
               weight: 2,
               opacity: 1,
               fillOpacity: 0.8
-            }).addTo(map).bindPopup('Vị trí của bạn');
+            }).addTo(map).bindPopup(t('map.yourLocation'));
           }, function(err) {
-            showToast('Không thể xác định vị trí: ' + err.message, 'error');
+            showToast(fmtTpl('map.locateFailed', { err: err.message }), 'error');
           }, { enableHighAccuracy: true, timeout: 10000 });
         } else {
-          showToast('Trình duyệt không hỗ trợ định vị', 'error');
+          showToast(t('map.geoUnsupported'), 'error');
         }
       };
       return btn;
@@ -1324,6 +1450,10 @@ map.addLayer(drawnItems);
 // tab rút list (lọc/đổi trang) KHÔNG xoá shape do user vẽ.
 const logShapeGroup = new L.FeatureGroup();
 map.addLayer(logShapeGroup);
+
+// Ngôn ngữ cho toolbar leaflet-draw (mặc định tiếng Anh cứng) → theo currentLang.
+// Một nguồn duy nhất: applyMapButtonI18n() (cũng được gọi lại khi toggleLang).
+if (typeof applyMapButtonI18n === 'function') applyMapButtonI18n();
 
 const drawControl = new L.Control.Draw({
   position: 'topright',
@@ -1457,7 +1587,8 @@ document.addEventListener('keydown', function (e) {
   if (!toolbar) return;
   const btn = L.DomUtil.create('a', 'leaflet-draw-measure', toolbar);
   btn.href = '#';
-  btn.title = 'Đo khoảng cách (click điểm, double-click để kết thúc)';
+  btn.title = t('map.measureTitle');
+  btn.setAttribute('aria-label', t('map.measureTitle'));
   L.DomEvent.on(btn, 'click', L.DomEvent.stop)
     .on(btn, 'click', function () { setMeasureMode(!measureState.active); });
 })();
@@ -2778,12 +2909,24 @@ function openClRecordOnMap(key) {
   // Các bản ghi khác cùng cell trong phiên → dòng thời gian ngắn như popup marker.
   const same = (myLogsCache || []).filter(x => x.mcc === l.mcc && x.mnc === l.mnc
     && x.lac === l.lac && String(x.cellid) === String(l.cellid));
-  const lineItems = same.slice(0, 8).map(g => {
+  // Phiên mở từ Lịch sử chỉ nạp 1 dòng/cell (myLogsCache không có từng cuộc gọi) —
+  // nhưng bảng cell biết TỔNG số dòng của cell qua `rowCount`. Dùng số đó để báo
+  // "N bản ghi" và nhắc xem bảng, thay vì im lặng hiện đúng 1 dòng.
+  const clCell = (clAnalyze && Array.isArray(clAnalyze.rows) && l.cellid)
+    ? clAnalyze.rows.find(c => c.key && c.key === canonicalClientKey(l))
+    : null;
+  const totalRows = Math.max(same.length, Number((clCell && clCell.rowCount) || l._rowCount || 0));
+  const lineItems = same.slice(0, 50).map(g => {
     const ts = fmtDateTime(g.timestamp);
-    return `${ts} [${actionLabel[g.action_type] || g.action_type || ''}] ${g.partner_number || g.contact_number || ''}`;
-  }).join('<br>');
-  const extra = same.length
-    ? `<br>${histEsc(t('upload.records'))}: ${same.length}<br><small>${lineItems}</small>`
+    return `<div class="cell-pop-log">${histEsc(ts)} <span class="cell-pop-act">[${histEsc(actionLabel[g.action_type] || g.action_type || '')}]</span> ${histEsc(g.partner_number || g.contact_number || '')}</div>`;
+  }).join('');
+  // Chỉ nhồi tối đa 50 dòng vào DOM; còn lại báo tổng số để user tự lọc bảng.
+  const more = totalRows > same.length
+    ? `<div class="cell-pop-more">${fmtTpl('map.moreLogs', { n: (totalRows - same.length).toLocaleString('vi-VN') })}</div>`
+    : '';
+  const extra = totalRows
+    ? `<div class="cell-pop-logs-hd">${histEsc(t('upload.records'))}: ${totalRows.toLocaleString('vi-VN')}</div>`
+      + lineItems + more
     : '';
   highlightCellOnMap(l.lat, l.lon, l.cell_range || l.range, l.radio, label, {
     mcc: l.mcc, mnc: l.mnc, lac: l.lac, cellid: l.cellid,
@@ -2813,13 +2956,19 @@ function buildCellPopupHtml(opts) {
   const lon = parseFloat(opts.lon);
   const range = parseFloat(opts.range || 500) || 500;
   const cp = cellPopupTitle(opts.mcc, opts.mnc, opts.lac, opts.cellid);
-  return `<b>${histEsc(cp.text)}</b><br>` +
+  return `<div class="cell-pop">` +
+    `<div class="cell-pop-hd">` +
+    `<b>${histEsc(cp.text)}</b><br>` +
     `${histEsc(opts.cellLine || '')}` +
     radioPopupLine(opts.radio) + '<br>' +
     `${t('hist.range')}: ${histEsc(range)}m<br>` +
     `${t('hist.result')}: ${lat}, ${lon} ${coordActionIcons(lat, lon)}` +
     (opts.description ? `<br>${histEsc(opts.description)}` : '') +
-    (opts.extra || '');
+    `</div>` +
+    // Phần danh sách bản ghi trùng cell có thể RẤT dài (hàng trăm cuộc gọi) →
+    // tách vào vùng cuộn riêng, giới hạn chiều cao để popup không tràn khỏi bản đồ.
+    (opts.extra ? `<div class="cell-pop-logs">${opts.extra}</div>` : '') +
+    `</div>`;
 }
 
 // Cell chỉ được xem/hiển thị khi đã trả phí trong phiên (`_charged`) hoặc mở lại
@@ -2874,14 +3023,19 @@ function plotCallLogs(records) {
         opacity: 0.6
       });
       cellOverlay.addLayer(circle);
-      const lineItems = group.map(g => {
+      const lineItems = group.slice(0, 50).map(g => {
         const ts = fmtDateTime(g.timestamp);
-        return `${ts} [${actionLabel[g.action_type] || g.action_type}] ${g.partner_number || g.contact_number || ''}`;
-      }).join('<br>');
+        return `<div class="cell-pop-log">${histEsc(ts)} <span class="cell-pop-act">[${histEsc(actionLabel[g.action_type] || g.action_type || '')}]</span> ${histEsc(g.partner_number || g.contact_number || '')}</div>`;
+      }).join('');
       const showSource = (typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin());
       const srcType = r.source === 'local' ? 'local' : 'online';
       const sourceLabel = SOURCE_LABELS[r.source] || (r.source || '');
-      const extra = `<br>${histEsc(t('upload.records'))}: ${group.length}<br><small>${lineItems}</small>`;
+      // Chỉ nhồi tối đa 50 dòng vào DOM; còn lại báo tổng số để user tự lọc bảng.
+      const more = group.length > 50
+        ? `<div class="cell-pop-more">… ${fmtTpl('map.moreLogs', { n: (group.length - 50).toLocaleString('vi-VN') })}</div>`
+        : '';
+      const extra = `<div class="cell-pop-logs-hd">${histEsc(t('upload.records'))}: ${group.length.toLocaleString('vi-VN')}</div>`
+        + lineItems + more;
       circle.bindPopup(buildCellPopupHtml({
         lat, lon, range: radius, mcc: r.mcc, mnc: r.mnc, lac: r.lac, cellid: r.cellid,
         cellLine: formatCellId(r.cellid, r.enb_id, r.sector),
@@ -6111,9 +6265,16 @@ function clRecordsWithSessionCells() {
     // Cell chưa có bản ghi nào trong danh sách → thêm dòng tổng hợp để thấy trạng
     // thái thật của cell (chưa tra / đã tra ra / không ra do server trả ở results).
     seen.add(key);
+    // Dòng tổng hợp kế thừa TOẠ ĐỘ của cell nếu cell đã tra ra (state='found').
+    // Trước đây gán cứng `lat: null, lon: null` nên dòng cell-only đã có toạ độ vẫn
+    // không bấm được trên bản đồ (không có onclick). Cell chỉ có lat/lng khi đã trả
+    // phí → vẫn không lộ toạ độ của cell chưa tra.
+    const cLat = (c.state === 'found' && c.lat != null) ? c.lat : null;
+    const cLng = (c.state === 'found' && (c.lng != null || c.lon != null)) ? (c.lng != null ? c.lng : c.lon) : null;
     extra.push({
       mcc: c.mcc, mnc: c.mnc, lac: c.lac, cellid: c.cellid, sector: c.sector,
-      radio: c.radio || '', lat: null, lon: null, cell_range: null, source: '',
+      radio: c.radio || '', lat: cLat, lon: cLng,
+      cell_range: (c.range != null) ? c.range : null, source: c.source || '',
       network: clAnalyze.network || '', action_type: '',
       phone_number: '', contact_number: '', timestamp: '', cell_address: '',
       duration: '', batch_id: clAnalyze.batchId || currentOpenBatchId || '',
@@ -6268,9 +6429,19 @@ function renderCallLogs() {
     const cellLabel = `${l.mcc || ''}-${l.mnc || ''}-${l.lac || ''}-${l.cellid || ''}`;
     // Click dòng CÓ toạ độ → zoom + vòng nhấp nháy trên bản đồ. Chỉ dòng đã tra ra
     // (đã trả phí / mở từ Lịch sử) mới có toạ độ → không lộ cell chưa tra.
-    const rowKey = `${cellLabel}|${(page.indexOf(l))}`;
-    if (st.cls === 'found' && l.lat != null && l.lon != null) clRecordRows[rowKey] = l;
-    const rowClick = (st.cls === 'found' && l.lat != null && l.lon != null)
+    // Khoá dòng: cellLabel + vị trí trong trang. Dùng '-' (KHÔNG dùng '|') vì khoá này
+    // được nhúng vào onclick qua histJsSafe() — hàm đó xoá mọi ký tự ngoài
+    // [A-Za-z0-9_-], nên '|' biến mất và tra cứu clRecordRows luôn trượt.
+    const rowKey = `${cellLabel}-${(page.indexOf(l))}`;
+    // Cell từ API dùng `lat`/`lng` (xem /api/lookup-history/batch/.../cells); bản ghi
+    // call_logs đời cũ dùng `lat`/`lon`. Nhận CẢ HAI — trước đây chỉ kiểm `l.lon` nên
+    // 13 cell đã tra ra toạ độ vẫn không bấm được (không có onclick nào trên dòng).
+    const rowLat = (l.lat != null) ? l.lat : null;
+    const rowLon = (l.lon != null) ? l.lon : ((l.lng != null) ? l.lng : null);
+    const hasCoord = rowLat != null && rowLon != null && isFinite(parseFloat(rowLat)) && isFinite(parseFloat(rowLon));
+    if (hasCoord) { l.lat = rowLat; l.lon = rowLon; }   // chuẩn hoá để openClRecordOnMap đọc 1 tên
+    if (st.cls === 'found' && hasCoord) clRecordRows[rowKey] = l;
+    const rowClick = (st.cls === 'found' && hasCoord)
       ? `onclick="openClRecordOnMap('${histJsSafe(rowKey)}')"`
       : '';
     // Nguồn kết quả đã bỏ khỏi giao diện (không còn badge nguồn ở dòng bản ghi).
@@ -6320,9 +6491,11 @@ function renderCallLogs() {
 //   miss   → "không tìm thấy trên mọi nguồn";
 //   unpaid/pending/busy → "chưa tra (chưa trả phí)".
 function clRecordDetailHtml(l, st) {
-  if (st.cls === 'found' && l.lat != null && l.lon != null) {
+  // Toạ độ: API trả `lat`/`lng`, bản ghi cũ dùng `lon` → nhận cả hai (xem renderCallLogs).
+  const dLon = (l.lon != null) ? l.lon : l.lng;
+  if (st.cls === 'found' && l.lat != null && dLon != null) {
     const lat = parseFloat(l.lat);
-    const lng = parseFloat(l.lon);
+    const lng = parseFloat(dLon);
     const range = parseFloat(l.cell_range);
     // Nguồn kết quả đã bỏ khỏi giao diện.
     return `<div class="log-detail">

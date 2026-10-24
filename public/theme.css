@@ -1,0 +1,279 @@
+/* ==========================================================================
+   Cell.id.vn — Bảng màu & lớp nền dùng chung cho MỌI trang public
+   --------------------------------------------------------------------------
+   Đây là NGUỒN DUY NHẤT cho màu sắc giao diện sáng/tối. Các trang KHÔNG tự
+   khai báo lại palette nữa; mọi token dưới đây được nạp trước <style> của
+   từng trang nên trang chỉ việc dùng var(--ten-token).
+
+   Quy ước:
+   - Một tông nhấn duy nhất (indigo, khớp logo + nút chính) cho toàn site:
+     --accent (chữ/icon/viền nhấn) đi cùng --bg-btn-primary (nền nút chính).
+     Sáng: #4444cc. Tối: nhấn sáng hơn (#6e6ef7) để đủ tương phản trên nền tối.
+   - Nền tối dùng chung một họ màu (nền #111122 → card #14142e) cho mọi trang,
+     không còn cảnh "mỗi trang một màu".
+   - Nhóm màu trạng thái (--success/--danger/--warning) thay cho các mã màu
+     rời rạc trước đây (#22aa44 / #ee6666 / #ff8800 / #33bb66 / #d9952a...).
+   - Nhiều token là BÍ DANH để giữ tương thích với các tên biến cũ
+     (--bg, --bg-page, --card, --text, --muted, --primary...).
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   THEME SÁNG (mặc định)
+   -------------------------------------------------------------------------- */
+:root {
+  /* Thuộc tính native (input date, select, scrollbar...) theo đúng theme. */
+  color-scheme: light;
+
+  /* --- Nền --- */
+  --bg-body: #f0f2f5;
+  --bg-page: var(--bg-body);
+  --bg: var(--bg-body);
+  --bg-card: #ffffff;
+  --card: var(--bg-card);
+  --bg-solid: #ffffff;
+  /* Nền "kính" (panel/navbar có backdrop-filter). */
+  --bg-surface: rgba(255,255,255,0.97);
+  --bg-surface2: rgba(0,0,0,0.035);
+  --bg-secondary: var(--bg-surface2);
+  --bg-elev: #f7f8fb;
+  --input-bg: var(--bg-surface2);
+  --bg-hover: rgba(0,0,0,0.06);
+  --row-hover: var(--bg-hover);
+
+  /* --- Nút --- */
+  --bg-btn-primary: #4444cc;
+  --bg-btn-success: #22aa44;
+  --bg-btn-danger: #cc3333;
+
+  /* --- Chữ --- */
+  --text-primary: #1a1a2e;
+  --text: var(--text-primary);
+  --text-secondary: #44446a;
+  --text-2: var(--text-secondary);
+  --text-muted: #7c7c90;
+  --muted: var(--text-muted);
+  --muted2: #9292a6;
+  --text-faint: #a3a3b6;
+  --text-3: var(--text-muted);
+
+  /* --- Viền --- */
+  --border-color: rgba(0,0,0,0.10);
+  --border: var(--border-color);
+  --border-hover: rgba(68,68,204,0.32);
+  --border-focus: #4444cc;
+
+  /* --- Màu nhấn (một tông duy nhất) --- */
+  --accent: #4444cc;
+  --accent-soft: rgba(68,68,204,0.10);
+  --accent-line: rgba(68,68,204,0.40);
+  --primary: var(--bg-btn-primary);
+  --primary-hover: #3333b3;
+
+  /* --- Màu trạng thái --- */
+  --success: #1f9e5a;
+  --success-soft: rgba(31,158,90,0.12);
+  --success-line: rgba(31,158,90,0.42);
+  --danger: #d9534f;
+  --danger-soft: rgba(217,83,79,0.10);
+  --danger-line: rgba(217,83,79,0.42);
+  --warning: #c98a1e;
+  --warning-soft: rgba(217,149,42,0.14);
+  --warning-line: rgba(217,149,42,0.45);
+  /* Bí danh cũ: --ok (credits), --warn, --accent1..3 (tools/ip-tracker). */
+  --ok: var(--success);
+  --warn: var(--warning);
+  --accent1: var(--warning);
+  --accent2: var(--success);
+  --accent3: var(--danger);
+
+  /* --- Khung/navbar --- */
+  --header-bg: rgba(255,255,255,0.95);
+  --shadow: 0 10px 40px rgba(0,0,0,0.10);
+  /* Bản đồ luôn dùng tile SÁNG ở cả 2 theme → nền sau tile cũng phải sáng. */
+  --map-bg: #d4e3f0;
+
+  /* --- Thành phần phụ --- */
+  --code-bg: rgba(68,68,204,0.06);
+  --code-text: #3f3fbf;
+  --badge-url-bg: #eceafd;
+  --badge-url-text: #3f3fbf;
+  --badge-img-bg: #e2f7ea;
+  --badge-img-text: #1f7a45;
+  --warning-bg: #fff7ed;
+  --warning-border: rgba(217,149,42,0.45);
+  --warning-head: #b45309;
+  --warning-text: #8a4b0f;
+  --modal-scrim: rgba(15,15,40,0.55);
+
+  /* --- Thanh cuộn --- */
+  --scrollbar-thumb: rgba(0,0,0,0.22);
+  --scrollbar-thumb-hover: rgba(0,0,0,0.38);
+  --scrollbar-track: transparent;
+
+  /* --- Chuyển động --- */
+  --transition: 0.3s ease;
+}
+
+/* --------------------------------------------------------------------------
+   THEME TỐI — một bảng màu duy nhất cho toàn site
+   -------------------------------------------------------------------------- */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* --- Nền --- */
+  --bg-body: #111122;
+  --bg-card: #14142e;
+  --bg-surface: rgba(15,15,40,0.95);
+  --bg-solid: #14142e;
+  --bg-surface2: rgba(255,255,255,0.045);
+  --bg-elev: #1a1a38;
+  --bg-hover: rgba(255,255,255,0.085);
+
+  /* --- Nút --- */
+  --bg-btn-primary: #5252d8;
+  --bg-btn-success: #22aa44;
+  --bg-btn-danger: #cc3333;
+
+  /* --- Chữ --- */
+  --text-primary: #e2e2ff;
+  --text-secondary: #a8a8d0;
+  --text-muted: #7a7aa4;
+  --muted2: #6a6a92;
+  --text-faint: #5c5c84;
+
+  /* --- Viền --- */
+  --border-color: rgba(255,255,255,0.09);
+  --border-hover: rgba(124,124,255,0.35);
+  --border-focus: #6e6ef7;
+
+  /* --- Màu nhấn --- */
+  --accent: #6e6ef7;
+  --accent-soft: rgba(110,110,247,0.16);
+  --accent-line: rgba(110,110,247,0.45);
+  --primary-hover: #6a6aee;
+
+  /* --- Màu trạng thái --- */
+  --success: #3ecf72;
+  --success-soft: rgba(62,207,114,0.14);
+  --success-line: rgba(62,207,114,0.40);
+  --danger: #f07577;
+  --danger-soft: rgba(240,117,119,0.14);
+  --danger-line: rgba(240,117,119,0.40);
+  --warning: #f0ac4a;
+  --warning-soft: rgba(240,172,74,0.14);
+  --warning-line: rgba(240,172,74,0.42);
+
+  /* --- Khung/navbar --- */
+  --header-bg: rgba(17,17,34,0.92);
+  --shadow: 0 10px 40px rgba(0,0,0,0.55);
+  /* --map-bg giữ nguyên bản sáng: bản đồ không đổi theo theme. */
+
+  /* --- Thành phần phụ --- */
+  --code-bg: rgba(255,255,255,0.05);
+  --code-text: #a9a9ff;
+  --badge-url-bg: rgba(110,110,247,0.18);
+  --badge-url-text: #a9a9ff;
+  --badge-img-bg: rgba(62,207,114,0.16);
+  --badge-img-text: #7fe0a2;
+  --warning-bg: rgba(240,172,74,0.10);
+  --warning-border: rgba(240,172,74,0.35);
+  --warning-head: #f0ac4a;
+  --warning-text: #e8c48a;
+  --modal-scrim: rgba(3,3,12,0.68);
+
+  /* --- Thanh cuộn --- */
+  --scrollbar-thumb: rgba(255,255,255,0.18);
+  --scrollbar-thumb-hover: rgba(255,255,255,0.30);
+  --scrollbar-track: transparent;
+}
+
+/* ==========================================================================
+   LỚP NỀN DÙNG CHUNG
+   ========================================================================== */
+
+html {
+  background: var(--bg-body);
+}
+
+body {
+  background: var(--bg-body);
+  color: var(--text-primary);
+}
+
+/* Bôi đen chữ dùng đúng màu nhấn của theme. */
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Placeholder / control native đồng bộ ở cả 2 theme. */
+::placeholder {
+  color: var(--text-faint);
+  opacity: 1;
+}
+
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"],
+progress {
+  accent-color: var(--bg-btn-primary);
+}
+
+/* Danh sách <option> của select: Firefox không tự đổi màu theo color-scheme. */
+option {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   THANH CUỘN — thay thanh cuộn mặc định (trắng ở theme sáng / xám sáng ở theme
+   tối) bằng thanh cuộn theo theme. Danh sách dài trong panel (vd tab "Lịch sử
+   tra cứu", bảng cell, modal) vì vậy không còn "lọt" một vệt sáng trên nền tối.
+   -------------------------------------------------------------------------- */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  /* Viền trong suốt + background-clip → thumb thon, có khoảng thở 2 bên. */
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
+}
+
+/* Firefox: chuẩn hoá thanh cuộn (Chromium/WebKit đã có pseudo-element ở trên). */
+@supports (-moz-appearance: none) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   THUỘC TÍNH `hidden` PHẢI LUÔN ẨN
+   --------------------------------------------------------------------------
+   `hidden` trong HTML chỉ là rule của trình duyệt: `[hidden] { display: none }`
+   ở UA stylesheet. Khai báo CSS của trang (`.banner { display: flex }`,
+   `.btn { display: inline-flex }`, `.countdown { display: inline-flex }`…) là
+   style của TÁC GIẢ nên THẮNG rule UA đó → phần tử vẫn hiện dù JS đã đặt
+   `el.hidden = true`.
+
+   Đây chính là lỗi "Nạp điểm tạm chưa khả dụng" hiện MÃI trên trang nạp dù cổng
+   đã bật: banner có `hidden` + `.banner{display:flex}` nên không bao giờ ẩn.
+   Khai báo tường minh (giống `public/m/app.css`) để mọi trang dùng `hidden`
+   đúng như ý định. */
+[hidden] { display: none !important; }

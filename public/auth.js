@@ -331,10 +331,10 @@ Auth.initNavbar = function() {
         right: 0 !important;
         margin-top: 6px !important;
         min-width: 200px !important;
-        background: var(--bg-surface, rgba(255,255,255,0.97)) !important;
+        background: var(--bg-card, var(--bg-surface, #fff)) !important;
         border: 1px solid var(--border-color, rgba(0,0,0,0.1)) !important;
         border-radius: 10px !important;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.1) !important;
+        box-shadow: var(--shadow, 0 10px 40px rgba(0,0,0,0.1)) !important;
         padding: 6px !important;
         display: none !important;
         z-index: 2000 !important;
@@ -389,10 +389,10 @@ Auth.initNavbar = function() {
         right: 0 !important;
         margin-top: 6px !important;
         min-width: 180px !important;
-        background: var(--bg-surface, rgba(255,255,255,0.97)) !important;
+        background: var(--bg-card, var(--bg-surface, #fff)) !important;
         border: 1px solid var(--border-color, rgba(0,0,0,0.1)) !important;
         border-radius: 10px !important;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.1) !important;
+        box-shadow: var(--shadow, 0 10px 40px rgba(0,0,0,0.1)) !important;
         padding: 6px !important;
         display: none !important;
         z-index: 2000 !important;
@@ -416,7 +416,7 @@ Auth.initNavbar = function() {
       .user-dropdown-item-common:hover { background: var(--bg-hover, rgba(0,0,0,0.06)) !important; }
       .user-dropdown-divider-common { height: 1px !important; background: var(--border-color, rgba(0,0,0,0.1)) !important; margin: 6px 0 !important; }
 
-      /* Credit badge */
+      /* Credit badge — dùng token trạng thái để hợp cả nền sáng lẫn nền tối. */
       .credit-badge-common {
         display: inline-flex !important;
         align-items: center !important;
@@ -426,21 +426,21 @@ Auth.initNavbar = function() {
         font-size: 12px !important;
         font-weight: 700 !important;
         cursor: pointer !important;
-        border: 1px solid rgba(120, 220, 160, 0.4) !important;
-        background: rgba(120, 220, 160, 0.14) !important;
-        color: #1f9e5a !important;
+        border: 1px solid var(--success-line, rgba(120, 220, 160, 0.4)) !important;
+        background: var(--success-soft, rgba(120, 220, 160, 0.14)) !important;
+        color: var(--success, #1f9e5a) !important;
         height: 30px !important;
         box-sizing: border-box !important;
         line-height: normal !important;
         text-decoration: none !important;
       }
-      .credit-badge-common:hover { background: rgba(120, 220, 160, 0.26) !important; }
+      .credit-badge-common:hover { filter: brightness(1.08); }
       .credit-badge-common.low {
-        border-color: rgba(255, 100, 100, 0.45) !important;
-        background: rgba(255, 100, 100, 0.15) !important;
-        color: #e04444 !important;
+        border-color: var(--danger-line, rgba(255, 100, 100, 0.45)) !important;
+        background: var(--danger-soft, rgba(255, 100, 100, 0.15)) !important;
+        color: var(--danger, #e04444) !important;
       }
-      .credit-badge-common.low:hover { background: rgba(255, 100, 100, 0.28) !important; }
+      .credit-badge-common.low:hover { filter: brightness(1.08); }
 
       /* Version badge */
       .ver-badge-common {
@@ -469,9 +469,9 @@ Auth.initNavbar = function() {
         border-radius: 14px !important;
         font-size: 11px !important;
         font-weight: 600 !important;
-        border: 1px solid rgba(255, 170, 60, 0.45) !important;
-        background: rgba(255, 170, 60, 0.15) !important;
-        color: #c98a1e !important;
+        border: 1px solid var(--warning-line, rgba(255, 170, 60, 0.45)) !important;
+        background: var(--warning-soft, rgba(255, 170, 60, 0.15)) !important;
+        color: var(--warning, #c98a1e) !important;
         height: 30px !important;
         box-sizing: border-box !important;
         line-height: normal !important;
@@ -484,7 +484,7 @@ Auth.initNavbar = function() {
   header.innerHTML = `
     <div class="header-left">
       <h1><a class="brand-logo-link" href="/index.html" title="${appTitle}" aria-label="${appTitle}"><span class="brand-logo" aria-hidden="true"></span></a></h1>
-      ${isAdmin ? `<span class="nav-badge" style="background: rgba(255,100,100,0.15); color: #ff5555; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; border: 1px solid rgba(255,100,100,0.3); text-transform: uppercase;">Admin</span>` : ''}
+      ${isAdmin ? `<span class="nav-badge" style="background: var(--danger-soft, rgba(255,100,100,0.15)); color: var(--danger, #ff5555); padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; border: 1px solid var(--danger-line, rgba(255,100,100,0.3)); text-transform: uppercase;">Admin</span>` : ''}
     </div>
     <div class="header-right">
       <button class="btn-header-common" id="langToggle" onclick="toggleLang()" title="Switch language">${isEn ? 'EN' : 'VI'}</button>

@@ -1124,8 +1124,12 @@
         '<span class="btn-txt"><i class="fas fa-check"></i> Xong</span></button>';
     } else if (pending) {
       if (o.qr_image) {
-        html += '<div class="tp-qr"><img src="' + esc(o.qr_image) + '" alt="Mã QR thanh toán" width="240" height="240">' +
-          '<p class="hint">Mở app ngân hàng và quét mã VietQR để chuyển khoản đúng số tiền và nội dung.</p></div>';
+        html += '<div class="tp-qr"><img src="' + esc(o.qr_image) + '" alt="Mã QR VietQR thanh toán của payOS" width="240" height="240">' +
+          '<p class="hint">Mở app ngân hàng và quét mã VietQR của payOS để chuyển đúng số tiền và nội dung.</p>' +
+          '<div class="tp-qr-actions">' +
+          '<button type="button" class="btn-ghost" onclick="mTpDownloadQr()"><i class="fas fa-download"></i> Tải mã QR</button>' +
+          '<button type="button" class="btn-ghost" onclick="mTpShareQr()"><i class="fas fa-share-nodes"></i> Chia sẻ</button>' +
+          '</div></div>';
       }
       if (o.description) {
         html += '<div class="tp-row"><span>Nội dung chuyển khoản</span>' +
@@ -1140,8 +1144,8 @@
         html += '<button type="button" class="btn-primary tp-testbtn" onclick="mTpMockPaid()">' +
           '<span class="btn-txt"><i class="fas fa-flask"></i> Thanh toán thử (test mode)</span></button>';
       }
-      html += '<button type="button" class="btn-ghost" onclick="mTpSyncNow()">' +
-        '<i class="fas fa-rotate"></i> Tôi đã chuyển khoản — kiểm tra lại</button>' +
+      html += '<button type="button" class="btn-ghost" id="mTpCheckBtn" onclick="mTpSyncNow()">' +
+        '<i class="fas fa-rotate"></i> Kiểm tra thanh toán</button>' +
         '<button type="button" class="btn-ghost danger" onclick="mTpCancel()">' +
         '<i class="fas fa-xmark"></i> Huỷ đơn</button>';
     } else {
@@ -1157,6 +1161,68 @@
   function mTpCopyDesc() {
     if (!TP.order || !TP.order.description) return;
     copyText(TP.order.description);
+  }
+
+  // ----- Ảnh QR VietQR: tải về máy / chia sẻ -----
+  // Ảnh là data-URL PNG do server dựng từ CHÍNH chuỗi VietQR payOS trả về
+  // (payos.buildQrImage) ⇒ tải/chia sẻ nguyên ảnh = đúng mã gốc, app ngân hàng quét được.
+  function mTpQrSrc() {
+    var src = TP.order && TP.order.qr_image;
+    return /^data:image\//i.test(src || '') ? src : '';
+  }
+
+  function mTpQrFileName() {
+    var code = (TP.order && TP.order.order_code) || 'don-nap';
+    return 'vietqr-' + code + '.png';
+  }
+
+  async function mTpDownloadQr() {
+    var src = mTpQrSrc();
+    if (!src) { toast('Chưa có mã QR để tải.', 'err'); return; }
+    try {
+      var blob = await (await fetch(src)).blob();
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = mTpQrFileName();
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+      toast('Đã tải mã QR về máy.', 'ok');
+    } catch (e) {
+      // iOS/Safari chặn download data-URL → mở ảnh để nhấn giữ "Lưu vào Ảnh".
+      var w = window.open('', '_blank');
+      if (w) {
+        w.document.write('<title>VietQR</title><body style="margin:0;background:#fff;display:flex;' +
+          'align-items:center;justify-content:center;min-height:100vh">' +
+          '<img src="' + src + '" alt="VietQR" style="max-width:100%"></body>');
+        w.document.close();
+      }
+      toast('Nhấn giữ ảnh vừa mở để lưu vào thư viện ảnh.', '');
+    }
+  }
+
+  async function mTpShareQr() {
+    var src = mTpQrSrc();
+    if (!src) { toast('Chưa có mã QR để chia sẻ.', 'err'); return; }
+    var o = TP.order || {};
+    var title = 'Mã QR thanh toán đơn #' + (o.order_code || '');
+    var text = 'Quét mã VietQR để chuyển ' + tpVnd(o.amount_vnd) + ' cho đơn #' + o.order_code + '.';
+    try {
+      var blob = await (await fetch(src)).blob();
+      var file = new File([blob], mTpQrFileName(), { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: title, text: text });
+        return;
+      }
+      if (navigator.share) { await navigator.share({ title: title, text: text }); return; }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;   // người dùng bỏ khay chia sẻ
+    }
+    // Không hỗ trợ chia sẻ → tải ảnh về máy.
+    await mTpDownloadQr();
   }
 
   function mTpNewOrder() {
@@ -1207,6 +1273,14 @@
 
   async function mTpSyncNow(silent) {
     if (!TP.order) return;
+    // Nút "Kiểm tra thanh toán" (không phải nhịp tự động) → hiện trạng thái đang kiểm tra.
+    var btn = silent ? null : $('mTpCheckBtn');
+    var oldHtml = null;
+    if (btn) {
+      oldHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner spin"></i> Đang kiểm tra…';
+    }
     try {
       var r = await mApi('POST', '/api/credits/topup/' + encodeURIComponent(TP.order.order_code) + '/sync', {});
       if (r && r.status && String(r.status).toUpperCase() !== 'PENDING') {
@@ -1219,6 +1293,11 @@
       }
     } catch (e) {
       if (!silent) toast(e.message || 'Không kiểm tra được trạng thái', 'err');
+    } finally {
+      if (btn && oldHtml !== null && btn.isConnected) {
+        btn.innerHTML = oldHtml;
+        btn.disabled = false;
+      }
     }
   }
 
@@ -2656,7 +2735,7 @@
       : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
     document.documentElement.setAttribute('data-theme', theme);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'light' ? '#f4f6fa' : '#0d1117');
+    if (meta) meta.setAttribute('content', theme === 'light' ? '#f0f2f5' : '#111122');
   }
 
   function hashTab() {
@@ -2807,6 +2886,8 @@
   window.mTpMockPaid = mTpMockPaid;
   window.mTpNewOrder = mTpNewOrder;
   window.mTpCopyDesc = mTpCopyDesc;
+  window.mTpDownloadQr = mTpDownloadQr;
+  window.mTpShareQr = mTpShareQr;
   window.mInstallAction = mInstallAction;
   window.mShowInstallHelp = mShowInstallHelp;
   window.mCloseInstallHelp = mCloseInstallHelp;

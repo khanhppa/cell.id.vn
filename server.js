@@ -119,7 +119,10 @@ app.use(express.urlencoded({ extended: true }));
 // Tài nguyên của app di động (`/m/*.js|css|html|webmanifest`) cũng vậy: service
 // worker + cache của trình duyệt rất dễ giữ bản cũ, và người dùng không có nút
 // "hard reload" trên điện thoại → cũng ép revalidate.
-const ALWAYS_REVALIDATE = /[\\/](version\.js|version\.html|admin\.(?:js|html)|[\\/]m[\\/][^\\/]+\.(?:js|css|html|webmanifest))$/;
+//
+// `theme.css` là bảng màu dùng chung cho MỌI trang: nếu trình duyệt giữ bản cũ thì
+// cả site lệch màu/thiếu token → cũng ép revalidate.
+const ALWAYS_REVALIDATE = /[\\/](version\.js|version\.html|admin\.(?:js|html)|theme\.css|[\\/]m[\\/][^\\/]+\.(?:js|css|html|webmanifest))$/;
 
 // `.webmanifest` không nằm trong bảng MIME mặc định của Express 4 → trình duyệt
 // nhận `application/octet-stream` và TỪ CHỐI cài PWA. Khai báo tường minh.
@@ -1501,20 +1504,75 @@ function toSqlDate(v) {
   return new Date(ms).toISOString().replace('T', ' ').slice(0, 19);
 }
 
-// Gói nạp đang bật + tỉ lệ quy đổi + khoảng cho phép.
-// `available=false` khi cổng chưa bật/cấu hình → trang credits hiện banner "chưa khả dụng".
+// ========================
+// Trạng thái cổng nạp điểm — dùng chung cho API public + trang chẩn đoán admin
+// ========================
+/**
+ * Vì sao cổng nạp CHƯA dùng được? Trả danh sách lý do có mã + câu tiếng Việt.
+ *
+ * Trước đây API chỉ trả `available:false` nên cả người dùng lẫn admin chỉ thấy
+ * "Nạp điểm tạm chưa khả dụng" mà không biết thiếu gì (bật cổng? thiếu client-id?
+ * thiếu checksum-key?). Mỗi lý do ở đây là một hành động cụ thể cho admin.
+ */
+function paymentUnavailableReasons(status) {
+  const reasons = [];
+  if (!status.enabled) {
+    reasons.push({
+      code: 'gateway_disabled',
+      message: 'Cổng thanh toán payOS đang TẮT. Admin vào Cài đặt ▸ payOS để bật.'
+    });
+  } else if (!status.has_credentials) {
+    reasons.push({
+      code: 'missing_credentials',
+      message: 'Cổng payOS đã bật nhưng thiếu cấu hình: ' + status.missing.join(', ') +
+        '. Admin vào Cài đặt ▸ payOS để nhập.'
+    });
+  }
+  return reasons;
+}
+
+/** Payload gọn cho client (không lộ credential) + lý do chưa khả dụng. */
+async function paymentPublicStatus() {
+  const [status, vndPerCredit, limits] = await Promise.all([
+    payos.getStatus(), payos.getVndPerCredit(), payos.getLimits()
+  ]);
+  const reasons = paymentUnavailableReasons(status);
+  return {
+    status,
+    reasons,
+    available: reasons.length === 0,
+    vnd_per_credit: vndPerCredit,
+    min_vnd: limits.min,
+    max_vnd: limits.max
+  };
+}
+
+// Gói nạp đang bật + tỉ lệ quy đổi + khoảng cho phép + LÝ DO nếu chưa khả dụng.
+// `available=false` → trang nạp điểm hiện banner kèm đúng lý do (xem topup.html).
 app.get('/api/credits/packages', requireAuth, async (req, res) => {
+  // Không cache: admin vừa bật cổng là lần tải trang kế tiếp phải thấy ngay.
+  res.set('Cache-Control', 'no-store');
   try {
-    const [packages, available, vndPerCredit, limits, cfg] = await Promise.all([
+    const [packages, pub] = await Promise.all([
       topup.listActivePackages(),
-      payos.isConfigured(),
-      payos.getVndPerCredit(),
-      payos.getLimits(),
-      payos.getConfig()
+      paymentPublicStatus()
     ]);
     res.json({
-      available, vnd_per_credit: vndPerCredit, min_vnd: limits.min, max_vnd: limits.max,
-      packages, test_mode: !!cfg.testMode
+      available: pub.available,
+      reason: pub.reasons.length ? pub.reasons[0].code : null,
+      reasons: pub.reasons,
+      vnd_per_credit: pub.vnd_per_credit,
+      min_vnd: pub.min_vnd,
+      max_vnd: pub.max_vnd,
+      packages,
+      test_mode: pub.status.test_mode,
+      gateway: {
+        enabled: pub.status.enabled,
+        test_mode: pub.status.test_mode,
+        configured: pub.status.configured,
+        missing: pub.status.missing,
+        webhook_configured: !!pub.status.webhook_url
+      }
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1522,9 +1580,16 @@ app.get('/api/credits/packages', requireAuth, async (req, res) => {
 // Tạo đơn nạp. Body: { package_id } hoặc { amount_vnd } (nạp tự do trong khoảng min–max).
 // KHÔNG nhận credits/amount VND từ client rồi cộng thẳng — server tính lại từ gói.
 app.post('/api/credits/topup/create', requireAuth, topupUserRateLimit, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   try {
-    if (!(await payos.isConfigured())) {
-      return res.status(400).json({ error: 'Cổng nạp điểm đang tắt', reason: 'gateway_disabled' });
+    const pub = await paymentPublicStatus();
+    if (!pub.available) {
+      const first = pub.reasons[0];
+      return res.status(400).json({
+        error: first ? first.message : 'Cổng nạp điểm đang tắt',
+        reason: first ? first.code : 'gateway_disabled',
+        missing: pub.status.missing
+      });
     }
     const { package_id, amount_vnd } = req.body || {};
     const limits = await payos.getLimits();
@@ -1598,6 +1663,7 @@ app.post('/api/credits/topup/create', requireAuth, topupUserRateLimit, async (re
 
 // Trạng thái 1 đơn — chỉ chủ đơn hoặc admin xem được.
 app.get('/api/credits/topup/:orderCode', requireAuth, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   try {
     const code = parseInt(req.params.orderCode, 10);
     if (!Number.isFinite(code)) return res.status(400).json({ error: 'order_code không hợp lệ' });
@@ -1621,8 +1687,105 @@ app.get('/api/credits/topup/:orderCode', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ========================
+// Chờ trạng thái đơn theo thời gian thực (long-poll)
+// ========================
+// Vì sao có route này: trước đây client hỏi lại mỗi 4s (và đối soát payOS mỗi
+// ~20s) nên sau khi khách quét QR, màn hình còn "Chờ thanh toán" thêm 10–20 giây
+// dù webhook đã cộng điểm. Giờ client giữ 1 kết nối; server đánh thức NGAY khi
+// trạng thái đơn đổi (webhook / đối soát / huỷ / hết hạn) → cập nhật tức thì.
+//
+// Chọn long-poll thay vì SSE/WebSocket vì: không cần đổi cấu hình Nginx/Cloudflare
+// (proxy buffer vẫn trả về đúng lúc response kết thúc), không cần thư viện thêm,
+// và vẫn dùng được header Authorization như mọi API khác.
+const ORDER_WAIT_TIMEOUT_MS = 25000;   // < proxy_read_timeout (60s) & Cloudflare (100s)
+const ORDER_WAIT_MAX_PER_USER = 5;     // ~5 tab; chặn mở hàng trăm kết nối
+const orderWaiters = new Map();        // userId -> Set<res>
+
+// Chờ trạng thái đơn: chỉ chủ đơn (hoặc admin) được chờ.
+app.get('/api/credits/topup/:orderCode/wait', requireAuth, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  // Bảo Nginx không buffer (nếu có) — response vẫn đúng dù buffer, đây chỉ là tối ưu.
+  res.set('X-Accel-Buffering', 'no');
+  try {
+    const code = parseInt(req.params.orderCode, 10);
+    if (!Number.isFinite(code)) return res.status(400).json({ error: 'order_code không hợp lệ' });
+
+    // Đơn quá hạn của chính user → đánh EXPIRED trước khi chờ (không đợi cron 10 phút).
+    await topup.expireStaleOrders(req.user.id);
+    let order = await topup.getOrderByCode(code);
+    if (!order) return res.status(404).json({ error: 'Không tìm thấy đơn' });
+    if (order.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Không có quyền với đơn này' });
+    }
+
+    const payload = (o) => ({
+      order_code: o.order_code, status: o.status, amount_vnd: o.amount_vnd,
+      credits: o.credits, paid_at: o.paid_at, expires_at: topup.getOrderExpiry(o),
+      description: o.description
+    });
+
+    // Đã có kết quả cuối → trả ngay (client không cần giữ kết nối).
+    if (order.status !== topup.STATUSES.PENDING) {
+      return res.json({ success: true, changed: true, ...payload(order) });
+    }
+
+    // Giới hạn số kết nối chờ / user.
+    let waiters = orderWaiters.get(req.user.id);
+    if (waiters && waiters.size >= ORDER_WAIT_MAX_PER_USER) {
+      return res.status(429).json({
+        error: 'Đang có quá nhiều kết nối chờ cho tài khoản này',
+        reason: 'too_many_waiters', retry_after: 3
+      });
+    }
+    if (!waiters) { waiters = new Set(); orderWaiters.set(req.user.id, waiters); }
+
+    let finished = false;
+    let timer = null;
+
+    const cleanup = () => {
+      if (timer) { clearTimeout(timer); timer = null; }
+      topup.events.removeListener('order', onOrder);
+      topup.events.removeListener('bulk', onBulk);
+      const set = orderWaiters.get(req.user.id);
+      if (set) {
+        set.delete(res);
+        if (!set.size) orderWaiters.delete(req.user.id);
+      }
+    };
+
+    // Kết thúc lượt chờ: đọc lại đơn (đã kiểm tra quyền ở trên) rồi trả về.
+    const finish = async (changed) => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      if (res.writableEnded || res.destroyed) return;
+      try {
+        const fresh = await topup.getOrderByCode(code);
+        res.json({ success: true, changed: !!changed, ...payload(fresh || order) });
+      } catch (e) {
+        res.json({ success: true, changed: !!changed, ...payload(order) });
+      }
+    };
+
+    const onOrder = (ev) => { if (ev && Number(ev.id) === Number(order.id)) finish(true); };
+    const onBulk = () => finish(true);
+
+    topup.events.on('order', onOrder);
+    topup.events.on('bulk', onBulk);
+    waiters.add(res);
+
+    timer = setTimeout(() => finish(false), ORDER_WAIT_TIMEOUT_MS);
+    // Client đóng tab / chuyển trang → gỡ listener ngay, không rò rỉ bộ nhớ.
+    res.on('close', () => { if (!finished) { finished = true; cleanup(); } });
+  } catch (e) {
+    if (!res.headersSent) res.status(500).json({ error: e.message });
+  }
+});
+
 // Danh sách đơn gần đây của chính user.
 app.get('/api/credits/topup', requireAuth, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   try {
     await topup.expireStaleOrders(req.user.id);
     const orders = await topup.listUserOrders(req.user.id, { limit: req.query.limit });
@@ -1814,11 +1977,25 @@ app.post('/api/payos/webhook', async (req, res) => {
 
     const r = await topup.creditOrder(orderCode, {
       transactionRef: data.reference || null,
-      rawWebhook: JSON.stringify(body).slice(0, 4000)
+      rawWebhook: JSON.stringify(body).slice(0, 4000),
+      // payOS báo số tiền THỰC NHẬN trong `data.amount`. Phải đối chiếu với giá
+      // trị đơn: chuyển thiếu mà vẫn cộng đủ điểm của gói = mất tiền thật.
+      paidAmount: Number(data.amount),
+      // Đã verify chữ ký payOS ⇒ tin được việc "đã thu tiền". Đơn bị đánh EXPIRED/
+      // CANCELLED phía mình (lệch giờ, user trả muộn) vẫn phải cộng điểm.
+      allowLate: true
     });
-    if (!r.ok) console.warn(`[payos webhook] đơn #${orderCode} creditOrder lỗi: ${r.reason}`);
-    else if (r.already) console.log(`[payos webhook] đơn #${orderCode} đã PAID trước đó — bỏ qua`);
-    else console.log(`[payos webhook] đơn #${orderCode} đã cộng ${r.credits} điểm cho user ${r.userId}`);
+    if (!r.ok) {
+      if (r.reason === 'underpaid') {
+        console.warn(`[payos webhook] đơn #${orderCode} TRẢ THIẾU: nhận ${r.paid}đ / cần ${r.expected}đ — đánh dấu UNDERPAID, KHÔNG cộng điểm`);
+      } else {
+        console.warn(`[payos webhook] đơn #${orderCode} creditOrder lỗi: ${r.reason}${r.message ? ' — ' + r.message : ''}`);
+      }
+    } else if (r.already) {
+      console.log(`[payos webhook] đơn #${orderCode} đã PAID trước đó — bỏ qua`);
+    } else {
+      console.log(`[payos webhook] đơn #${orderCode} đã cộng ${r.credits} điểm cho user ${r.userId}`);
+    }
 
     res.json({ success: true });
   } catch (e) {
@@ -1921,14 +2098,27 @@ async function syncOrderFromPayos(order) {
   const remote = await payos.getPaymentLink(order.payment_link_id || code);
   if (!remote.ok) return { ok: false, message: remote.message || 'Không lấy được trạng thái từ payOS' };
 
-  const status = remote.data.status;
+  const data = remote.data || {};
+  const status = data.status;
   let credited = null;
   if (status === 'PAID') {
-    const tx = (remote.data.transactions && remote.data.transactions[0]) || null;
-    credited = await topup.creditOrder(code, { transactionRef: tx ? tx.reference : null });
+    const tx = (data.transactions && data.transactions[0]) || null;
+    // payOS trả `amountPaid` (tổng đã thu). Thiếu field này thì cộng tổng transaction.
+    let paidAmount = Number(data.amountPaid);
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+      paidAmount = (data.transactions || []).reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    }
+    credited = await topup.creditOrder(code, {
+      transactionRef: tx ? tx.reference : null,
+      paidAmount: Number.isFinite(paidAmount) && paidAmount > 0 ? paidAmount : undefined,
+      // Đối soát qua API payOS (credential server) ⇒ cũng là nguồn đã xác thực.
+      allowLate: true
+    });
   } else if (['CANCELLED', 'EXPIRED', 'UNDERPAID', 'FAILED'].includes(status)
     && order.status === topup.STATUSES.PENDING) {
-    await topup.updateOrderStatus(order.id, status);
+    await topup.updateOrderStatus(order.id, status, {
+      amountPaid: Number(data.amountPaid) || null
+    });
   }
   const fresh = await topup.getOrderByCode(code);
   return { ok: true, status: fresh.status, remoteStatus: status, credited };
@@ -1996,12 +2186,37 @@ async function mockCreditPaid(order) {
   return { ok: true, order: fresh, credited: result };
 }
 
+/**
+ * Chặn "giả lập đã trả tiền" ở production — kể cả khi ai đó để sót
+ * `payos_test_mode=1`. Đây là đường DUY NHẤT cộng điểm mà không cần payOS xác
+ * nhận, nên phải có 2 lớp: môi trường production + công tắc test mode.
+ */
+function mockPaidBlockReason(cfg) {
+  const env = String(process.env.NODE_ENV || '').toLowerCase();
+  if (env === 'production') {
+    return {
+      status: 403,
+      error: 'Giả lập thanh toán bị khoá ở môi trường production',
+      reason: 'production_forbidden'
+    };
+  }
+  if (!cfg.testMode) {
+    return {
+      status: 400,
+      error: 'Chỉ dùng được khi bật chế độ test (payos_test_mode)',
+      reason: 'not_test_mode'
+    };
+  }
+  return null;
+}
+
 // Giả lập thanh toán thành công — CHỈ hoạt động ở test mode (local dev).
 // Đi đúng luồng thật: tự ký payload bằng checksumKey rồi verify lại.
 app.post('/api/admin/payments/:orderCode/mock-paid', requireAuth, requireAdmin, creditAdminRateLimit, async (req, res) => {
   try {
     const cfg = await payos.getConfig();
-    if (!cfg.testMode) return res.status(400).json({ error: 'Chỉ dùng được khi bật chế độ test (payos_test_mode)' });
+    const blocked = mockPaidBlockReason(cfg);
+    if (blocked) return res.status(blocked.status).json({ error: blocked.error, reason: blocked.reason });
     const code = parseInt(req.params.orderCode, 10);
     if (!Number.isFinite(code)) return res.status(400).json({ error: 'order_code không hợp lệ' });
     const order = await topup.getOrderByCode(code);
@@ -2019,7 +2234,8 @@ app.post('/api/admin/payments/:orderCode/mock-paid', requireAuth, requireAdmin, 
 app.post('/api/credits/topup/:orderCode/mock-paid', requireAuth, topupUserRateLimit, async (req, res) => {
   try {
     const cfg = await payos.getConfig();
-    if (!cfg.testMode) return res.status(400).json({ error: 'Chỉ dùng được khi bật chế độ test' });
+    const blocked = mockPaidBlockReason(cfg);
+    if (blocked) return res.status(blocked.status).json({ error: blocked.error, reason: blocked.reason });
     const code = parseInt(req.params.orderCode, 10);
     if (!Number.isFinite(code)) return res.status(400).json({ error: 'order_code không hợp lệ' });
     const order = await topup.getOrderByCode(code);
@@ -2029,6 +2245,73 @@ app.post('/api/credits/topup/:orderCode/mock-paid', requireAuth, topupUserRateLi
     const r = await mockCreditPaid(order);
     if (!r.ok) return res.status(400).json({ error: r.error });
     res.json({ success: true, order: r.order, credited: r.credited });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/**
+ * Chẩn đoán cổng nạp điểm cho admin: vì sao (không) sẵn sàng, cảnh báo cấu hình
+ * production, số đơn theo trạng thái. Không trả secret.
+ */
+app.get('/api/admin/payos/status', requireAuth, requireAdmin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const [status, packages, counts, resolvedWebhook, resolvedBase] = await Promise.all([
+      payos.getStatus(),
+      topup.listActivePackages(),
+      topup.getStatusCounts(),
+      payos.resolveWebhookUrl(req),
+      payos.resolveBaseUrl(req)
+    ]);
+    const reasons = paymentUnavailableReasons(status);
+    const isProd = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+    const warnings = [];
+
+    if (isProd && status.test_mode) {
+      warnings.push({
+        code: 'test_mode_in_production',
+        level: 'danger',
+        message: 'Đang BẬT chế độ test ở production — đơn nạp sẽ KHÔNG gọi payOS thật và có thể bị cộng điểm giả. Tắt ngay (Cài đặt ▸ payOS).'
+      });
+    }
+    if (!isProd && status.enabled && !status.test_mode) {
+      warnings.push({
+        code: 'live_mode_in_dev',
+        level: 'info',
+        message: 'Đang ở môi trường dev nhưng gọi payOS THẬT. Dùng chế độ test nếu chỉ muốn thử luồng nạp.'
+      });
+    }
+    if (status.enabled && !status.public_base_url) {
+      warnings.push({
+        code: 'no_public_base_url',
+        level: 'warn',
+        message: 'Chưa đặt URL công khai (public_base_url). Hệ thống suy ra từ header Host — sau Nginx vẫn đúng nếu TRUST_PROXY=1, nhưng nên đặt tường minh (vd https://cell.id.vn) để returnUrl/cancelUrl luôn chính xác.'
+      });
+    }
+    if (resolvedWebhook && !/^https:\/\//i.test(resolvedWebhook)) {
+      warnings.push({
+        code: 'webhook_not_https',
+        level: 'warn',
+        message: 'URL webhook không phải HTTPS: ' + resolvedWebhook + '. payOS có thể không gọi tới được từ Internet.'
+      });
+    }
+    if (status.enabled && !packages.length) {
+      warnings.push({
+        code: 'no_active_packages',
+        level: 'info',
+        message: 'Không có gói nạp nào đang bật — người dùng vẫn nạp được bằng ô "số tiền tự chọn".'
+      });
+    }
+
+    res.json({
+      ...status,
+      available: reasons.length === 0,
+      reasons,
+      effective_webhook_url: resolvedWebhook || null,
+      effective_base_url: resolvedBase || null,
+      active_packages: packages.length,
+      orders: counts,
+      warnings
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -2202,6 +2485,14 @@ app.get('/api/lookup-history', requireAuth, (req, res) => {
   // Yêu cầu: TRÙNG KẾT QUẢ THÌ CHỈ HIỆN 1 DÒNG. Cell khoá tự nhiên là
   // (mcc, mnc, lac, cellid, sector) nên gộp theo khoá đó, GIỮ dòng mới nhất
   // (MAX(id)) để toạ độ/nguồn/RAT hiển thị là bản tra gần nhất.
+  //
+  // NHÁNH PHIÊN (mode='batch') phải gộp CẢ HAI bảng nguồn:
+  //   * lookup_batches     — phiên tra theo list (ghi metadata khi trả phí)
+  //   * call_log_batches   — phiên nạp Excel (có thể tồn tại TRƯỚC/ĐỘC LẬP với
+  //     lookup_batches, ví dụ file nạp ở tab "Xem rút list" nhưng chưa tra cell nào).
+  // Trước đây chỉ đọc lookup_batches nên các phiên chỉ có trong call_log_batches
+  // (VD b1791939137526 của user 34: 4099 dòng / 166 cell) hiện đầy đủ ở tab
+  // call logs nhưng BIẾN MẤT khỏi tab Lịch sử — hai tab lệch nhau.
   const union = `
     SELECT h.id, 'single' AS mode, h.mcc, h.mnc, h.lac, h.cellid, h.sector, h.lat, h.lng,
            h.range, h.source, h.found, NULL AS batch_id, 1 AS cell_count,
@@ -2232,11 +2523,26 @@ app.get('/api/lookup-history', requireAuth, (req, res) => {
     LEFT JOIN lookup_history h ON h.id = (
       SELECT MAX(id) FROM lookup_history WHERE batch_id = b.batch_id AND user_id = b.user_id
     )
-    WHERE b.user_id = ?`;
+    WHERE b.user_id = ?
+    UNION ALL
+    -- Phiên CHỈ có trong call_log_batches (nạp file nhưng chưa ghi lookup_batches):
+    -- cell_count lấy MAX(cell_count, số cell thật trong call_logs) để không báo thiếu.
+    SELECT NULL AS id, 'batch' AS mode, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+           NULL, NULL, 0, cb.batch_id,
+           MAX(ifnull(cb.cell_count, 0), ifnull((SELECT COUNT(DISTINCT
+             ifnull(c.mcc,'')||'|'||ifnull(c.mnc,'')||'|'||ifnull(c.lac,'')||'|'||ifnull(c.cellid,'')
+           ) FROM call_logs c WHERE c.user_id = cb.user_id AND c.batch_id = cb.batch_id), 0)),
+           0 AS found_count, cb.file_name,
+           NULL AS radio, cb.created_at, cb.created_at AS sort_at, 1 AS repeat_count,
+           cb.row_count AS row_count, cb.network AS network, cb.cell_count AS batch_cell_count
+    FROM call_log_batches cb
+    WHERE cb.user_id = ?
+      AND NOT EXISTS (SELECT 1 FROM lookup_batches b2 WHERE b2.batch_id = cb.batch_id AND b2.user_id = cb.user_id)
+  `;
 
   // Điều kiện động: mode + ngày (VDN UTC+7).
   const conds = [];
-  const params = [req.user.id, req.user.id];
+  const params = [req.user.id, req.user.id, req.user.id];
   if (mode) { conds.push('t.mode = ?'); params.push(mode); }
   if (date) { conds.push("date(t.sort_at, '+7 hours') = date(?)"); params.push(date); }
   const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
@@ -5876,6 +6182,65 @@ function initApiLogRetention() {
   }
 }
 
+// ========================
+// Đơn nạp quá hạn — dọn toàn cục
+// ========================
+// PayOS hết hạn link sau 15 phút. Nếu chỉ đánh EXPIRED khi user mở lại trang thì
+// đơn của người không quay lại sẽ treo PENDING mãi → sai thống kê + khó đối soát.
+// Job này chạy 10 phút/lần và 1 lần lúc khởi động (dọn đơn treo từ lần chạy trước).
+async function runPaymentOrderExpiry() {
+  try {
+    const n = await topup.expireAllStaleOrders();
+    if (n) console.log(`payment_orders: ${n} đơn PENDING quá hạn → EXPIRED`);
+  } catch (e) {
+    console.error('payment order expiry error:', e.message);
+  }
+}
+
+function initPaymentOrderExpiry() {
+  try {
+    cron.schedule('*/10 * * * *', runPaymentOrderExpiry, { timezone: 'Asia/Ho_Chi_Minh' });
+    console.log('Payment order expiry job scheduled (every 10 min)');
+    const t = setTimeout(runPaymentOrderExpiry, 15000);
+    if (t && typeof t.unref === 'function') t.unref();
+  } catch (e) {
+    console.error('Failed to schedule payment order expiry job:', e.message);
+  }
+}
+
+/**
+ * Log trạng thái cổng nạp lúc khởi động — KHÔNG chứa secret.
+ * Giúp phát hiện ngay: quên bật cổng, thiếu credential, để sót test mode ở
+ * production, hoặc chưa có URL công khai để payOS gọi webhook.
+ */
+async function logPayosDiagnostics() {
+  try {
+    const st = await payos.getStatus();
+    const env = String(process.env.NODE_ENV || '').toLowerCase();
+    if (!st.enabled) {
+      console.log('[payos] Cổng nạp điểm đang TẮT — bật tại Admin ▸ Cài đặt ▸ payOS (payos_enabled=1).');
+      return;
+    }
+    if (st.test_mode) {
+      console.warn('[payos] TEST MODE đang BẬT — đơn nạp KHÔNG gọi payOS thật và có thể được "giả lập đã trả tiền".');
+      if (env === 'production') {
+        console.error('[payos] NGHIÊM TRỌNG: test mode đang bật ở PRODUCTION — tắt ngay trước khi nhận tiền thật.');
+      }
+    }
+    if (!st.has_credentials) {
+      console.error('[payos] THIẾU credential: ' + st.missing.join(', ') + ' — cổng sẽ báo "chưa khả dụng" cho tới khi nhập đủ.');
+      return;
+    }
+    console.log('[payos] Sẵn sàng' + (st.test_mode ? ' (test mode)' : ' (payOS thật)') +
+      ' — base URL: ' + st.base_url);
+    const wh = await payos.resolveWebhookUrl(null);
+    if (wh) console.log('[payos] Webhook: ' + wh + ' (nhớ đăng ký URL này với payOS)');
+    else console.warn('[payos] Chưa xác định được URL webhook — đặt public_base_url hoặc payos_webhook_url trong Admin.');
+  } catch (e) {
+    console.error('[payos] không đọc được cấu hình:', e.message);
+  }
+}
+
 // GET /api/sync-jobs - list jobs (with source name)
 app.get('/api/sync-jobs', requireAuth, requireAdmin, (req, res) => {
   db.all(`SELECT j.*, s.name AS source_name, s.type AS source_type
@@ -7158,6 +7523,8 @@ function onListening() {
   initLookupHistoryRetention();
   initApiLogRetention();
   initIpLookupRetention();
+  initPaymentOrderExpiry();
+  logPayosDiagnostics();
 }
 
 // ========================

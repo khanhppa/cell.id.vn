@@ -1207,6 +1207,97 @@ async function loadPayosStatus() {
     const el = document.getElementById('setPayosWebhookHint');
     if (el) el.innerHTML = d.webhook_url ? `URL webhook hiện tại: <b>${escAttr(d.webhook_url)}</b>` : 'Chưa xác định được URL webhook.';
   } catch (e) { /* không chặn UI */ }
+  loadGatewayStatus();
+}
+
+/** Mở Cấu hình ▸ tab payOS (từ thẻ trạng thái cổng ở mục Nạp điểm). */
+function openPayosSettings() {
+  switchSection('settings');
+  switchSettingsTab('payos');
+}
+
+/** Một dòng ✓/✗ trong thẻ trạng thái cổng. */
+function gwCheck(ok, label) {
+  return `<div style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;margin-bottom:4px">
+    <i class="fas ${ok ? 'fa-circle-check' : 'fa-circle-xmark'}" style="color:${ok ? 'var(--ok)' : 'var(--danger)'};margin-top:2px"></i>
+    <span>${label}</span></div>`;
+}
+
+/**
+ * Thẻ "Trạng thái cổng thanh toán": trả lời đúng câu hỏi "vì sao trang nạp báo
+ * chưa khả dụng" — cổng tắt? thiếu credential? test mode? webhook? — kèm nút sửa.
+ */
+function renderGatewayStatus(el, d) {
+  const stateBadge = d.available
+    ? '<span class="badge badge-active">Sẵn sàng nhận tiền</span>'
+    : '<span class="badge badge-admin">Chưa khả dụng</span>';
+  const modeBadge = d.test_mode
+    ? '<span class="badge badge-pending">TEST MODE</span>'
+    : '<span class="badge badge-user">PAYOS THẬT</span>';
+
+  const reasons = (d.reasons || []).map(x =>
+    `<div style="font-size:12.5px;color:var(--danger);margin-bottom:4px"><i class="fas fa-circle-xmark"></i> ${escAttr(x.message)}</div>`
+  ).join('');
+
+  const w = String(d.effective_webhook_url || '');
+  const checks = [
+    gwCheck(!!d.enabled, 'Cổng thanh toán đang bật (payos_enabled)'),
+    gwCheck(!!d.has_credentials, d.has_credentials
+      ? 'Đủ 3 credential (client-id / api-key / checksum-key)'
+      : 'Thiếu credential: ' + escAttr((d.missing || []).join(', '))),
+    gwCheck(/^https:\/\//i.test(w), w
+      ? 'Webhook: ' + escAttr(w)
+      : 'Chưa xác định được URL webhook (đặt public_base_url)'),
+    gwCheck(!!d.public_base_url, d.public_base_url
+      ? 'URL công khai: ' + escAttr(d.public_base_url)
+      : 'Chưa đặt public_base_url — đang suy ra từ header Host')
+  ].join('');
+
+  const warnings = (d.warnings || []).map(x => {
+    const color = x.level === 'danger' ? 'var(--danger)'
+      : (x.level === 'warn' ? 'var(--warning)' : 'var(--text-secondary)');
+    return `<div style="font-size:12.5px;color:${color};margin-top:6px;line-height:1.5">
+      <i class="fas fa-triangle-exclamation"></i> ${escAttr(x.message)}</div>`;
+  }).join('');
+
+  const c = (d.orders && d.orders.counts) || {};
+  const countsLine = `Đơn: ${fmtNum(c.PENDING || 0)} chờ · ${fmtNum(c.PAID || 0)} đã trả · `
+    + `${fmtNum(c.UNDERPAID || 0)} trả thiếu · ${fmtNum(c.EXPIRED || 0)} hết hạn · ${fmtNum(c.CANCELLED || 0)} huỷ`;
+  const lastPaid = d.orders && d.orders.last_paid_at
+    ? ` · lần thu gần nhất: ${escAttr(String(d.orders.last_paid_at))} UTC` : '';
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      ${stateBadge} ${modeBadge}
+      <span class="muted-text" style="font-size:12px">${countsLine}${lastPaid}</span>
+    </div>
+    ${reasons}
+    ${checks}
+    ${warnings}
+    <div class="page-actions" style="margin-top:10px">
+      <button class="btn btn-sm btn-primary" onclick="openPayosSettings()"><i class="fas fa-sliders-h"></i> Mở cấu hình payOS</button>
+      <button class="btn btn-sm" onclick="turnupConfirmWebhook()"><i class="fas fa-plug"></i> Đăng ký webhook</button>
+      <button class="btn btn-sm" onclick="turnupTestConnection()"><i class="fas fa-vial"></i> Kiểm tra kết nối</button>
+      <a class="btn btn-sm" href="/topup.html" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Mở trang nạp</a>
+    </div>`;
+}
+
+/** Tải + vẽ thẻ trạng thái cổng (lỗi mạng không chặn phần còn lại của trang). */
+async function loadGatewayStatus() {
+  const body = document.getElementById('payGatewayBody');
+  if (!body) return;
+  body.classList.add('loading');
+  body.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang kiểm tra…';
+  try {
+    const r = await Auth.fetch('/api/admin/payos/status?t=' + Date.now());
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'Không đọc được trạng thái cổng');
+    body.classList.remove('loading');
+    renderGatewayStatus(body, d);
+  } catch (e) {
+    body.classList.remove('loading');
+    body.innerHTML = `<span class="muted-text">Lỗi: ${escAttr(e.message)}</span>`;
+  }
 }
 
 // ========================
@@ -3968,6 +4059,7 @@ Object.assign(window, {
   loadDashboard, openGaSettings, openGaGuide, testGaConnection, copyGaEmail, saveGaSettings,
   // Nạp điểm payOS
   loadPayments, loadPayStats, loadPackages, loadPayOrders, loadPayosStatus,
+  loadGatewayStatus, openPayosSettings,
   pkgOpenCreate, pkgOpenEdit, pkgToggle, pkgDelete,
   paySync, payCancel, payMockPaid,
   turnupCheckWebhook, turnupConfirmWebhook, turnupTestConnection,

@@ -9,7 +9,7 @@
      Ã¢â‚¬Â¢ TÃƒÂ i nguyÃƒÂªn tÃ„Â©nh cÃ¡Â»Â§a /m/: stale-while-revalidate (mÃ¡Â»Å¸ tÃ¡Â»Â©c thÃƒÂ¬, cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t ngÃ¡ÂºÂ§m).
    Ã„ÂÃ¡Â»â€¢i CACHE_VERSION mÃ¡Â»â€”i khi sÃ¡Â»Â­a app.css/app.js Ã„â€˜Ã¡Â»Æ’ client nhÃ¡ÂºÂ­n bÃ¡ÂºÂ£n mÃ¡Â»â€ºi.
    ========================================================================== */
-const CACHE_VERSION = 'cell-m-v14';
+const CACHE_VERSION = 'cell-m-v17';
 const CACHE_NAME = CACHE_VERSION;
 
 // TÃƒÂ i nguyÃƒÂªn tÃ¡Â»â€˜i thiÃ¡Â»Æ’u Ã„â€˜Ã¡Â»Æ’ app mÃ¡Â»Å¸ Ã„â€˜Ã†Â°Ã¡Â»Â£c khi mÃ¡ÂºÂ¥t mÃ¡ÂºÂ¡ng.
@@ -22,6 +22,9 @@ const PRECACHE = [
   '/auth.js',
   '/m/icons/icon-192.png',
   '/m/icons/favicon-64.png',
+  // Logo topbar (bản nhỏ 3x, vài KB) — topbar có ở mọi màn hình nên cần sẵn offline.
+  '/m/img/logo-topbar-dark.png',
+  '/m/img/logo-topbar-light.png',
   '/img/logo.png',
   '/img/logo-white.png',
   '/img/favicon-32.png',

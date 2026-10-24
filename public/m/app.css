@@ -4,27 +4,35 @@
    ========================================================================== */
 
 :root {
-  --bg: #0d1117;
-  --bg-2: #161b22;
-  --bg-3: #1c2430;
-  --bg-elev: #1f2937;
-  --border: #2b3648;
-  --border-strong: #3a4961;
+  /* Cùng họ màu với website (xem /theme.css): nền #111122 → #14142e,
+     nhấn indigo. Chỉ khác tên biến vì /m có bộ token riêng. */
+  --bg: #111122;
+  --bg-2: #15152e;
+  --bg-3: #1b1b36;
+  --bg-elev: #1f1f3d;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
 
-  --text: #e8eef7;
-  --text-2: #a9b6c8;
-  --text-3: #77839a;
+  --text: #e2e2ff;
+  --text-2: #a8a8d0;
+  --text-3: #7a7aa4;
 
-  --brand: #1a6cf0;
-  --brand-2: #0b3fa8;
-  --brand-soft: rgba(26, 108, 240, 0.14);
+  --brand: #6e6ef7;
+  --brand-2: #4a4ad0;
+  --brand-soft: rgba(110, 110, 247, 0.16);
+  --brand-line: rgba(110, 110, 247, 0.45);
+  /* Màu nhấn dùng cho CHỮ/icon trên nền tối (sáng hơn --brand để đủ tương phản). */
+  --brand-ink: #a9a9ff;
 
-  --ok: #2e9e5b;
-  --ok-soft: rgba(46, 158, 91, 0.14);
-  --warn: #d9952a;
-  --warn-soft: rgba(217, 149, 42, 0.14);
-  --err: #d9534f;
-  --err-soft: rgba(217, 83, 79, 0.13);
+  --ok: #3ecf72;
+  --ok-soft: rgba(62, 207, 114, 0.14);
+  --ok-line: rgba(62, 207, 114, 0.42);
+  --warn: #f0ac4a;
+  --warn-soft: rgba(240, 172, 74, 0.14);
+  --warn-line: rgba(240, 172, 74, 0.45);
+  --err: #f07577;
+  --err-soft: rgba(240, 117, 119, 0.14);
+  --err-line: rgba(240, 117, 119, 0.42);
 
   --r-sm: 8px;
   --r: 12px;
@@ -39,16 +47,29 @@
 }
 
 html[data-theme="light"] {
-  --bg: #f4f6fa;
+  --bg: #f0f2f5;
   --bg-2: #ffffff;
-  --bg-3: #eef2f8;
+  --bg-3: #ececf2;
   --bg-elev: #ffffff;
-  --border: #dbe2ec;
-  --border-strong: #c3cddc;
-  --text: #16202e;
-  --text-2: #4a5a6e;
-  --text-3: #71809a;
-  --brand-soft: rgba(26, 108, 240, 0.10);
+  --border: rgba(0, 0, 0, 0.10);
+  --border-strong: rgba(0, 0, 0, 0.18);
+  --text: #1a1a2e;
+  --text-2: #44446a;
+  --text-3: #7c7c90;
+  --brand: #4444cc;
+  --brand-2: #3333b3;
+  --brand-soft: rgba(68, 68, 204, 0.10);
+  --brand-line: rgba(68, 68, 204, 0.40);
+  --brand-ink: #4444cc;
+  --ok: #1f9e5a;
+  --ok-soft: rgba(31, 158, 90, 0.12);
+  --ok-line: rgba(31, 158, 90, 0.42);
+  --warn: #c98a1e;
+  --warn-soft: rgba(217, 149, 42, 0.14);
+  --warn-line: rgba(217, 149, 42, 0.45);
+  --err: #d9534f;
+  --err-soft: rgba(217, 83, 79, 0.12);
+  --err-line: rgba(217, 83, 79, 0.42);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -110,12 +131,11 @@ html[data-theme="dark"] .auth-brand { background-image: url('/img/logo-white.png
 
 .auth-err {
   padding: 9px 11px; border-radius: var(--r-sm);
-  background: var(--err-soft); border: 1px solid rgba(217, 83, 79, 0.45);
-  color: #ffb4b1; font-size: 13px; line-height: 1.45;
+  background: var(--err-soft); border: 1px solid var(--err-line);
+  color: var(--err); font-size: 13px; line-height: 1.45;
 }
-html[data-theme="light"] .auth-err { color: #a9322f; }
-/* Lỗi trong kết quả tra cứu IP: tông đậm hơn cho nền sáng (đồng bộ auth-err). */
-html[data-theme="light"] .m-ip-v.m-ip-err { color: #a9322f; }
+/* Lỗi trong kết quả tra cứu IP: cùng token với auth-err. */
+.m-ip-v.m-ip-err { color: var(--err); }
 
 /* ==========================================================================
    TRƯỜNG NHẬP LIỆU
@@ -192,7 +212,7 @@ html[data-theme="light"] .m-ip-v.m-ip-err { color: #a9322f; }
   border-radius: var(--r-sm);
   background: linear-gradient(135deg, var(--brand), var(--brand-2));
   color: #fff; font-size: 15px; font-weight: 600;
-  box-shadow: 0 4px 14px rgba(26, 108, 240, 0.28);
+  box-shadow: 0 4px 14px var(--brand-line);
   transition: transform .1s, opacity .16s;
   display: flex; align-items: center; justify-content: center; gap: 7px;
 }
@@ -214,8 +234,7 @@ html[data-theme="light"] .m-ip-v.m-ip-err { color: #a9322f; }
   transition: background .16s, border-color .16s;
 }
 .btn-ghost:active { background: var(--bg-3); }
-.btn-ghost.danger { color: #ff8f8c; border-color: rgba(217,83,79,.35); }
-html[data-theme="light"] .btn-ghost.danger { color: #b03a37; }
+.btn-ghost.danger { color: var(--err); border-color: var(--err-line); }
 
 .link-line {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -242,12 +261,31 @@ html[data-theme="light"] .btn-ghost.danger { color: #b03a37; }
   height: calc(var(--topbar-h) + var(--sa-t));
   padding: var(--sa-t) 16px 0;
   display: flex; align-items: center; gap: 10px;
-  background: rgba(13, 17, 23, 0.92);
+  background: rgba(17, 17, 34, 0.92);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
 }
-html[data-theme="light"] .topbar { background: rgba(244, 246, 250, 0.92); }
-.topbar-main { flex: 1 1 auto; min-width: 0; }
+html[data-theme="light"] .topbar { background: rgba(240, 242, 245, 0.92); }
+.topbar-main {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 10px;
+}
+/* Logo website ở topbar — dùng ảnh logo gốc (logo-white cho nền tối, logo cho nền
+   sáng). Ảnh đã thu nhỏ sẵn ở 3x (198×84 cho khung 66×28) nên nét trên Retina.
+   Dùng background-image thay <img> để đổi logo theo html[data-theme] và chỉ tải
+   đúng một tệp. */
+.topbar-logo {
+  flex: 0 0 auto; width: 76px; height: 32px;
+  background-image: url('/m/img/logo-topbar-dark.png');
+  background-repeat: no-repeat;
+  background-position: left center;
+  background-size: contain;
+}
+html[data-theme="light"] .topbar-logo {
+  background-image: url('/m/img/logo-topbar-light.png');
+}
+/* Logo + 2 dòng chữ: phần chữ co lại và cắt "..." trước khi đẩy credit pill */
+.topbar-text { flex: 1 1 auto; min-width: 0; }
 .topbar-hello {
   font-size: 11px; color: var(--text-3);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -257,10 +295,9 @@ html[data-theme="light"] .topbar { background: rgba(244, 246, 250, 0.92); }
 .credit-pill {
   flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
   height: 30px; padding: 0 11px; border-radius: 15px;
-  background: var(--brand-soft); border: 1px solid rgba(26,108,240,.35);
-  color: #7bb0ff; font-size: 12.5px; font-weight: 700;
+  background: var(--brand-soft); border: 1px solid var(--brand-line);
+  color: var(--brand-ink); font-size: 12.5px; font-weight: 700;
 }
-html[data-theme="light"] .credit-pill { color: var(--brand-2); }
 .credit-pill i { font-size: 10px; }
 
 /* --- Pages --- */
@@ -403,15 +440,10 @@ html[data-theme="light"] .credit-pill { color: var(--brand-2); }
   margin-top: 4px; padding: 4px 8px; border-radius: 6px;
   font-size: 11.5px; border: 1px solid transparent;
 }
-.hist-bar.busy { background: var(--brand-soft); border-color: rgba(26,108,240,.45); color: #7bb0ff; }
-.hist-bar.done { background: var(--ok-soft); border-color: rgba(46,158,91,.45); color: #6ede9b; }
-.hist-bar.miss, .hist-bar.fail { background: var(--err-soft); border-color: rgba(217,83,79,.45); color: #ff9b98; }
-.hist-bar.nofunds { background: var(--warn-soft); border-color: rgba(217,149,42,.5); color: #f0be6b; }
-html[data-theme="light"] .hist-bar.busy { color: #2c5fb8; }
-html[data-theme="light"] .hist-bar.done { color: #1f7a45; }
-html[data-theme="light"] .hist-bar.miss,
-html[data-theme="light"] .hist-bar.fail { color: #b03a37; }
-html[data-theme="light"] .hist-bar.nofunds { color: #96650f; }
+.hist-bar.busy { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand-ink); }
+.hist-bar.done { background: var(--ok-soft); border-color: var(--ok-line); color: var(--ok); }
+.hist-bar.miss, .hist-bar.fail { background: var(--err-soft); border-color: var(--err-line); color: var(--err); }
+.hist-bar.nofunds { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn); }
 
 .hist-pager {
   display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -457,7 +489,7 @@ html[data-theme="dark"] .acct-brand { background-image: url('/img/logo-white.png
   height: calc(var(--tabbar-h) + var(--sa-b));
   padding-bottom: var(--sa-b);
   display: flex;
-  background: rgba(13, 17, 23, 0.96);
+  background: rgba(17, 17, 34, 0.96);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   border-top: 1px solid var(--border);
 }
@@ -489,10 +521,8 @@ html[data-theme="light"] .tabbar { background: rgba(255,255,255,.97); }
   box-shadow: 0 8px 26px rgba(0,0,0,.45);
   animation: toastIn .2s ease-out;
 }
-.toast.ok { border-color: rgba(46,158,91,.55); color: #6ede9b; }
-.toast.err { border-color: rgba(217,83,79,.55); color: #ff9b98; }
-html[data-theme="light"] .toast.ok { color: #1f7a45; }
-html[data-theme="light"] .toast.err { color: #b03a37; }
+.toast.ok { border-color: var(--ok-line); color: var(--ok); }
+.toast.err { border-color: var(--err-line); color: var(--err); }
 @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } }
 
 /* ==========================================================================
@@ -550,25 +580,27 @@ body.map-open { overflow: hidden; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .mapsheet-x {
-  flex: 0 0 auto; width: 36px; height: 36px; border-radius: 18px;
+  /* 42×42: đủ vùng chạm trên điện thoại (trước đây 36×36 → bấm trượt, "chiều cao thấp"). */
+  flex: 0 0 auto; width: 42px; height: 42px; border-radius: 21px;
   display: flex; align-items: center; justify-content: center;
-  background: var(--bg-3); color: var(--text-2); font-size: 15px;
+  background: var(--bg-3); color: var(--text-2); font-size: 16px;
 }
 .mapsheet-x:active { background: var(--border-strong); color: var(--text); }
 
 .mapbody { position: relative; flex: 1 1 auto; min-height: 0; }
-.map { position: absolute; inset: 0; background: var(--bg-3); }
 
-/* Leaflet: tối theo theme, không viền trắng ở mép ảnh vệ tinh */
-.leaflet-container { background: var(--bg-3); font: inherit; }
+/* ===== CÔNG CỤ TRÊN BẢN ĐỒ — LUÔN GIAO DIỆN SÁNG =====
+   Tile bản đồ (Google streets/satellite) luôn sáng ở cả 2 theme, nên nền map,
+   attribution, chip chọn lớp và nút điều khiển giữ nền sáng để không "lạc"
+   thành khối tối nằm trên bản đồ sáng. Dùng mã màu cố định, không theo theme. */
+.map { position: absolute; inset: 0; background: #d4e3f0; }
+
+.leaflet-container { background: #d4e3f0; font: inherit; }
 .leaflet-container .leaflet-control-attribution {
-  background: rgba(0,0,0,.55); color: #cfd8e6; font-size: 9.5px;
+  background: rgba(255,255,255,.82); color: #445; font-size: 9.5px;
   padding: 1px 6px; border-radius: 6px 0 0 0;
 }
-.leaflet-container .leaflet-control-attribution a { color: #8fb6ff; }
-html[data-theme="light"] .leaflet-container .leaflet-control-attribution {
-  background: rgba(255,255,255,.82); color: #445;
-}
+.leaflet-container .leaflet-control-attribution a { color: #2f6fd0; }
 /* Marker tròn thay cho pin mặc định (đọc tốt trên nền vệ tinh) */
 .cell-pin {
   width: 18px; height: 18px; border-radius: 50%;
@@ -577,24 +609,22 @@ html[data-theme="light"] .leaflet-container .leaflet-control-attribution {
 }
 .cell-pin::after {
   content: ''; position: absolute; inset: -7px; border-radius: 50%;
-  border: 2px solid rgba(26,108,240,.45);
+  border: 2px solid var(--brand-line);
 }
 
-/* Vạch chọn lớp nền — nổi trên bản đồ */
+/* Vạch chọn lớp nền — nổi trên bản đồ, nền sáng như các control của Leaflet */
 .map-layers {
   position: absolute; left: 10px; top: 10px; z-index: 500;
   display: flex; gap: 6px; padding: 4px; border-radius: 999px;
-  background: rgba(13,17,23,.82); border: 1px solid var(--border);
+  background: rgba(255,255,255,.93); border: 1px solid rgba(0,0,0,.15);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
-html[data-theme="light"] .map-layers { background: rgba(255,255,255,.93); }
 .map-layers .chip {
   height: 30px; padding: 0 11px; border-radius: 999px;
-  font-size: 12px; font-weight: 600; color: var(--text-2);
+  font-size: 12px; font-weight: 600; color: #44446a;
   border: 1px solid transparent; background: none;
 }
-.map-layers .chip.active { color: #fff; background: var(--brand); }
-html[data-theme="light"] .map-layers .chip.active { color: #fff; }
+.map-layers .chip.active { color: #fff; background: #4444cc; }
 
 /* Nút điều khiển bản đồ */
 .map-ctrl {
@@ -604,11 +634,11 @@ html[data-theme="light"] .map-layers .chip.active { color: #fff; }
 .map-btn {
   width: 44px; height: 44px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
-  background: var(--bg-elev); color: var(--text);
-  border: 1px solid var(--border-strong); font-size: 16px;
-  box-shadow: 0 6px 18px rgba(0,0,0,.42);
+  background: #fff; color: #333;
+  border: 1px solid rgba(0,0,0,.25); font-size: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3);
 }
-.map-btn:active { background: var(--bg-3); color: var(--brand); }
+.map-btn:active { background: #f0f0f4; color: #4444cc; }
 
 /* Không tải được Leaflet → báo + nút mở Google Maps */
 .map-fallback {
@@ -704,11 +734,10 @@ html[data-theme="light"] .map-layers .chip.active { color: #fff; }
 .tp-preview {
   display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
   padding: 12px 14px; border-radius: var(--r);
-  background: var(--brand-soft); border: 1px solid rgba(26,108,240,.35);
+  background: var(--brand-soft); border: 1px solid var(--brand-line);
 }
 .tp-preview-lbl { font-size: 12px; color: var(--text-2); }
-.tp-preview-cr { font-size: 17px; font-weight: 700; color: #7bb0ff; }
-html[data-theme="light"] .tp-preview-cr { color: var(--brand-2); }
+.tp-preview-cr { font-size: 17px; font-weight: 700; color: var(--brand-ink); }
 .tp-preview-amt { margin-left: auto; font-size: 12.5px; color: var(--text-2); }
 
 .tp-note {
@@ -718,11 +747,10 @@ html[data-theme="light"] .tp-preview-cr { color: var(--brand-2); }
   font-size: 12.5px; line-height: 1.5; color: var(--text-2);
 }
 .tp-note i { color: var(--brand); margin-top: 2px; }
-.tp-note.warn { border-color: rgba(217,149,42,.5); background: var(--warn-soft); }
+.tp-note.warn { border-color: var(--warn-line); background: var(--warn-soft); }
 .tp-note.warn i { color: var(--warn); }
-.tp-note.ok { border-color: rgba(46,158,91,.5); background: var(--ok-soft); color: #8fe0b0; }
+.tp-note.ok { border-color: var(--ok-line); background: var(--ok-soft); color: var(--ok); }
 .tp-note.ok i { color: var(--ok); }
-html[data-theme="light"] .tp-note.ok { color: #1f7a45; }
 
 .tp-msg {
   display: flex; flex-direction: column; align-items: center; gap: 12px;
@@ -737,8 +765,8 @@ html[data-theme="light"] .tp-note.ok { color: #1f7a45; }
   padding: 14px; background: var(--bg-2);
   display: flex; flex-direction: column; gap: 6px;
 }
-.tp-order-box.ok { border-color: rgba(46,158,91,.6); }
-.tp-order-box.err { border-color: rgba(217,83,79,.6); }
+.tp-order-box.ok { border-color: var(--ok-line); }
+.tp-order-box.err { border-color: var(--err-line); }
 .tp-order-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tp-code { font-size: 12px; color: var(--text-3); }
 .tp-order-amt { font-size: 26px; font-weight: 800; letter-spacing: -.5px; }
@@ -750,12 +778,10 @@ html[data-theme="light"] .tp-note.ok { color: #1f7a45; }
   flex: 0 0 auto; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
   background: var(--bg-3); color: var(--text-2); border: 1px solid var(--border-strong);
 }
-.tp-badge.pending { color: #7bb0ff; border-color: rgba(26,108,240,.5); background: var(--brand-soft); }
-.tp-badge.ok { color: #6ede9b; border-color: rgba(46,158,91,.5); background: var(--ok-soft); }
-.tp-badge.warn { color: #f0c072; border-color: rgba(217,149,42,.5); background: var(--warn-soft); }
-.tp-badge.err { color: #ff9b98; border-color: rgba(217,83,79,.5); background: var(--err-soft); }
-html[data-theme="light"] .tp-badge.ok { color: #1f7a45; }
-html[data-theme="light"] .tp-badge.pending { color: var(--brand-2); }
+.tp-badge.pending { color: var(--brand-ink); border-color: var(--brand-line); background: var(--brand-soft); }
+.tp-badge.ok { color: var(--ok); border-color: var(--ok-line); background: var(--ok-soft); }
+.tp-badge.warn { color: var(--warn); border-color: var(--warn-line); background: var(--warn-soft); }
+.tp-badge.err { color: var(--err); border-color: var(--err-line); background: var(--err-soft); }
 
 /* QR + dòng nội dung chuyển khoản */
 .tp-qr { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 6px 0; }
@@ -764,6 +790,9 @@ html[data-theme="light"] .tp-badge.pending { color: var(--brand-2); }
   background: #fff; border-radius: var(--r); padding: 8px;
 }
 .tp-qr .hint { text-align: center; margin: 0; }
+/* Tải / chia sẻ ảnh VietQR: 2 nút cạnh nhau, cao 44px (vùng chạm chuẩn). */
+.tp-qr-actions { display: flex; gap: 8px; width: 100%; margin-top: 2px; }
+.tp-qr-actions .btn-ghost { flex: 1 1 0; min-width: 0; height: 44px; font-size: 13px; }
 
 .tp-row {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;

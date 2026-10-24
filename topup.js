@@ -10,6 +10,7 @@
  */
 const db = require('./database');
 const credits = require('./credits');
+const { EventEmitter } = require('events');
 
 const STATUSES = Object.freeze({
   PENDING: 'PENDING',
@@ -19,6 +20,26 @@ const STATUSES = Object.freeze({
   UNDERPAID: 'UNDERPAID',
   FAILED: 'FAILED'
 });
+
+// ============================================================================
+// Event bus trạng thái đơn — nguồn cho long-poll "cập nhật tức thời".
+//
+// Vì sao cần: webhook payOS tới là biết khách đã trả tiền NGAY, nhưng client chỉ
+// đang hỏi lại mỗi 4–20 giây → khách thấy "chờ thanh toán" thêm chục giây dù điểm
+// đã cộng. Bus này phát 1 sự kiện ngay sau khi UPDATE trạng thái; route
+// GET /api/credits/topup/:code/wait đang giữ kết nối sẽ trả về tức thì.
+//
+// Một tiến trình Node duy nhất (app không chạy multi-instance — xem deploy/README)
+// nên bus trong RAM là đủ. Sự kiện chỉ chứa { id, status }, KHÔNG chứa dữ liệu
+// nhạy cảm; người chờ tự đọc lại đơn của mình qua DB (đã kiểm tra quyền).
+// ============================================================================
+const events = new EventEmitter();
+events.setMaxListeners(0); // mỗi tab đang chờ = 1 listener; không giới hạn cứng
+
+/** Phát sự kiện đổi trạng thái 1 đơn (gọi sau khi UPDATE đã commit). */
+function emitOrderChange(id, status) {
+  try { events.emit('order', { id: Number(id), status }); } catch (e) { /* listener lỗi không được làm hỏng luồng tiền */ }
+}
 
 function all(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -168,37 +189,141 @@ async function expireStaleOrders(userId) {
                        WHERE user_id = ? AND status = 'PENDING'
                          AND COALESCE(expires_at, datetime(created_at, '+15 minutes')) < ?`,
     [userId, now]);
+  if (r.changes) events.emit('bulk');   // có đơn vừa hết hạn → client đang chờ tự đọc lại
   return r.changes || 0;
 }
 
-async function updateOrderStatus(id, status, { transactionRef, rawWebhook, paidAt } = {}) {
+/**
+ * Đánh dấu EXPIRED cho MỌI đơn PENDING quá hạn (không chỉ của 1 user).
+ *
+ * Chạy theo cron: nếu chỉ dựa vào `expireStaleOrders(userId)` khi user mở trang
+ * thì đơn của người không quay lại sẽ treo PENDING vĩnh viễn, làm sai thống kê
+ * ("đơn chờ" tăng mãi) và khiến đối soát payOS khó đọc.
+ */
+async function expireAllStaleOrders() {
+  const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  const r = await run(`UPDATE payment_orders
+                       SET status = 'EXPIRED'
+                       WHERE status = 'PENDING'
+                         AND COALESCE(expires_at, datetime(created_at, '+15 minutes')) < ?`,
+    [now]);
+  if (r.changes) events.emit('bulk');   // dọn hàng loạt → đánh thức mọi client đang chờ
+  return r.changes || 0;
+}
+
+/** Đếm đơn theo trạng thái + mốc thanh toán gần nhất (dùng cho trang chẩn đoán admin). */
+async function getStatusCounts() {
+  const [rows, last] = await Promise.all([
+    all(`SELECT status, COUNT(*) AS c FROM payment_orders GROUP BY status`, []),
+    get(`SELECT MAX(paid_at) AS last_paid_at,
+                MAX(CASE WHEN raw_webhook IS NOT NULL THEN COALESCE(paid_at, created_at) END) AS last_webhook_at
+         FROM payment_orders`, [])
+  ]);
+  const counts = {};
+  for (const r of rows || []) counts[r.status] = Number(r.c) || 0;
+  return {
+    counts,
+    last_paid_at: (last && last.last_paid_at) || null,
+    last_webhook_at: (last && last.last_webhook_at) || null
+  };
+}
+
+async function updateOrderStatus(id, status, { transactionRef, rawWebhook, paidAt, amountPaid } = {}) {
   await run(`UPDATE payment_orders
              SET status = ?, transaction_ref = COALESCE(?, transaction_ref),
                  raw_webhook = COALESCE(?, raw_webhook),
-                 paid_at = COALESCE(?, paid_at)
+                 paid_at = COALESCE(?, paid_at),
+                 amount_paid = COALESCE(?, amount_paid)
              WHERE id = ?`,
-    [status, transactionRef || null, rawWebhook || null, paidAt || null, id]);
+    [status, transactionRef || null, rawWebhook || null, paidAt || null,
+      Number.isFinite(Number(amountPaid)) && amountPaid !== null && amountPaid !== undefined ? Math.round(Number(amountPaid)) : null,
+      id]);
+  // Đánh thức mọi client đang long-poll đơn này → cập nhật NGAY, không chờ nhịp poll.
+  emitOrderChange(id, status);
+}
+
+/** Mốc thời gian UTC đúng định dạng DATETIME của SQLite ('YYYY-MM-DD HH:MM:SS'). */
+function sqlNow() {
+  return new Date().toISOString().replace('T', ' ').slice(0, 19);
 }
 
 /**
  * Cộng điểm cho 1 đơn và đánh dấu PAID — idempotent.
- * @returns {{ok:boolean, reason?:string, credits?:number, balance?:number, already?:boolean}}
+ *
+ * Quy tắc tiền bạc (quan trọng cho production):
+ *  1. Đơn đã PAID → không cộng lại.
+ *  2. `paidAmount` (payOS báo) NHỎ HƠN giá trị đơn → KHÔNG cộng điểm, đánh dấu
+ *     UNDERPAID để admin đối soát tay. Trước đây cộng đủ điểm của gói dù khách
+ *     chuyển thiếu → thất thoát tiền thật.
+ *  3. `allowLate` = payOS ĐÃ xác nhận thanh toán (webhook chữ ký hợp lệ / đối soát
+ *     API). Khi đó đơn đã bị đánh EXPIRED/CANCELLED phía mình vẫn phải cộng điểm,
+ *     nếu không khách mất tiền mà không có điểm. Chỉ đường đã xác thực mới được
+ *     bật cờ này — client không bao giờ tự đặt được.
+ *  4. Hai request song song (webhook vs /sync) cùng cộng: unique index ledger chặn
+ *     bút toán thứ 2 → bắt DUPLICATE_TX và coi như đã cộng, vẫn đánh dấu PAID.
+ *
+ * @returns {{ok:boolean, reason?:string, credits?:number, balance?:number,
+ *            already?:boolean, expected?:number, paid?:number, userId?:number}}
  */
-async function creditOrder(orderCode, { transactionRef, rawWebhook } = {}) {
+async function creditOrder(orderCode, { transactionRef, rawWebhook, paidAmount, allowLate = false } = {}) {
   const order = await getOrderByCode(orderCode);
   if (!order) return { ok: false, reason: 'order_not_found' };
-  if (order.status === STATUSES.PAID) return { ok: true, already: true, credits: order.credits };
-  if (order.status !== STATUSES.PENDING) return { ok: false, reason: `status_${String(order.status).toLowerCase()}` };
+  if (order.status === STATUSES.PAID) {
+    return { ok: true, already: true, credits: order.credits, userId: order.user_id };
+  }
 
-  const r = await credits.topUp(order.user_id, order.credits, {
-    type: credits.TX_TYPES.PAYMENT,
-    ref: ledgerRef(orderCode),
-    note: `Nạp điểm payOS #${orderCode} (${order.amount_vnd}đ)`
-  });
+  const paid = Number(paidAmount);
+  const hasPaid = Number.isFinite(paid) && paid > 0;
+  const expected = Number(order.amount_vnd);
+
+  // Trạng thái được phép cộng. payOS xác nhận ĐÃ THU TIỀN là chân lý cuối cùng:
+  // đơn bị đánh EXPIRED/CANCELLED/FAILED phía mình (lệch giờ, webhook lỗi tạm thời,
+  // user trả muộn) vẫn phải cộng điểm, nếu không khách mất tiền mà không có điểm.
+  // UNDERPAID cũng cho phép: nếu payOS sau đó báo đã thu ĐỦ thì cộng bình thường.
+  const allowed = new Set([STATUSES.PENDING]);
+  if (allowLate) {
+    allowed.add(STATUSES.EXPIRED);
+    allowed.add(STATUSES.CANCELLED);
+    allowed.add(STATUSES.UNDERPAID);
+    allowed.add(STATUSES.FAILED);
+  }
+  if (!allowed.has(order.status)) {
+    return { ok: false, reason: `status_${String(order.status).toLowerCase()}` };
+  }
+
+  // Trả thiếu → không cộng điểm, đánh dấu để admin xử lý.
+  if (hasPaid && paid < expected) {
+    await updateOrderStatus(order.id, STATUSES.UNDERPAID, {
+      transactionRef, rawWebhook, amountPaid: paid
+    });
+    return { ok: false, reason: 'underpaid', expected, paid, userId: order.user_id };
+  }
+
+  let r;
+  try {
+    r = await credits.topUp(order.user_id, order.credits, {
+      type: credits.TX_TYPES.PAYMENT,
+      ref: ledgerRef(orderCode),
+      note: `Nạp điểm payOS #${orderCode} (${order.amount_vnd}đ)`
+    });
+  } catch (e) {
+    if (e && e.message === 'DUPLICATE_TX') {
+      // Request song song đã ghi bút toán cho đơn này → chỉ còn thiếu cập nhật trạng thái.
+      await updateOrderStatus(order.id, STATUSES.PAID, {
+        transactionRef, rawWebhook,
+        amountPaid: hasPaid ? paid : expected,
+        paidAt: sqlNow()
+      });
+      return { ok: true, already: true, credits: order.credits, userId: order.user_id };
+    }
+    return { ok: false, reason: 'ledger_error', message: e && e.message };
+  }
   if (!r.ok) return { ok: false, reason: r.reason };
+
   await updateOrderStatus(order.id, STATUSES.PAID, {
     transactionRef, rawWebhook,
-    paidAt: new Date().toISOString().replace('T', ' ').slice(0, 19)
+    amountPaid: hasPaid ? paid : expected,
+    paidAt: sqlNow()
   });
   return { ok: true, credits: order.credits, balance: r.balance, userId: order.user_id };
 }
@@ -383,6 +508,7 @@ function buildStatsView({ totalsRow, statusRows, revenueDaily, revenueMonthly, t
 
 module.exports = {
   STATUSES,
+  events,
   ledgerRef,
   listActivePackages,
   listAllPackages,
@@ -400,6 +526,8 @@ module.exports = {
   listUserOrders,
   getOrderExpiry,
   expireStaleOrders,
+  expireAllStaleOrders,
+  getStatusCounts,
   DEFAULT_ORDER_TTL_MS,
   listOrders,
   getStats

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0d1117">
+  <meta name="theme-color" content="#111122">
   <meta name="robots" content="noindex">
   <title>Mất kết nối — Cell.id.vn</title>
   <!-- Favicon dùng chung toàn ứng dụng (fav.png) -->
@@ -12,14 +12,18 @@
   <link rel="icon" type="image/png" sizes="256x256" href="/img/favicon.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
   <style>
+    /* Cùng bảng màu với /m/app.css (và /theme.css của website). */
     :root {
-      --bg: #0d1117; --bg-2: #161b22; --border: #2b3648;
-      --text: #e8eef7; --text-2: #a9b6c8; --text-3: #77839a;
-      --brand: #1a6cf0; --brand-2: #0b3fa8;
+      --bg: #111122; --bg-2: #15152e; --border: rgba(255,255,255,0.09);
+      --text: #e2e2ff; --text-2: #a8a8d0; --text-3: #7a7aa4;
+      --brand: #6e6ef7; --brand-2: #4a4ad0;
+      --brand-soft: rgba(110,110,247,0.16); --brand-ink: #a9a9ff;
     }
     html[data-theme="light"] {
-      --bg: #f4f6fa; --bg-2: #ffffff; --border: #dbe2ec;
-      --text: #16202e; --text-2: #4a5a6e; --text-3: #71809a;
+      --bg: #f0f2f5; --bg-2: #ffffff; --border: rgba(0,0,0,0.10);
+      --text: #1a1a2e; --text-2: #44446a; --text-3: #7c7c90;
+      --brand: #4444cc; --brand-2: #3333b3;
+      --brand-soft: rgba(68,68,204,0.10); --brand-ink: #4444cc;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; }
@@ -38,7 +42,7 @@
     .ico {
       width: 64px; height: 64px; margin: 0 auto 16px; border-radius: 20px;
       display: flex; align-items: center; justify-content: center;
-      background: rgba(26, 108, 240, 0.14); color: #7bb0ff; font-size: 26px;
+      background: var(--brand-soft); color: var(--brand-ink); font-size: 26px;
     }
     h1 { font-size: 19px; margin-bottom: 8px; letter-spacing: -0.2px; }
     p { font-size: 13.5px; line-height: 1.6; color: var(--text-2); }

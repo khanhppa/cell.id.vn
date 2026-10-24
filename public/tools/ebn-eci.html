@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Chặn trang khi website đang bảo trì (admin vẫn đi qua). Script chặn render. -->
   <script src="/site-status.js"></script>
-  <title>Đổi eNB ID ↔ ECI</title>
+  <title>Đổi eNB ID ↔ ECI — hướng dẫn &amp; chuyển đổi chính xác</title>
   <!-- Favicon dùng chung toàn ứng dụng (fav.png) -->
   <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
   <link rel="icon" type="image/png" sizes="64x64" href="/img/favicon-64.png">
@@ -15,44 +15,10 @@
   <script src="/auth.js"></script>
   <script src="/version.js"></script>
   <script async src="/ga.js"></script>
+  <!-- Bảng màu sáng/tối dùng chung (nguồn DUY NHẤT cho token màu của mọi trang). -->
+  <link rel="stylesheet" href="/theme.css">
   <style>
-    :root {
-      --bg-body: #f0f2f5;
-      --bg-surface: rgba(255,255,255,0.97);
-      --bg-surface2: rgba(0,0,0,0.03);
-      --bg-hover: rgba(0,0,0,0.06);
-      --bg-btn-primary: #4444cc;
-      --bg-btn-success: #22aa44;
-      --bg-btn-danger: #cc3333;
-      --text-primary: #1a1a2e;
-      --text-secondary: #444466;
-      --text-muted: #888899;
-      --text-faint: #aaaabb;
-      --border-color: rgba(0,0,0,0.1);
-      --border-hover: rgba(68,68,204,0.3);
-      --border-focus: #4444cc;
-      --header-bg: rgba(255,255,255,0.95);
-      --shadow: 0 10px 40px rgba(0,0,0,0.1);
-      --transition: 0.3s ease;
-    }
-    [data-theme="dark"] {
-      --bg-body: #111122;
-      --bg-surface: rgba(15,15,40,0.95);
-      --bg-surface2: rgba(255,255,255,0.04);
-      --bg-hover: rgba(255,255,255,0.1);
-      --bg-btn-primary: #4444cc;
-      --bg-btn-success: #22aa44;
-      --bg-btn-danger: #cc3333;
-      --text-primary: #e0e0ff;
-      --text-secondary: #aaaacc;
-      --text-muted: #666688;
-      --text-faint: #555577;
-      --border-color: rgba(255,255,255,0.08);
-      --border-hover: rgba(100,100,255,0.3);
-      --border-focus: #6666ff;
-      --header-bg: rgba(15,15,40,0.92);
-      --shadow: 0 10px 40px rgba(0,0,0,0.5);
-    }
+    /* Token màu lấy từ /theme.css → không còn palette riêng cho từng trang. */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -61,110 +27,661 @@
       transition: background var(--transition), color var(--transition);
       min-height: 100vh;
     }
-    .topbar {
-      display: flex; align-items: center; justify-content: space-between;
-      background: var(--header-bg);
-      backdrop-filter: blur(12px);
-      padding: 8px 16px;
-      border-bottom: 1px solid var(--border-color);
-      height: 48px;
-      position: sticky; top: 0; z-index: 100;
-    }
-    .topbar-left { display: flex; align-items: center; gap: 12px; }
-    .topbar-left h1 { font-size: 16px; color: var(--text-primary); }
-    .topbar-right { display: flex; align-items: center; gap: 8px; }
-    .btn {
-      padding: 7px 14px; border: 1px solid var(--border-color);
-      border-radius: 6px; background: var(--bg-surface2);
-      color: var(--text-secondary); cursor: pointer; font-size: 12px; transition: all 0.2s;
-      text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
-    }
-    .btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-    .btn-primary { background: var(--bg-btn-primary); border-color: var(--bg-btn-primary); color: white; }
-    .btn-primary:hover { filter: brightness(1.15); }
-    .btn-block { width: 100%; justify-content: center; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
-    .container { max-width: 640px; margin: 40px auto; padding: 0 16px; }
+    .container { max-width: 720px; margin: 64px auto 48px; padding: 0 16px; }
+
+    /* ---------- Tiêu đề trang + nút ? ---------- */
+    .page-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; margin-bottom: 16px;
+    }
+    .page-head h1 {
+      font-size: 22px; line-height: 1.3; display: flex; align-items: center; gap: 10px;
+    }
+    .page-head h1 i { color: var(--accent); font-size: 20px; }
+    .page-head p { margin-top: 6px; font-size: 13px; line-height: 1.55; color: var(--text-muted); }
+    .page-head p b { color: var(--text-secondary); }
+
+    /* Nút ? tròn — mở hướng dẫn. Dùng ký tự "?" (không phụ thuộc icon font). */
+    .help-btn {
+      width: 30px; height: 30px; flex: 0 0 auto; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border-color); border-radius: 50%;
+      background: var(--bg-surface2); color: var(--text-muted);
+      font-size: 15px; font-weight: 700; line-height: 1; cursor: pointer;
+      transition: color .2s, border-color .2s, background .2s;
+    }
+    .help-btn:hover, .help-btn:focus-visible {
+      color: var(--accent); border-color: var(--accent); background: var(--accent-soft);
+      outline: none;
+    }
+    .help-btn-lg { width: 36px; height: 36px; font-size: 17px; }
+
+    /* Dải nhắc ngắn ngay đầu trang. */
+    .accuracy-strip {
+      display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap;
+      padding: 12px 14px; margin-bottom: 16px;
+      background: var(--accent-soft); border: 1px solid var(--accent-line);
+      border-radius: 10px; font-size: 13px; line-height: 1.55; color: var(--text-secondary);
+    }
+    .accuracy-strip > i { color: var(--accent); margin-top: 3px; }
+    .accuracy-strip b { color: var(--text-primary); }
+    .accuracy-strip .strip-link {
+      margin-left: auto; border: none; background: transparent; padding: 0;
+      color: var(--accent); font-size: 12.5px; font-weight: 600; cursor: pointer;
+      white-space: nowrap; border-bottom: 1px dashed var(--accent-line);
+    }
+    .accuracy-strip .strip-link:hover { border-bottom-style: solid; }
+
+    /* ---------- Card ---------- */
     .card {
-      background: var(--bg-surface);
+      background: var(--bg-card);
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      padding: 24px;
+      padding: 22px;
       box-shadow: var(--shadow);
-      margin-bottom: 20px;
+      margin-bottom: 18px;
+      scroll-margin-top: 64px;
+    }
+    .card-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px; margin-bottom: 8px;
     }
     .card h2 {
-      font-size: 18px; margin-bottom: 20px; color: var(--text-primary);
-      display: flex; align-items: center; gap: 10px;
+      font-size: 17px; line-height: 1.35; display: flex; align-items: center; gap: 9px;
+      color: var(--text-primary);
     }
-    .card p.hint { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+    .card h2 i { color: var(--accent); font-size: 16px; }
+    .card p.hint { font-size: 13px; color: var(--text-muted); line-height: 1.55; margin-bottom: 16px; }
+    .card p.hint b { color: var(--text-secondary); }
+
+    /* ---------- Form ---------- */
+    .form-row { display: flex; gap: 12px; }
+    .form-row .form-group { flex: 1; min-width: 0; }
     .form-group { margin-bottom: 14px; }
     .form-group label {
-      display: block; color: var(--text-muted); font-size: 11px; margin-bottom: 4px;
-      text-transform: uppercase; letter-spacing: 0.5px;
+      display: block; color: var(--text-muted); font-size: 11px; margin-bottom: 5px;
+      text-transform: uppercase; letter-spacing: .5px;
     }
     .form-group input {
-      width: 100%; padding: 9px 12px;
-      border: 1px solid var(--border-color); border-radius: 6px;
-      background: var(--bg-surface2); color: var(--text-primary); font-size: 14px; outline: none;
-      transition: border-color 0.2s;
+      width: 100%; padding: 10px 12px;
+      border: 1px solid var(--border-color); border-radius: 7px;
+      background: var(--bg-surface2); color: var(--text-primary);
+      font-size: 15px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      outline: none; transition: border-color .2s;
     }
     .form-group input:focus { border-color: var(--border-focus); }
-    .form-row { display: flex; gap: 12px; }
-    .form-row .form-group { flex: 1; }
+    .field-hint { margin-top: 5px; font-size: 11px; line-height: 1.45; color: var(--text-faint); }
 
-    .result-box {
-      margin-top: 16px; padding: 16px; border-radius: 8px; font-size: 14px;
-      display: none;
+    /* ---------- Nút ---------- */
+    .btn {
+      padding: 9px 14px; border: 1px solid var(--border-color); border-radius: 7px;
+      background: var(--bg-surface2); color: var(--text-secondary); cursor: pointer;
+      font-size: 13px; font-family: inherit; transition: all .2s;
+      text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     }
+    .btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .btn-primary { background: var(--bg-btn-primary); border-color: var(--bg-btn-primary); color: #fff; }
+    .btn-primary:hover { filter: brightness(1.12); color: #fff; }
+    .btn-block { width: 100%; }
+    .btn-sm { padding: 6px 10px; font-size: 12px; }
+
+    /* ---------- Chip gợi ý sector ---------- */
+    .quick-row {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+      margin: -2px 0 14px;
+    }
+    .quick-label {
+      font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+      letter-spacing: .5px; margin-right: 2px;
+    }
+    .quick-note { font-size: 11px; color: var(--text-faint); }
+    .chip {
+      padding: 4px 11px; border-radius: 999px;
+      border: 1px solid var(--border-color); background: var(--bg-surface2);
+      color: var(--text-secondary); font-size: 12px; font-family: inherit;
+      cursor: pointer; line-height: 1.5; transition: color .18s, border-color .18s, background .18s;
+    }
+    .chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+    .chip[aria-pressed="true"] {
+      border-color: var(--bg-btn-primary); background: var(--bg-btn-primary); color: #fff;
+    }
+
+    /* ---------- Ví dụ bấm được ---------- */
+    .examples {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+      margin-top: 14px; padding-top: 12px;
+      border-top: 1px dashed var(--border-color);
+      font-size: 12px; color: var(--text-muted);
+    }
+    .example-btn {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px; color: var(--accent); background: transparent;
+      border: none; border-bottom: 1px dashed var(--accent-line);
+      padding: 0 0 1px; cursor: pointer;
+    }
+    .example-btn:hover { border-bottom-style: solid; }
+    .example-sep { color: var(--text-faint); }
+
+    /* ---------- Kết quả ---------- */
+    .result-box { display: none; margin-top: 16px; padding: 14px 16px; border-radius: 9px; font-size: 13px; }
     .result-box.show { display: block; }
-    .result-box.success { background: rgba(34,170,68,0.1); border: 1px solid rgba(34,170,68,0.3); }
-    .result-box.error { background: rgba(204,51,51,0.1); border: 1px solid rgba(204,51,51,0.3); }
-    .result-box .big { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
-    .result-box .detail-row {
-      display: flex; justify-content: space-between; padding: 4px 0;
-      border-bottom: 1px solid var(--border-color); font-size: 13px;
+    .result-box.success { background: var(--success-soft); border: 1px solid var(--success-line); }
+    .result-box.warn { background: var(--warning-soft); border: 1px solid var(--warning-line); }
+    .result-box.error { background: var(--danger-soft); border: 1px solid var(--danger-line); }
+    .res-head { margin-bottom: 8px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600;
     }
-    .result-box .detail-row:last-child { border-bottom: none; }
-    .result-box .detail-label { color: var(--text-muted); }
-    .result-box .detail-value { color: var(--text-primary); font-weight: 500; font-family: monospace; }
-    .status-msg { margin-top: 10px; font-size: 13px; color: var(--text-muted); }
+    .badge.exact { color: var(--success); background: var(--success-soft); border: 1px solid var(--success-line); }
+    .badge.estimate { color: var(--warning); background: var(--warning-soft); border: 1px solid var(--warning-line); }
+    .badge.neutral { color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent-line); }
+    .badge.danger { color: var(--danger); background: var(--danger-soft); border: 1px solid var(--danger-line); }
+
+    .big {
+      font-size: 24px; font-weight: 700; line-height: 1.25; letter-spacing: .2px;
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .big-sub {
+      margin-top: 2px; font-size: 11px; text-transform: uppercase;
+      letter-spacing: .5px; color: var(--text-muted);
+    }
+    .detail-row {
+      display: flex; justify-content: space-between; gap: 14px;
+      padding: 5px 0; border-bottom: 1px solid var(--border-color); font-size: 13px;
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label { color: var(--text-muted); flex: 0 0 auto; }
+    .detail-value {
+      color: var(--text-primary); font-weight: 500; text-align: right;
+      word-break: break-word; display: inline-flex; align-items: center;
+      justify-content: flex-end; gap: 5px; flex-wrap: wrap;
+    }
+    .muted { color: var(--text-faint); font-weight: 400; }
+    .note {
+      margin: 10px 0; padding: 10px 12px; border-radius: 8px;
+      font-size: 12.5px; line-height: 1.55; color: var(--text-secondary);
+    }
+    .note b { color: var(--text-primary); }
+    .note.warn { background: var(--warning-soft); border: 1px solid var(--warning-line); }
+    .note.info { background: var(--accent-soft); border: 1px solid var(--accent-line); }
+    .formula-line {
+      margin-top: 10px; padding-top: 10px;
+      border-top: 1px dashed var(--border-color);
+      font-size: 12.5px; color: var(--text-muted); line-height: 1.6;
+    }
+    .formula-line .ok { color: var(--success); font-weight: 700; }
+    .cand-row {
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      margin-top: 10px; font-size: 12px; color: var(--text-muted);
+    }
+    .copy-btn {
+      border: none; background: transparent; color: var(--text-muted);
+      cursor: pointer; padding: 2px 4px; border-radius: 4px;
+      font-size: 12px; line-height: 1; transition: color .2s, background .2s;
+    }
+    .copy-btn:hover { color: var(--accent); background: var(--accent-soft); }
+    .copy-btn.copied { color: var(--success); }
+    .status-msg { margin-top: 10px; font-size: 12.5px; line-height: 1.5; color: var(--text-muted); }
+    .status-msg:empty { display: none; }
+
+    /* ---------- Thẻ mẹo ---------- */
+    .range-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px; margin-bottom: 14px;
+    }
+    .range-item {
+      background: var(--bg-surface2); border: 1px solid var(--border-color);
+      border-radius: 8px; padding: 10px 12px;
+    }
+    .range-item .k { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); }
+    .range-item .v { margin-top: 3px; font-size: 13px; font-weight: 600; }
+    .tips-list { list-style: none; display: grid; gap: 9px; }
+    .tips-list li {
+      display: flex; gap: 9px; font-size: 13px; line-height: 1.55;
+      color: var(--text-secondary);
+    }
+    .tips-list li > i { color: var(--accent); font-size: 12px; margin-top: 3px; flex: 0 0 auto; }
+    .tips-list b { color: var(--text-primary); }
+    .tips-list code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px; background: var(--code-bg); color: var(--code-text);
+      padding: 1px 5px; border-radius: 4px;
+    }
+    .help-cta { margin-top: 16px; }
+
+    /* ---------- Modal hướng dẫn ---------- */
+    body.modal-open { overflow: hidden; }
+    .help-modal {
+      position: fixed; inset: 0; z-index: 2000;
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .help-modal[hidden] { display: none; }
+    .help-backdrop {
+      position: absolute; inset: 0; background: var(--modal-scrim);
+      backdrop-filter: blur(2px);
+    }
+    .help-dialog {
+      position: relative; width: min(760px, 100%);
+      max-height: min(88vh, 920px);
+      display: flex; flex-direction: column;
+      background: var(--bg-card); border: 1px solid var(--border-color);
+      border-radius: 14px; box-shadow: 0 24px 80px rgba(0, 0, 0, .35);
+      overflow: hidden;
+    }
+    .help-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 16px 20px; border-bottom: 1px solid var(--border-color);
+      background: var(--bg-elev); flex: 0 0 auto;
+    }
+    .help-title-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .help-title-wrap i { color: var(--accent); font-size: 18px; }
+    .help-head h2 { font-size: 16px; line-height: 1.3; }
+    .help-close {
+      width: 32px; height: 32px; flex: 0 0 auto; border-radius: 50%;
+      border: 1px solid var(--border-color); background: var(--bg-surface2);
+      color: var(--text-muted); cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .help-close:hover { color: var(--danger); border-color: var(--danger-line); background: var(--danger-soft); }
+    .help-body { padding: 20px; overflow-y: auto; position: relative; scroll-behavior: smooth; }
+    .help-lead { font-size: 13.5px; line-height: 1.6; color: var(--text-secondary); margin-bottom: 20px; }
+    .help-lead b { color: var(--text-primary); }
+    .help-section { margin-bottom: 24px; }
+    .help-section:last-of-type { margin-bottom: 8px; }
+    .help-section h3 {
+      font-size: 14.5px; color: var(--text-primary);
+      display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    }
+    .help-section h3 i { color: var(--accent); font-size: 14px; }
+    .help-section p {
+      font-size: 13px; line-height: 1.65; color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+    .help-section p:last-child { margin-bottom: 0; }
+    .help-section b { color: var(--text-primary); }
+    .help-steps, .help-list {
+      padding-left: 20px; display: grid; gap: 8px;
+      font-size: 13px; line-height: 1.6; color: var(--text-secondary);
+    }
+    .help-list { gap: 7px; }
+    .help-steps li::marker { color: var(--accent); font-weight: 700; }
+    .help-list li::marker { color: var(--accent); }
+    .bitbar {
+      display: flex; height: 38px; margin: 12px 0 6px;
+      border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;
+    }
+    .bitbar span {
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 6px; font-size: 11px; font-weight: 700;
+      letter-spacing: .3px; text-align: center;
+    }
+    .bitbar .b-enb { flex: 20 1 0; background: var(--bg-btn-primary); color: #fff; }
+    .bitbar .b-sec {
+      flex: 8 1 0; background: var(--warning-soft); color: var(--warning);
+      border-left: 1px solid var(--warning-line);
+    }
+    .bit-caption { font-size: 11px; color: var(--text-faint); text-align: center; margin-bottom: 14px; }
+    .formula {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: var(--code-bg); color: var(--code-text);
+      border: 1px solid var(--border-color); border-radius: 8px;
+      padding: 12px 14px; margin: 10px 0 12px;
+      font-size: 12.5px; line-height: 1.8; white-space: pre-wrap; overflow-x: auto;
+    }
+    .callout {
+      margin: 12px 0; padding: 10px 12px; border-radius: 8px;
+      font-size: 12.5px; line-height: 1.55; color: var(--text-secondary);
+    }
+    .callout.info { background: var(--accent-soft); border: 1px solid var(--accent-line); }
+    .callout.warn { background: var(--warning-soft); border: 1px solid var(--warning-line); }
+    .scenario {
+      margin-bottom: 8px; padding: 10px 12px;
+      border: 1px solid var(--border-color); border-left-width: 3px;
+      border-radius: 8px; background: var(--bg-surface2);
+    }
+    .scenario.good { border-left-color: var(--success); }
+    .scenario.mid { border-left-color: var(--warning); }
+    .scenario.bad { border-left-color: var(--danger); }
+    .scenario-title {
+      display: flex; align-items: flex-start; gap: 8px;
+      font-size: 12.5px; font-weight: 600; line-height: 1.45; color: var(--text-primary);
+    }
+    .scenario-title .tag {
+      flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+      min-width: 20px; height: 20px; border-radius: 6px;
+      font-size: 11px; font-weight: 700;
+      background: var(--bg-hover); color: var(--text-secondary);
+    }
+    .scenario.good .tag { background: var(--success-soft); color: var(--success); }
+    .scenario.mid .tag { background: var(--warning-soft); color: var(--warning); }
+    .scenario.bad .tag { background: var(--danger-soft); color: var(--danger); }
+    .scenario p { margin: 6px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); }
+    .scenario p:last-child { margin-bottom: 0; }
+    .help-foot {
+      margin-top: 18px; padding-top: 12px;
+      border-top: 1px solid var(--border-color);
+      font-size: 11.5px; line-height: 1.5; color: var(--text-faint);
+    }
+
+    /* ---------- Mobile ---------- */
+    @media (max-width: 560px) {
+      .container { margin-top: 60px; }
+      .page-head h1 { font-size: 19px; }
+      .page-head p { font-size: 12.5px; }
+      .card { padding: 18px; }
+      .form-row { flex-direction: column; gap: 0; }
+      .range-grid { grid-template-columns: 1fr 1fr; }
+      /* 3 ô lẻ → ô cuối chiếm cả hàng cho cân đối. */
+      .range-grid > .range-item:last-child:nth-child(odd) { grid-column: 1 / -1; }
+      .big { font-size: 21px; }
+      .help-modal { padding: 0; align-items: flex-end; }
+      .help-dialog {
+        width: 100%; max-height: 92vh;
+        border-radius: 14px 14px 0 0;
+      }
+      .help-head { padding: 14px 16px; }
+      .help-body { padding: 16px; }
+      .bitbar { height: 34px; }
+      .bitbar span { font-size: 10px; }
+      .accuracy-strip .strip-link { margin-left: 0; }
+    }
+    @media (max-width: 380px) {
+      .range-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <nav class="navbar"></nav>
 
-  <div class="container">
-    <div class="card">
-      <h2><i class="fas fa-exchange-alt"></i> Đổi eNB ID ↔ ECI</h2>
+  <main class="container">
+    <header class="page-head">
+      <div>
+        <h1><i class="fas fa-right-left" aria-hidden="true"></i> Đổi eNB ID ↔ ECI</h1>
+        <p>Chuyển đổi hai chiều giữa <b>eNB ID</b> (Cell ID ngắn) và <b>ECI</b> (Cell ID dài) của LTE.</p>
+      </div>
+      <button type="button" class="help-btn help-btn-lg" onclick="openHelp()"
+              aria-label="Mở hướng dẫn chuyển đổi eNB ID và ECI"
+              aria-haspopup="dialog" aria-controls="helpModal"
+              title="Hướng dẫn chuyển đổi">?</button>
+    </header>
+
+    <div class="accuracy-strip">
+      <i class="fas fa-bullseye" aria-hidden="true"></i>
+      <span><b>Chính xác nhất:</b> dùng <b>ECI đầy đủ</b> (số dài). Nếu chỉ có eNB ID, hãy nhập thêm <b>Sector</b> — bỏ trống Sector thì tool chỉ tính được ECI cơ sở (giả định sector 0) và sẽ cảnh báo.</span>
+      <button type="button" class="strip-link" onclick="openHelp('help-no-sector')">Xem các trường hợp thiếu Sector</button>
+    </div>
+
+    <!-- ================= eNB ID + Sector → ECI ================= -->
+    <section class="card" id="cardEnb" aria-labelledby="cardEnbTitle">
+      <div class="card-head">
+        <h2 id="cardEnbTitle"><i class="fas fa-right-left" aria-hidden="true"></i> Đổi eNB ID ↔ ECI</h2>
+        <button type="button" class="help-btn" onclick="openHelp('help-no-sector')"
+                aria-label="Hướng dẫn trường hợp không có Sector"
+                aria-haspopup="dialog" aria-controls="helpModal"
+                title="Thiếu Sector thì sao?">?</button>
+      </div>
       <p class="hint">
-        ECI (E-UTRAN Cell Identity) = eNB ID × 256 + Sector. Ngược lại: eNB ID = ECI ÷ 256 (làm tròn xuống),
-        Sector = ECI mod 256. Theo 3GPP TS 36.331 (ECI 28 bit = eNB 20 bit + Cell 8 bit).
+        Nhập <b>eNB ID</b> + <b>Sector</b> để ra ECI chính xác. Dán thẳng <b>ECI dài</b> vào ô đầu tiên,
+        tool tự nhận diện và tách eNB + Sector.
       </p>
 
       <div class="form-row">
         <div class="form-group">
-          <label>Cell ID (Short / eNB)</label>
-          <input type="number" id="enbInput" placeholder="VD: 662079" min="0" onkeydown="if(event.key==='Enter') convertEnb()">
+          <label for="enbInput">eNB ID / Cell ID ngắn</label>
+          <input type="text" id="enbInput" inputmode="numeric" autocomplete="off" spellcheck="false"
+                 placeholder="VD: 662079" aria-describedby="enbHint">
+          <div class="field-hint" id="enbHint">20 bit · 0 – 1.048.575 · thường 4–6 chữ số</div>
         </div>
         <div class="form-group">
-          <label>Sector / Cell (0–255)</label>
-          <input type="number" id="sectorInput" placeholder="VD: 13" min="0" max="255" onkeydown="if(event.key==='Enter') convertEnb()">
+          <label for="sectorInput">Sector / Cell (8 bit)</label>
+          <input type="text" id="sectorInput" inputmode="numeric" autocomplete="off" spellcheck="false"
+                 placeholder="VD: 13" aria-describedby="sectorHint">
+          <div class="field-hint" id="sectorHint">0 – 255 · bỏ trống = chưa xác định (≠ 0)</div>
         </div>
       </div>
-      <button class="btn btn-primary btn-block" onclick="convertEnb()"><i class="fas fa-arrow-right"></i> Đổi sang ECI (Long)</button>
-      <div class="result-box" id="enbResult"></div>
-    </div>
 
-    <div class="card">
-      <h2><i class="fas fa-exchange-alt" style="transform:rotate(180deg)"></i> Đổi ECI → eNB ID</h2>
-      <div class="form-group">
-        <label>ECI (Long / Cell ID đầy đủ)</label>
-        <input type="number" id="eciInput" placeholder="VD: 169492237" min="0" onkeydown="if(event.key==='Enter') convertEci()">
+      <div class="quick-row" aria-label="Gợi ý giá trị Sector">
+        <span class="quick-label">Sector gợi ý</span>
+        <button type="button" class="chip" data-sector="0" onclick="applySector('0')">0</button>
+        <button type="button" class="chip" data-sector="1" onclick="applySector('1')">1</button>
+        <button type="button" class="chip" data-sector="2" onclick="applySector('2')">2</button>
+        <button type="button" class="chip" data-sector="3" onclick="applySector('3')">3</button>
+        <button type="button" class="chip" data-sector="13" onclick="applySector('13')">13</button>
+        <button type="button" class="chip" data-sector="" onclick="applySector('')">Không rõ</button>
+        <span class="quick-note">— chỉ là gợi ý để thử, không phải quy luật cố định</span>
       </div>
-      <button class="btn btn-primary btn-block" onclick="convertEci()"><i class="fas fa-arrow-left"></i> Đổi sang eNB ID (Short)</button>
+
+      <button type="button" class="btn btn-primary btn-block" onclick="convertEnb()">
+        <i class="fas fa-arrow-right" aria-hidden="true"></i> Đổi sang ECI (Long)
+      </button>
+      <div class="result-box" id="enbResult" role="status" aria-live="polite"></div>
+
+      <div class="examples">
+        <span>Ví dụ:</span>
+        <button type="button" class="example-btn" onclick="useEnbExample(662079, 13)">662079 + 13 → 169492237</button>
+        <span class="example-sep" aria-hidden="true">·</span>
+        <button type="button" class="example-btn" onclick="useEnbExample(662091, 0)">662091 + 0 → 169495296</button>
+      </div>
+    </section>
+
+    <!-- ================= ECI → eNB ID ================= -->
+    <section class="card" id="cardEci" aria-labelledby="cardEciTitle">
+      <div class="card-head">
+        <h2 id="cardEciTitle"><i class="fas fa-arrow-left" aria-hidden="true"></i> Đổi ECI → eNB ID</h2>
+        <button type="button" class="help-btn" onclick="openHelp('help-no-sector')"
+                aria-label="Hướng dẫn đổi ECI sang eNB ID"
+                aria-haspopup="dialog" aria-controls="helpModal"
+                title="Hướng dẫn đổi ECI → eNB ID">?</button>
+      </div>
+      <p class="hint">
+        ECI đã chứa sẵn Sector bên trong nên chiều này <b>luôn chính xác</b> — không cần nhập Sector.
+      </p>
+
+      <div class="form-group">
+        <label for="eciInput">ECI (Long / Cell ID đầy đủ)</label>
+        <input type="text" id="eciInput" inputmode="numeric" autocomplete="off" spellcheck="false"
+               placeholder="VD: 169492237" aria-describedby="eciHint">
+        <div class="field-hint" id="eciHint">28 bit · 0 – 268.435.455 · thường 7–9 chữ số · nhận cả hex 0x…</div>
+      </div>
+
+      <button type="button" class="btn btn-primary btn-block" onclick="convertEci()">
+        <i class="fas fa-arrow-left" aria-hidden="true"></i> Đổi sang eNB ID (Short)
+      </button>
       <div class="status-msg" id="eciStatus"></div>
-      <div class="result-box" id="eciResult"></div>
+      <div class="result-box" id="eciResult" role="status" aria-live="polite"></div>
+
+      <div class="examples">
+        <span>Ví dụ:</span>
+        <button type="button" class="example-btn" onclick="useEciExample(169492237)">169492237 → eNB 662079 · sector 13</button>
+      </div>
+    </section>
+
+    <!-- ================= Giải thích ngắn trên giao diện chính ================= -->
+    <section class="card" id="tipsCard" aria-labelledby="tipsTitle">
+      <div class="card-head">
+        <h2 id="tipsTitle"><i class="fas fa-lightbulb" aria-hidden="true"></i> Làm sao để chuyển đổi chính xác?</h2>
+        <button type="button" class="help-btn" onclick="openHelp()"
+                aria-label="Mở hướng dẫn đầy đủ"
+                aria-haspopup="dialog" aria-controls="helpModal"
+                title="Hướng dẫn đầy đủ">?</button>
+      </div>
+
+      <div class="range-grid">
+        <div class="range-item"><div class="k">eNB ID · 20 bit</div><div class="v mono">0 – 1.048.575</div></div>
+        <div class="range-item"><div class="k">Sector · 8 bit</div><div class="v mono">0 – 255</div></div>
+        <div class="range-item"><div class="k">ECI · 28 bit</div><div class="v mono">0 – 268.435.455</div></div>
+      </div>
+
+      <ul class="tips-list">
+        <li><i class="fas fa-circle-check" aria-hidden="true"></i><span><b>Ưu tiên ECI đầy đủ</b> — chiều ECI → eNB ID chính xác 100% vì Sector đã nằm trong ECI.</span></li>
+        <li><i class="fas fa-circle-check" aria-hidden="true"></i><span><b>Chỉ có eNB ID:</b> nhập thêm Sector. Bỏ trống Sector, tool chỉ ra ECI cơ sở (sector 0) và <b>dải 256 ECI</b> khả dĩ, không chốt được ECI thật.</span></li>
+        <li><i class="fas fa-circle-check" aria-hidden="true"></i><span><b>Mốc phân biệt là <code>1.048.575</code></b>, không phải số chữ số. Lớn hơn mốc này chắc chắn là ECI; nhỏ hơn hoặc bằng có thể là eNB ID.</span></li>
+        <li><i class="fas fa-circle-check" aria-hidden="true"></i><span><b>Sector hay gặp:</b> 0 (một số trạm dùng), 1–3 (trạm 3 hướng) và một số log dùng 13. Không rõ thì <b>để trống</b> — đây chỉ là gợi ý, Sector là 8 bit do nhà mạng quy định.</span></li>
+        <li><i class="fas fa-circle-info" aria-hidden="true"></i><span>Chỉ áp dụng cho <b>LTE (4G)</b>. 5G NR dùng NCI 36 bit; GSM/UMTS có cấu trúc ID khác.</span></li>
+      </ul>
+
+      <div class="help-cta">
+        <button type="button" class="btn btn-block" onclick="openHelp()">
+          <i class="fas fa-circle-question" aria-hidden="true"></i>
+          Xem hướng dẫn đầy đủ: nguyên lý &amp; các trường hợp thiếu Sector
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= Modal hướng dẫn ================= -->
+  <div class="help-modal" id="helpModal" hidden>
+    <div class="help-backdrop" data-close-help></div>
+    <div class="help-dialog" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <div class="help-head">
+        <div class="help-title-wrap">
+          <i class="fas fa-circle-question" aria-hidden="true"></i>
+          <h2 id="helpTitle">Hướng dẫn đổi eNB ID ↔ ECI</h2>
+        </div>
+        <button type="button" class="help-close" onclick="closeHelp()" aria-label="Đóng hướng dẫn">
+          <i class="fas fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="help-body" id="helpBody">
+        <p class="help-lead">
+          Toàn bộ nguyên lý chuyển đổi, giới hạn giá trị và <b>mọi trường hợp xảy ra khi không có Sector</b>.
+          Công thức dùng chung cho cả hai chiều ở trên.
+        </p>
+
+        <section class="help-section" id="help-principle">
+          <h3><i class="fas fa-calculator" aria-hidden="true"></i> 1. Nguyên lý chuyển đổi</h3>
+          <p>
+            <b>ECI</b> (<i>E-UTRAN Cell Identity</i>) là định danh ô LTE dài <b>28 bit</b>, chia làm hai phần:
+            <b>eNB ID 20 bit</b> và <b>Sector 8 bit</b> (còn gọi là Cell ID trong eNB / local cell ID).
+          </p>
+          <div class="bitbar" aria-hidden="true">
+            <span class="b-enb">eNB ID · 20 bit</span>
+            <span class="b-sec">Sector · 8 bit</span>
+          </div>
+          <div class="bit-caption">28 bit = 20 bit eNB ID + 8 bit Sector (3GPP TS 36.331)</div>
+          <div class="formula">ECI     = eNB ID × 256 + Sector
+eNB ID  = ⌊ECI ÷ 256⌋      (dịch phải 8 bit)
+Sector  = ECI mod 256      (AND 0xFF)</div>
+          <p>
+            Vì Sector là trường <b>8 bit</b> nên có 2⁸ = <b>256</b> giá trị (0–255).
+            Nhân eNB ID với 256 tương đương dịch trái 8 bit để chừa chỗ cho Sector.
+          </p>
+          <div class="range-grid">
+            <div class="range-item"><div class="k">eNB ID · 20 bit</div><div class="v mono">0 – 1.048.575</div></div>
+            <div class="range-item"><div class="k">Sector · 8 bit</div><div class="v mono">0 – 255</div></div>
+            <div class="range-item"><div class="k">ECI · 28 bit</div><div class="v mono">0 – 268.435.455</div></div>
+          </div>
+          <p>
+            <b>Ví dụ:</b> eNB ID <span class="mono">662079</span>, Sector <span class="mono">13</span> →
+            <span class="mono">662079 × 256 + 13 = 169492237</span>.
+            Ngược lại: <span class="mono">169492237 ÷ 256 = 662079</span> dư <span class="mono">13</span>.
+          </p>
+          <div class="callout info">
+            Công thức này chỉ đúng cho <b>LTE (4G)</b>. 5G NR dùng NCI 36 bit; GSM/UMTS có cấu trúc ID khác —
+            đừng áp dụng eNB × 256 + Sector cho các công nghệ đó.
+          </div>
+        </section>
+
+        <section class="help-section" id="help-usage">
+          <h3><i class="fas fa-list-check" aria-hidden="true"></i> 2. Cách dùng nhanh</h3>
+          <ol class="help-steps">
+            <li><b>Có ECI (số dài):</b> dán vào ô <b>“Đổi ECI → eNB ID”</b> → nhận eNB ID + Sector chính xác, không cần nhập Sector.</li>
+            <li><b>Có eNB ID + Sector:</b> nhập cả hai vào ô đầu → ECI chính xác 100%.</li>
+            <li><b>Chỉ có eNB ID:</b> xem mục 3 — tool chỉ xác định được <b>dải 256 ECI</b>, chưa chốt được ECI thật.</li>
+            <li>Dán ECI dài vào ô đầu tiên cũng được: tool tự nhận diện và tách eNB + Sector.</li>
+          </ol>
+        </section>
+
+        <section class="help-section" id="help-no-sector">
+          <h3><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> 3. Khi KHÔNG có Sector — tất cả trường hợp</h3>
+          <p>
+            Sector chỉ cần khi đi <b>từ eNB ID sang ECI</b>. Đi từ ECI sang eNB ID thì Sector đã nằm sẵn trong ECI.
+            Dưới đây là toàn bộ các tình huống và cách tool xử lý.
+          </p>
+
+          <div class="scenario good">
+            <div class="scenario-title"><span class="tag">A</span><span>Đầu vào là ECI (long), không có Sector</span></div>
+            <p><b>Chính xác 100%.</b> Sector được tách trực tiếp từ ECI bằng <span class="mono">ECI mod 256</span>; không cần nhập thêm gì. Đây là cách chuyển đổi an toàn nhất.</p>
+          </div>
+
+          <div class="scenario mid">
+            <div class="scenario-title"><span class="tag">B</span><span>Đầu vào là eNB ID (short), không có Sector</span></div>
+            <p><b>Chưa đủ dữ liệu.</b> Có <b>256 ECI khả dĩ</b>: từ <span class="mono">eNB × 256 + 0</span> đến <span class="mono">eNB × 256 + 255</span>. Tool hiển thị <b>ECI cơ sở (sector 0)</b> + dải giá trị và đánh dấu <b>Ước tính</b>; kết quả chỉ đúng nếu trạm dùng sector 0.</p>
+            <p><b>Cách chốt:</b> nhập Sector nếu biết (gợi ý 0, 1, 2, 3, 13), hoặc lấy ECI đầy đủ từ log/bản đồ. Khi tra cứu, thiếu Sector có thể làm trượt hoặc trúng trạm khác.</p>
+            <p><b>Đừng tự điền 0</b> nếu log không ghi Sector: 0 là một sector cụ thể, không phải “không biết”. Bỏ trống để tool báo Ước tính là trung thực hơn.</p>
+          </div>
+
+          <div class="scenario mid">
+            <div class="scenario-title"><span class="tag">C</span><span>Giá trị ≤ 1.048.575 nhưng thực chất là ECI (trạm có eNB ≤ 4095)</span></div>
+            <p><b>Nhập nhằng.</b> Tool mặc định hiểu là eNB ID — đúng với đa số log. Nếu biết chắc đây là ECI, hãy dùng ô <b>“Đổi ECI → eNB ID”</b>; nếu không, đối chiếu eNB ID tìm được với danh sách trạm trước khi dùng.</p>
+          </div>
+
+          <div class="scenario bad">
+            <div class="scenario-title"><span class="tag">D</span><span>Có eNB ID và Sector &gt; 255</span></div>
+            <p><b>Không hợp lệ.</b> Sector chỉ có 8 bit (0–255); 256 <b>không</b> phải sector 0. Tool báo lỗi thay vì tự lấy mod 256 — tránh âm thầm đổi sang một ECI sai.</p>
+          </div>
+
+          <div class="scenario mid">
+            <div class="scenario-title"><span class="tag">E</span><span>Có cả ECI và Sector</span></div>
+            <p><b>Sector bị bỏ qua.</b> ECI đã chứa Sector bên trong; tool ưu tiên ECI và cảnh báo để bạn không tưởng Sector nhập tay có tác dụng.</p>
+          </div>
+
+          <div class="scenario bad">
+            <div class="scenario-title"><span class="tag">F</span><span>Giá trị &gt; 268.435.455</span></div>
+            <p><b>Không phải ECI/eNB LTE.</b> Vượt 28 bit; có thể là NCI 5G, Cell ID GSM hoặc ID nội bộ. Tool từ chối chuyển đổi thay vì cắt bớt bit.</p>
+          </div>
+
+          <div class="scenario bad">
+            <div class="scenario-title"><span class="tag">G</span><span>Không phải LTE (2G/3G/5G)</span></div>
+            <p><b>Không áp dụng.</b> Công thức eNB × 256 + Sector chỉ đúng cho LTE. Với GSM/UMTS/5G, giá trị có thể chỉ là mã cell nội bộ — đổi sẽ ra kết quả vô nghĩa.</p>
+          </div>
+
+          <div class="scenario mid">
+            <div class="scenario-title"><span class="tag">H</span><span>Giá trị 0 hoặc để trống</span></div>
+            <p><b>0</b> hợp lệ về toán nhưng hiếm khi là cell thật; tool vẫn tính và cảnh báo. <b>Để trống</b> thì tool yêu cầu nhập — không tự đoán.</p>
+          </div>
+
+          <div class="scenario bad">
+            <div class="scenario-title"><span class="tag">I</span><span>Sector không phải số nguyên</span></div>
+            <p><b>Không hợp lệ.</b> Sector phải là số nguyên 0–255 (không nhận 1.5, -1, chữ cái).</p>
+          </div>
+        </section>
+
+        <section class="help-section" id="help-values">
+          <h3><i class="fas fa-bullseye" aria-hidden="true"></i> 4. Giá trị thường gặp &amp; mẹo tăng độ chính xác</h3>
+          <ul class="help-list">
+            <li><b>Mốc quyết định là 1.048.575</b>, không phải số chữ số. Giá trị ≤ 1.048.575 có thể là eNB ID (hoặc ECI của trạm rất nhỏ); lớn hơn mốc này và không vượt 268.435.455 thì <b>chắc chắn là ECI</b>.</li>
+            <li>eNB ID thực tế thường <b>4–6 chữ số</b> (ví dụ 662079). ECI của các trạm đó thường <b>7–9 chữ số</b> (ví dụ 169492237).</li>
+            <li><b>Sector hay gặp:</b> 0 (một số trạm dùng), 1–3 (trạm 3 hướng) và một số log dùng 13. Không rõ thì để trống; đây chỉ là gợi ý để thử — Sector do nhà mạng quy định, không có danh sách cố định.</li>
+            <li>Tra cứu ra sai vị trí: thử sector kế tiếp (0 → 1 → 2 → 3) hoặc dùng ECI đầy đủ. Thiếu Sector là nguyên nhân phổ biến nhất của việc tra trượt.</li>
+            <li>Tool tự bỏ dấu phân cách (<span class="mono">169.492.237</span>), khoảng trắng, nhãn “ECI:” và nhận cả hex (<span class="mono">0xA1A3F0D</span>).</li>
+          </ul>
+          <div class="callout warn">
+            <b>Đừng làm tròn hoặc thêm/bớt số 0.</b> Sai một chữ số là ra eNB/ECI khác hoàn toàn.
+            Nếu ô Excel hiện <span class="mono">1,69E+08</span>, hãy mở ô và copy giá trị đầy đủ.
+          </div>
+        </section>
+
+        <section class="help-section" id="help-errors">
+          <h3><i class="fas fa-circle-xmark" aria-hidden="true"></i> 5. Lỗi thường gặp</h3>
+          <ul class="help-list">
+            <li><b>“Sector phải là số nguyên 0–255”</b> — Sector vượt 8 bit hoặc không phải số.</li>
+            <li><b>“Vượt 28 bit”</b> — giá trị &gt; 268.435.455, không phải ECI/eNB LTE.</li>
+            <li><b>“Có thể là eNB ID ngắn”</b> — bạn nhập một số ≤ 1.048.575 vào ô ECI; kiểm tra lại chiều chuyển đổi.</li>
+            <li><b>“Số ở dạng khoa học”</b> — Excel đã rút gọn; copy giá trị đầy đủ từ ô.</li>
+            <li><b>“Không phải số nguyên”</b> — chỉ nhập chữ số; dấu chấm/phẩy phân cách được tự bỏ.</li>
+          </ul>
+        </section>
+
+        <p class="help-foot">
+          Công thức theo 3GPP TS 36.331: ECI 28 bit = eNB ID 20 bit + Cell ID 8 bit.
+          eNB/ECI chỉ duy nhất trong một PLMN (MCC-MNC) — khi tra cứu nhớ kèm MCC/MNC/LAC (TAC).
+        </p>
+      </div>
     </div>
   </div>
 
@@ -172,72 +689,439 @@
     // ========== Auth check ==========
     // Công cụ công khai: khách dùng được, chỉ navbar rút gọn.
     (() => {
-      Auth.initNavbar();
+      if (window.Auth && typeof Auth.initNavbar === 'function') Auth.initNavbar();
     })();
 
-    // ========== Helpers (same formula as app.js / cell-id.js) ==========
-    const ECI_MAX = 0xFFFFFFF;
-    const SHORT_THRESHOLD = 0x100000; // 2^20 = max eNB ID + 1
+    // ==========================================================================
+    // Hằng số 3GPP TS 36.331 — ECI 28 bit = eNB ID 20 bit + Sector 8 bit
+    // ==========================================================================
+    const ENB_MAX = 0xFFFFF;        // 1.048.575 = 2^20 - 1
+    const SECTOR_MAX = 0xFF;        // 255       = 2^8 - 1
+    const ECI_MAX = 0xFFFFFFF;      // 268.435.455 = 2^28 - 1
 
-    function classifyCellId(value) {
-      const n = parseInt(value, 10);
-      if (isNaN(n)) return 'short';
-      return n > SHORT_THRESHOLD && n <= ECI_MAX ? 'long' : 'short';
-    }
-    function enbToEci(enbId, sector) {
-      const enb = parseInt(enbId, 10);
-      const sec = parseInt(sector, 10) || 0;
-      if (isNaN(enb)) return NaN;
-      return enb * 256 + (sec & 0xFF);
-    }
-    function eciToEnb(eci) {
-      const n = parseInt(eci, 10);
-      if (isNaN(n)) return { enbId: NaN, sector: NaN };
-      return { enbId: Math.floor(n / 256), sector: n & 0xFF };
+    // Các Sector hay gặp trong log thực tế — chỉ để gợi ý, không phải quy luật.
+    const COMMON_SECTORS = [0, 1, 2, 3, 13];
+
+    // ==========================================================================
+    // Đọc & kiểm tra giá trị người dùng nhập
+    // ==========================================================================
+    const esc = (s) => String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+
+    /**
+     * Chuẩn hoá một Cell ID: bỏ nhãn ("ECI:", "eNB ID ="), khoảng trắng,
+     * dấu phân cách hàng nghìn, đuôi ".0" của Excel; nhận thêm dạng hex 0x…
+     * Trả { ok, value } hoặc { ok:false, error }.
+     */
+    function parseId(raw, label) {
+      const name = label || 'giá trị';
+      let s = String(raw == null ? '' : raw).trim();
+      if (!s) return { ok: false, error: 'Nhập ' + name + ' trước.' };
+
+      // Nhãn hay gặp khi copy từ báo cáo: "eNB: 662079", "ECI = 169492237".
+      s = s.replace(/^(?:e-?nb(?:\s*id)?|eci|cell\s*id|cid)(?:\s*\([^)]*\))?\s*[:=]?\s*/i, '');
+      // Khoảng trắng (kể cả NBSP) và dấu nhóm hàng nghìn kiểu 1'234_567.
+      s = s.replace(/[\s\u00A0\u202F\u2007_']/g, '');
+      if (!s) return { ok: false, error: 'Nhập ' + name + ' trước.' };
+
+      // Hex: 0xA1A3F0D (một số báo cáo xuất ECI dạng hex).
+      if (/^0x[0-9a-f]+$/i.test(s)) {
+        const v = parseInt(s.slice(2), 16);
+        if (!Number.isFinite(v) || v > ECI_MAX) {
+          return { ok: false, error: 'Giá trị hex vượt 28 bit (tối đa 0x' + ECI_MAX.toString(16).toUpperCase() + ').' };
+        }
+        return { ok: true, value: v };
+      }
+
+      // Excel rút gọn số lớn thành 1,69E+08 → không thể khôi phục chính xác.
+      if (/\d[eE][+-]?\d/.test(s)) {
+        return { ok: false, error: 'Số ở dạng khoa học (ví dụ 1,69E+08) nên đã mất chữ số. Hãy copy giá trị đầy đủ từ ô Excel.' };
+      }
+      if (s.startsWith('-')) return { ok: false, error: 'Không nhận số âm.' };
+      s = s.replace(/^\+/, '');
+
+      // Excel có thể ghi số nguyên kèm một số 0 thập phân: 169492237.0
+      if (/^\d+[.,]0$/.test(s)) s = s.slice(0, -2);
+      // Dấu phân cách hàng nghìn: 169.492.237 hoặc 169,492,237
+      if (/^\d{1,3}(?:[.,]\d{3})+$/.test(s)) s = s.replace(/[.,]/g, '');
+
+      if (!/^\d+$/.test(s)) {
+        return { ok: false, error: '“' + s + '” không phải số nguyên. Chỉ nhập chữ số (có thể dùng dấu phân cách).' };
+      }
+
+      const value = parseInt(s, 10);
+      if (!Number.isFinite(value)) return { ok: false, error: 'Giá trị không hợp lệ.' };
+      if (value > ECI_MAX) {
+        return {
+          ok: false,
+          error: 'Giá trị ' + value + ' vượt 28 bit (tối đa ' + ECI_MAX + ') — không phải eNB ID hay ECI LTE. ' +
+            'Có thể là NCI 5G hoặc ID của công nghệ khác.'
+        };
+      }
+      return { ok: true, value };
     }
 
+    /** Sector: rỗng = chưa xác định (KHÁC 0); chỉ nhận số nguyên 0–255. */
+    function parseSector(raw) {
+      let s = String(raw == null ? '' : raw).trim();
+      if (s === '') return { ok: true, value: null };
+      s = s.replace(/^(?:sector|cell(?:\s*id)?)\s*[:=]?\s*/i, '').trim();
+      if (!/^\d+$/.test(s)) return { ok: false, error: 'Sector phải là số nguyên 0–255.' };
+      const n = parseInt(s, 10);
+      if (n > SECTOR_MAX) {
+        return { ok: false, error: 'Sector ' + n + ' vượt 8 bit: chỉ nhận 0–255 (không tự lấy mod 256).' };
+      }
+      return { ok: true, value: n };
+    }
+
+    // ==========================================================================
+    // Chuyển đổi & định dạng
+    // ==========================================================================
+    function enbToEci(enb, sector) { return enb * 256 + sector; }
+    function eciToEnb(eci) { return { enbId: Math.floor(eci / 256), sector: eci % 256 }; }
+    function hex(n) { return '0x' + n.toString(16).toUpperCase(); }
+    function bin28(n) {
+      const b = n.toString(2).padStart(28, '0');
+      return b.slice(0, 20) + ' ' + b.slice(20);
+    }
+
+    function copyBtn(value, label) {
+      const safe = esc(value);
+      return '<button type="button" class="copy-btn" data-copy="' + safe + '"' +
+        ' title="Copy ' + esc(label || value) + '" aria-label="Copy ' + safe + '">' +
+        '<i class="fas fa-copy" aria-hidden="true"></i></button>';
+    }
+    function numCell(v) {
+      return '<span class="mono">' + v + '</span>' + copyBtn(v);
+    }
     function row(label, value) {
-      return `<div class="detail-row"><span class="detail-label">${label}</span><span class="detail-value">${value}</span></div>`;
+      return '<div class="detail-row"><span class="detail-label">' + label + '</span>' +
+        '<span class="detail-value">' + value + '</span></div>';
+    }
+    function showResult(box, kind, html) {
+      box.className = 'result-box show ' + kind;
+      box.innerHTML = html;
     }
 
+    // ==========================================================================
+    // Chiều eNB ID (+ Sector) → ECI
+    // ==========================================================================
     function convertEnb() {
-      const enbVal = document.getElementById('enbInput').value;
-      const secVal = document.getElementById('sectorInput').value;
       const box = document.getElementById('enbResult');
-      if (enbVal === '') { box.className = 'result-box show error'; box.innerHTML = 'Nhập Cell ID (Short / eNB).'; return; }
-
-      // Auto-detect: if user pasted a long ECI into the short box, treat as ECI.
-      if (classifyCellId(enbVal) === 'long') {
-        const { enbId, sector } = eciToEnb(enbVal);
-        box.className = 'result-box show success';
-        box.innerHTML = `<div class="big">${enbVal}</div>` +
-          row('Phân loại', 'ECI (Long)') + row('eNB ID', enbId) + row('Sector', sector);
+      const parsed = parseId(document.getElementById('enbInput').value, 'eNB ID hoặc ECI');
+      if (!parsed.ok) {
+        showResult(box, 'error',
+          '<div class="res-head"><span class="badge danger"><i class="fas fa-circle-xmark" aria-hidden="true"></i> Không hợp lệ</span></div>' +
+          '<div>' + esc(parsed.error) + '</div>');
         return;
       }
 
-      const enb = parseInt(enbVal, 10);
-      const sec = secVal === '' ? 0 : (parseInt(secVal, 10) || 0);
-      const eci = enbToEci(enb, sec);
-      box.className = 'result-box show success';
-      box.innerHTML = `<div class="big">${eci}</div>` +
-        row('eNB ID', enb) + row('Sector', sec & 0xFF) + row('ECI (Long)', eci);
+      const sec = parseSector(document.getElementById('sectorInput').value);
+      if (!sec.ok) {
+        showResult(box, 'error',
+          '<div class="res-head"><span class="badge danger"><i class="fas fa-circle-xmark" aria-hidden="true"></i> Sector không hợp lệ</span></div>' +
+          '<div>' + esc(sec.error) + '</div>');
+        return;
+      }
+
+      const n = parsed.value;
+
+      // Dán ECI dài vào ô eNB → tự nhận diện và tách (đúng tinh thần "↔").
+      if (n > ENB_MAX) {
+        const p = eciToEnb(n);
+        let html = '<div class="res-head"><span class="badge neutral"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> Tự nhận diện: ECI (long)</span></div>' +
+          '<div class="big">eNB ID: ' + p.enbId + copyBtn(p.enbId) + '</div>' +
+          '<div class="big-sub">ECI đã được tách thành eNB ID + Sector</div>' +
+          '<div class="note info">Giá trị <span class="mono">' + n + '</span> lớn hơn ' + ENB_MAX +
+          ' nên không thể là eNB ID — tool tự tách thành eNB + Sector.</div>' +
+          row('eNB ID', numCell(p.enbId)) +
+          row('Sector', numCell(p.sector)) +
+          row('ECI', numCell(n)) +
+          row('Hex', '<span class="mono">' + hex(n) + '</span>') +
+          row('Bit (20 + 8)', '<span class="mono">' + bin28(n) + '</span>') +
+          '<div class="formula-line mono">' + p.enbId + ' × 256 + ' + p.sector + ' = ' + n +
+          ' <span class="ok">✓</span></div>';
+        if (sec.value != null) {
+          html += '<div class="note warn">Bạn có nhập Sector <b>' + sec.value + '</b> nhưng giá trị vừa nhập là ECI — ' +
+            'Sector đã nằm sẵn trong ECI nên <b>giá trị nhập tay bị bỏ qua</b>.</div>';
+        }
+        showResult(box, 'success', html);
+        return;
+      }
+
+      const enb = n;
+      const zeroNote = enb === 0
+        ? '<div class="note warn">eNB ID 0 hợp lệ về mặt toán nhưng hiếm khi là trạm thật — kiểm tra lại nếu log không ghi 0.</div>'
+        : '';
+
+      if (sec.value == null) {
+        // Không có Sector: chỉ xác định được ECI cơ sở + dải 256 giá trị.
+        const base = enbToEci(enb, 0);
+        const end = base + SECTOR_MAX;
+        showResult(box, 'warn',
+          '<div class="res-head"><span class="badge estimate"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Ước tính — thiếu Sector</span></div>' +
+          '<div class="big">ECI cơ sở: ' + base + copyBtn(base) + '</div>' +
+          '<div class="big-sub">Giả định sector = 0 (chưa xác định)</div>' +
+          '<div class="note warn"><b>Chưa có Sector.</b> ECI thật là một trong <b>256</b> giá trị từ ' +
+          '<span class="mono">' + base + '</span> đến <span class="mono">' + end + '</span>. ' +
+          'Kết quả trên chỉ đúng nếu trạm dùng sector 0.</div>' +
+          zeroNote +
+          row('eNB ID', numCell(enb)) +
+          row('Sector', '<span class="muted">chưa xác định</span>') +
+          row('ECI cơ sở', numCell(base)) +
+          row('Dải ECI khả dĩ', '<span class="mono">' + base + ' – ' + end + '</span>') +
+          row('Hex (cơ sở)', '<span class="mono">' + hex(base) + '</span>') +
+          '<div class="cand-row"><span>Thử nhanh Sector:</span>' +
+          COMMON_SECTORS.map(function (s) {
+            return '<button type="button" class="chip" data-sector="' + s + '" onclick="applySector(\'' + s + '\')">' +
+              s + ' → ' + (base + s) + '</button>';
+          }).join('') +
+          '</div>');
+        syncSectorChips();
+        return;
+      }
+
+      // Đủ eNB + Sector → chính xác tuyệt đối.
+      const eci = enbToEci(enb, sec.value);
+      showResult(box, 'success',
+        '<div class="res-head"><span class="badge exact"><i class="fas fa-circle-check" aria-hidden="true"></i> Chính xác</span></div>' +
+        '<div class="big">' + eci + copyBtn(eci) + '</div>' +
+        '<div class="big-sub">ECI (E-UTRAN Cell Identity)</div>' +
+        zeroNote +
+        row('eNB ID', numCell(enb)) +
+        row('Sector', numCell(sec.value)) +
+        row('ECI', numCell(eci)) +
+        row('Hex', '<span class="mono">' + hex(eci) + '</span>') +
+        row('Bit (20 + 8)', '<span class="mono">' + bin28(eci) + '</span>') +
+        '<div class="formula-line mono">' + enb + ' × 256 + ' + sec.value + ' = ' + eci +
+        ' <span class="ok">✓</span></div>');
+      syncSectorChips();
     }
 
+    // ==========================================================================
+    // Chiều ECI → eNB ID
+    // ==========================================================================
     function convertEci() {
-      const val = document.getElementById('eciInput').value;
       const box = document.getElementById('eciResult');
       const status = document.getElementById('eciStatus');
       status.textContent = '';
-      if (val === '') { box.className = 'result-box show error'; box.innerHTML = 'Nhập ECI (Long).'; return; }
 
-      if (classifyCellId(val) === 'short') {
-        status.textContent = 'Giá trị này nhỏ (≤ 16,777,216) — có thể là eNB ID (Short) chứ không phải ECI.';
+      const parsed = parseId(document.getElementById('eciInput').value, 'ECI');
+      if (!parsed.ok) {
+        showResult(box, 'error',
+          '<div class="res-head"><span class="badge danger"><i class="fas fa-circle-xmark" aria-hidden="true"></i> Không hợp lệ</span></div>' +
+          '<div>' + esc(parsed.error) + '</div>');
+        return;
       }
-      const { enbId, sector } = eciToEnb(val);
-      box.className = 'result-box show success';
-      box.innerHTML = `<div class="big">eNB ID: ${enbId}</div>` +
-        row('eNB ID (Short)', enbId) + row('Sector', sector) + row('ECI', val);
+
+      const n = parsed.value;
+      const p = eciToEnb(n);
+      const small = n <= ENB_MAX;
+      let html = '';
+
+      if (small) {
+        // Vùng nhập nhằng: bình thường đây là eNB ID chứ không phải ECI.
+        status.textContent = 'Giá trị ≤ 1.048.575 — thường là eNB ID ngắn, không phải ECI. Kết quả bên dưới chỉ đúng nếu đây thực sự là ECI (trạm có eNB ≤ 4095).';
+        html += '<div class="res-head"><span class="badge estimate"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Cần kiểm tra</span></div>';
+      } else {
+        html += '<div class="res-head"><span class="badge exact"><i class="fas fa-circle-check" aria-hidden="true"></i> Chính xác</span></div>';
+      }
+
+      html += '<div class="big">eNB ID: ' + p.enbId + copyBtn(p.enbId) + '</div>' +
+        '<div class="big-sub">ECI ' + n + ' · Sector ' + p.sector + '</div>';
+
+      if (small) {
+        html += '<div class="note warn">Giá trị <span class="mono">' + n + '</span> ≤ ' + ENB_MAX +
+          ' nên thường là <b>eNB ID ngắn</b>. Nếu đúng là eNB ID, hãy đổi theo chiều eNB → ECI ' +
+          '(ECI sẽ là <span class="mono">' + (n * 256) + '</span> nếu sector = 0), không dùng kết quả tách này.</div>' +
+          '<button type="button" class="btn btn-sm" onclick="useAsEnb(' + n + ')">' +
+          '<i class="fas fa-arrow-up" aria-hidden="true"></i> Đây là eNB ID — đổi sang ECI</button>';
+      }
+      if (p.enbId === 0) {
+        html += '<div class="note warn">eNB ID 0 hợp lệ về mặt toán nhưng hiếm khi là trạm thật.</div>';
+      }
+
+      html += row('eNB ID (Short)', numCell(p.enbId)) +
+        row('Sector', numCell(p.sector)) +
+        row('ECI', numCell(n)) +
+        row('Hex', '<span class="mono">' + hex(n) + '</span>') +
+        row('Bit (20 + 8)', '<span class="mono">' + bin28(n) + '</span>') +
+        '<div class="formula-line mono">' + p.enbId + ' × 256 + ' + p.sector + ' = ' + n +
+        ' <span class="ok">✓</span></div>';
+
+      showResult(box, small ? 'warn' : 'success', html);
     }
+
+    // ==========================================================================
+    // Tương tác phụ: chip Sector, ví dụ, "đây là eNB"
+    // ==========================================================================
+    function applySector(s) {
+      document.getElementById('sectorInput').value = String(s == null ? '' : s);
+      syncSectorChips();
+      // Chưa nhập eNB thì chỉ ghi giá trị, không báo lỗi "thiếu eNB".
+      if (document.getElementById('enbInput').value.trim() !== '') {
+        convertEnb();
+      } else {
+        document.getElementById('enbResult').className = 'result-box';
+      }
+    }
+
+    function syncSectorChips() {
+      const raw = document.getElementById('sectorInput').value.trim();
+      document.querySelectorAll('.quick-row .chip[data-sector]').forEach(function (btn) {
+        btn.setAttribute('aria-pressed', btn.getAttribute('data-sector') === raw ? 'true' : 'false');
+      });
+    }
+
+    function useEnbExample(enb, sector) {
+      document.getElementById('enbInput').value = enb;
+      document.getElementById('sectorInput').value = (sector == null ? '' : sector);
+      syncSectorChips();
+      convertEnb();
+    }
+
+    function useEciExample(eci) {
+      document.getElementById('eciInput').value = eci;
+      convertEci();
+    }
+
+    function useAsEnb(value) {
+      document.getElementById('enbInput').value = value;
+      document.getElementById('sectorInput').value = '';
+      syncSectorChips();
+      document.getElementById('cardEnb').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      convertEnb();
+    }
+
+    // ==========================================================================
+    // Copy kết quả (nút copy nằm trong HTML động → uỷ quyền sự kiện)
+    // ==========================================================================
+    function copyText(text, btn) {
+      const done = function () {
+        if (!btn) return;
+        btn.classList.add('copied');
+        const icon = btn.querySelector('i');
+        // Giữ class gốc ở dataset: bấm liên tiếp không làm mất icon copy.
+        if (icon && !btn.dataset.copyIcon) btn.dataset.copyIcon = icon.className;
+        const oldClass = btn.dataset.copyIcon || 'fas fa-copy';
+        if (icon) icon.className = 'fas fa-check';
+        setTimeout(function () {
+          btn.classList.remove('copied');
+          if (icon) icon.className = oldClass;
+        }, 1200);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text, done); });
+      } else {
+        fallbackCopy(text, done);
+      }
+    }
+    function fallbackCopy(text, done) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { /* bỏ qua */ }
+      ta.remove();
+    }
+    document.addEventListener('click', function (e) {
+      const btn = e.target.closest('[data-copy]');
+      if (btn) {
+        e.preventDefault();
+        copyText(btn.getAttribute('data-copy'), btn);
+      }
+    });
+
+    // ==========================================================================
+    // Modal hướng dẫn
+    // ==========================================================================
+    let helpLastFocus = null;
+    let helpOpen = false;
+
+    function openHelp(sectionId) {
+      const modal = document.getElementById('helpModal');
+      if (!modal) return;
+      const body = document.getElementById('helpBody');
+      const target = sectionId ? document.getElementById(sectionId) : null;
+      // Đang mở sẵn (bấm ? khác) → chỉ cuộn tới mục, giữ nguyên focus đã lưu.
+      if (!modal.hidden) {
+        if (target) body.scrollTop = Math.max(0, target.offsetTop - 12);
+        return;
+      }
+      helpLastFocus = document.activeElement;
+      helpOpen = true;
+      modal.hidden = false;
+      document.body.classList.add('modal-open');
+
+      body.scrollTop = 0;
+      if (target) {
+        // offsetTop tính theo .help-body (đã đặt position: relative).
+        body.scrollTop = Math.max(0, target.offsetTop - 12);
+      }
+      const closeBtn = modal.querySelector('.help-close');
+      if (closeBtn) closeBtn.focus();
+    }
+
+    function closeHelp() {
+      const modal = document.getElementById('helpModal');
+      if (!modal || modal.hidden) return;
+      modal.hidden = true;
+      helpOpen = false;
+      document.body.classList.remove('modal-open');
+      if (helpLastFocus && typeof helpLastFocus.focus === 'function') helpLastFocus.focus();
+      helpLastFocus = null;
+    }
+
+    // Bấm nền tối để đóng.
+    document.getElementById('helpModal').addEventListener('click', function (e) {
+      if (e.target.hasAttribute('data-close-help')) closeHelp();
+    });
+
+    // Esc để đóng; Tab giữ focus trong dialog (chỉ có nút đóng + nội dung).
+    document.addEventListener('keydown', function (e) {
+      if (!helpOpen) return;
+      if (e.key === 'Escape') { e.preventDefault(); closeHelp(); return; }
+      if (e.key !== 'Tab') return;
+      const dialog = document.querySelector('.help-dialog');
+      if (!dialog) return;
+      const focusables = dialog.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+
+    // ==========================================================================
+    // Nhập liệu: Enter để chuyển đổi, sửa input thì ẩn kết quả cũ (tránh stale)
+    // ==========================================================================
+    (function bindInputs() {
+      const enb = document.getElementById('enbInput');
+      const sec = document.getElementById('sectorInput');
+      const eci = document.getElementById('eciInput');
+
+      enb.addEventListener('keydown', function (e) { if (e.key === 'Enter') convertEnb(); });
+      sec.addEventListener('keydown', function (e) { if (e.key === 'Enter') convertEnb(); });
+      eci.addEventListener('keydown', function (e) { if (e.key === 'Enter') convertEci(); });
+
+      enb.addEventListener('input', function () {
+        document.getElementById('enbResult').className = 'result-box';
+      });
+      sec.addEventListener('input', function () {
+        document.getElementById('enbResult').className = 'result-box';
+        syncSectorChips();
+      });
+      eci.addEventListener('input', function () {
+        document.getElementById('eciResult').className = 'result-box';
+        document.getElementById('eciStatus').textContent = '';
+      });
+
+      syncSectorChips();
+    })();
   </script>
 </body>
 </html>

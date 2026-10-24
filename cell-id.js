@@ -14,7 +14,8 @@
  */
 
 const ECI_MAX = 0xFFFFFFF;      // 2^28 - 1
-const SHORT_THRESHOLD = 0x100000; // 2^20 = 1,048,576 (max eNB ID + 1)
+const ENB_MAX = 0xFFFFF;        // 2^20 - 1 = 1,048,575 (eNB ID tối đa)
+const SHORT_THRESHOLD = ENB_MAX + 1; // 2^20 = 1,048,576 = ECI nhỏ nhất vượt eNB
 
 /**
  * Convert eNB ID + sector to ECI (long cell ID).
@@ -48,7 +49,9 @@ function eciToEnb(eci) {
 function classifyCellId(value) {
   const n = parseInt(value, 10);
   if (isNaN(n)) return 'short';
-  return n > SHORT_THRESHOLD && n <= ECI_MAX ? 'long' : 'short';
+  // Dùng >= (không phải >): 1,048,576 = 2^20 đã vượt eNB ID tối đa nên là
+  // ECI của eNB 4096, không được coi là eNB ngắn.
+  return n >= SHORT_THRESHOLD && n <= ECI_MAX ? 'long' : 'short';
 }
 
 /**

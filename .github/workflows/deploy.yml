@@ -68,6 +68,9 @@ jobs:
       - name: Smoke test
         run: npm run smoke
 
+      - name: "Verify payments (offline: webhook, idempotency, underpaid, production guard)"
+        run: npm run verify:payments
+
       - name: Package release
         id: meta
         run: |
@@ -92,7 +95,9 @@ jobs:
   deploy:
     name: Deploy to LXC
     needs: build
-    runs-on: [self-hosted, linux, celltracker-lxc]
+    # Runner do deploy/ci/install-runner.sh đăng ký với label celltracker-lxc.
+    # KHÔNG dùng label 'linux' (GitHub tự thêm là 'Linux', phân biệt hoa/thường).
+    runs-on: [self-hosted, celltracker-lxc]
     environment:
       name: production
     timeout-minutes: 25
@@ -108,22 +113,34 @@ jobs:
           echo "version=${{ needs.build.outputs.version }}"
           echo "sha256=${{ needs.build.outputs.sha256 }}"
           echo "commit=${{ github.sha }}"
-          echo "trigger=${{ github.event_name }} ${{ inputs.reason }}"
+          echo "trigger=${{ github.event_name }} ${{ github.event.inputs.reason }}"
 
       - name: Stage artifact
         run: |
           set -euo pipefail
           # /opt/cell-tracker/incoming thuộc user runner (install-runner.sh tạo + chown),
           # nên chỉ cần cp; deploy-release.sh mới cần root.
+          INCOMING=/opt/cell-tracker/incoming
+          mkdir -p "$INCOMING"
+          if [ ! -w "$INCOMING" ]; then
+            echo "Không ghi được $INCOMING — chạy lại deploy/ci/install-runner.sh (nó chown thư mục này)."
+            exit 1
+          fi
           ARTIFACT=$(ls "${{ runner.temp }}"/release/release-*.tar.gz | head -n1)
           test -n "$ARTIFACT"
           BASENAME=$(basename "$ARTIFACT")
-          install -m 640 "$ARTIFACT" "/opt/cell-tracker/incoming/$BASENAME"
-          echo "ARTIFACT=/opt/cell-tracker/incoming/$BASENAME" >> "$GITHUB_ENV"
+          install -m 640 "$ARTIFACT" "$INCOMING/$BASENAME"
+          echo "ARTIFACT=$INCOMING/$BASENAME" >> "$GITHUB_ENV"
 
       - name: Deploy (auto-rollback on failed health gate)
         run: |
           set -euo pipefail
+          if [ ! -x /opt/cell-tracker/bin/deploy-release.sh ]; then
+            echo "Chưa có /opt/cell-tracker/bin/deploy-release.sh."
+            echo "Lần đầu hãy deploy thủ công: pwsh ./deploy/deploy.ps1 -Target root@<IP> -FirstDeploy"
+            echo "(script này được cài từ artifact ở mọi lần deploy, nhưng cần có sẵn để chạy lần đầu.)"
+            exit 1
+          fi
           sudo -n /opt/cell-tracker/bin/deploy-release.sh "$ARTIFACT" "${{ needs.build.outputs.version }}"
 
       - name: Verify from inside LXC
